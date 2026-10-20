@@ -1,0 +1,503 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Prisoners of War</title>
+  <style>
+    :root {
+      color-scheme: dark;
+      font-family: "Segoe UI", Arial, sans-serif;
+      background: #252a2b;
+      color: #f3f4ef;
+      font-synthesis: none;
+      --felt: #777f7b;
+      --felt-dark: #606864;
+      --gold: #f0c75e;
+      --paper: #f4f2e9;
+    }
+
+    * { box-sizing: border-box; }
+    body { margin: 0; min-width: 320px; background: #252a2b; }
+    button { font: inherit; }
+    .shell { width: min(1440px, 100%); margin: 0 auto; padding: 20px clamp(12px, 3vw, 40px) 36px; }
+    .topline { display: flex; justify-content: space-between; align-items: center; gap: 16px; margin-bottom: 18px; }
+    .brand { margin: 0; font-size: clamp(20px, 3vw, 30px); letter-spacing: .08em; text-transform: uppercase; }
+    .brand span { color: var(--gold); }
+    .round-label { color: #c9ceca; font-size: 14px; letter-spacing: .08em; text-transform: uppercase; }
+    .board { padding: clamp(12px, 2vw, 24px); border: 1px solid #919a95; border-radius: 18px; background: var(--felt); box-shadow: 0 18px 50px #0005; }
+    .track { display: grid; grid-template-columns: repeat(10, minmax(0, 1fr)); gap: 5px; }
+    .track-cell { min-width: 0; height: clamp(76px, 10vw, 126px); display: flex; align-items: center; justify-content: center; position: relative; border: 2px solid #d2d7d2; border-radius: 9px; background: #626a66; }
+    .track-cell.bounty { border: 3px solid var(--gold); background: #6b664f; }
+    .track-cell.bounty .card { border: 3px solid var(--gold); }
+    .track-cell.white-capture { border-color: #fff; }
+    .track-cell.black-capture { border-color: #151817; }
+    .track-cell.white-capture .card { border-color: #fff; }
+    .track-cell.black-capture .card { border-color: #151817; }
+    .cell-caption { position: absolute; top: 5px; left: 6px; right: 6px; overflow: hidden; color: #d9dedb; font-size: clamp(8px, 1vw, 11px); text-overflow: ellipsis; white-space: nowrap; text-transform: uppercase; letter-spacing: .04em; }
+    .track-cell.bounty .cell-caption { color: #ffdfa0; }
+    .track-cell .card { width: min(64px, calc(100% - 10px)); height: calc(100% - 34px); min-height: 0; margin-top: 22px; }
+    .track-cell .card .face { font-size: clamp(18px, 3vw, 32px); }
+    .track-cell .card .code { right: 3px; bottom: 2px; }
+    .cell-empty { color: #aeb5b0; font-size: 13px; }
+    .card {
+      width: clamp(49px, 7vw, 83px);
+      height: clamp(66px, 9vw, 108px);
+      display: inline-flex;
+      flex: 0 0 auto;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      position: relative;
+      padding: 5px;
+      border: 2px solid #fff;
+      border-radius: 8px;
+      background: var(--paper);
+      box-shadow: 0 4px 9px #0004;
+      color: #252a2b;
+      cursor: default;
+      transition: transform .12s ease, box-shadow .12s ease, outline-color .12s ease;
+    }
+    button.card { cursor: pointer; }
+    button.card:hover { transform: translateY(-5px); box-shadow: 0 8px 13px #0005; }
+    button.card:focus-visible { outline: 3px solid var(--gold); outline-offset: 2px; }
+    .card .face { font-size: clamp(24px, 4vw, 42px); font-weight: 800; line-height: 1; }
+    .card .code { position: absolute; right: 6px; bottom: 4px; font-size: 10px; font-weight: 800; }
+    .suit-blade { color: #c5373d; }
+    .suit-fang { color: #b58a06; }
+    .suit-shield { color: #2873be; }
+    .card.back { cursor: default; border-color: #e2e4df; background: repeating-linear-gradient(135deg, #323a39 0 7px, #414b48 7px 14px); }
+    .card.back::after { content: "POW"; color: #f0c75e; font-size: 11px; font-weight: 800; letter-spacing: .16em; }
+    .card.back .face, .card.back .code { display: none; }
+    .scoreline { min-height: 50px; display: flex; align-items: center; justify-content: center; gap: clamp(12px, 4vw, 48px); margin: 10px 0 4px; font-size: clamp(16px, 2.5vw, 23px); font-weight: 700; letter-spacing: .03em; }
+    .scoreline strong { color: #fff; }
+    .scoreline .black-score { color: #171b1a; text-shadow: 0 1px #c7ceca; }
+    .status { min-height: 34px; margin: 2px 0 14px; text-align: center; color: #f4f5f1; font-size: 15px; }
+    .battle { display: grid; grid-template-columns: 1fr minmax(100px, 170px) 1fr; align-items: center; gap: 12px; min-height: 160px; padding: 14px clamp(8px, 3vw, 32px); border: 1px solid #c2c8c4; border-radius: 13px; background: #68716c; }
+    .battle-player { display: flex; align-items: center; justify-content: center; gap: 12px; min-width: 0; }
+    .battle-player-name { max-width: 90px; color: #e4e8e4; font-size: 12px; text-align: center; text-transform: uppercase; letter-spacing: .08em; }
+    .battle-player:last-child { flex-direction: row-reverse; }
+    .battle-vs { color: #d5dbd6; text-align: center; font-weight: 800; letter-spacing: .12em; }
+    .battle .card { width: clamp(62px, 9vw, 93px); height: clamp(84px, 12vw, 119px); }
+    .battle-empty { width: clamp(62px, 9vw, 93px); height: clamp(84px, 12vw, 119px); border: 2px dashed #bdc5bf; border-radius: 8px; }
+    .players { display: grid; grid-template-columns: minmax(0, 1fr); margin-top: 16px; }
+    .player-panel { min-width: 0; padding: 13px clamp(10px, 2vw, 18px) 16px; border: 1px solid #aeb7b1; border-radius: 12px; background: #6c746f; }
+    .player-panel.white { border-top: 4px solid #fff; }
+    .player-panel.black { border-top: 4px solid #171b1a; }
+    .player-heading { display: flex; justify-content: space-between; align-items: baseline; gap: 8px; margin-bottom: 10px; }
+    .player-heading h2 { margin: 0; font-size: 15px; letter-spacing: .09em; text-transform: uppercase; }
+    .player-heading span { color: #e1e5e1; font-size: 12px; }
+    .row-label { margin: 11px 0 6px; color: #e1e5e1; font-size: 10px; font-weight: 700; letter-spacing: .14em; text-align: center; text-transform: uppercase; }
+    .player-card-rows { display: block; }
+    .card-group { min-width: 0; }
+    .card-row { min-height: 74px; display: flex; align-items: center; gap: clamp(5px, 1vw, 11px); overflow-x: auto; padding: 4px 3px 8px; }
+    .pile-row, .hand-row { justify-content: center; }
+    .card-row .card { width: clamp(44px, 5.5vw, 62px); height: clamp(60px, 7vw, 80px); }
+    .card-row .card .face { font-size: clamp(21px, 3vw, 31px); }
+    .card-row .card .code { font-size: 8px; }
+    .pile-row .card, .committing .hand-row .card { width: clamp(62px, 9vw, 93px); height: clamp(84px, 12vw, 119px); }
+    .pile-row .card .face, .committing .hand-row .card .face { font-size: clamp(24px, 4vw, 42px); }
+    .pile-row .card .code, .committing .hand-row .card .code { right: 6px; bottom: 4px; font-size: 10px; }
+    .committing .hand-row {
+      display: grid;
+      grid-template-columns: repeat(3, clamp(62px, 9vw, 93px));
+      justify-content: center;
+      overflow-x: visible;
+    }
+    .empty-row { align-self: center; color: #d0d6d1; font-size: 12px; font-style: italic; }
+    .chosen { outline: 3px solid var(--gold); outline-offset: 2px; transform: translateY(-4px); }
+    .actions { display: flex; justify-content: center; flex-wrap: wrap; gap: 10px; margin-top: 17px; }
+    .action {
+      min-height: 43px; padding: 0 20px; border: 1px solid #f4d881; border-radius: 8px;
+      background: #f0c75e; color: #262a29; font-weight: 800; cursor: pointer;
+    }
+    .action:hover { background: #ffda74; }
+    .action:disabled { border-color: #999f9b; background: #aeb5b0; color: #555d59; cursor: not-allowed; }
+    .action.secondary { border-color: #c4ccc6; background: #424a47; color: #f2f4f0; }
+    .rules-line { margin: 12px 0; color: #d1d7d2; font-size: 12px; font-weight: 600; line-height: 1.5; text-align: center; }
+    .rules-blade { color: #e1434b; }
+    .rules-fang { color: #e2b518; }
+    .rules-shield { color: #4598e7; }
+    .rules-separator { margin: 0 .45em; color: #b7beb9; font-size: .75em; vertical-align: middle; }
+    .modal-backdrop { position: fixed; z-index: 5; inset: 0; display: grid; place-items: center; padding: 18px; background: #141817d9; }
+    .modal { width: min(440px, 100%); padding: 27px; border: 1px solid #e6ce81; border-radius: 16px; background: #303735; box-shadow: 0 20px 70px #0008; text-align: center; }
+    .modal h2 { margin: 0 0 10px; font-size: 25px; }
+    .modal p { color: #d6ddd8; line-height: 1.5; }
+    .confirmation-actions { display: flex; justify-content: center; gap: 10px; margin-top: 18px; }
+    .confirmation-actions .action { flex: 1; }
+    .mode-list { display: grid; gap: 9px; margin-top: 19px; }
+    .mode-list .action { width: 100%; }
+    .hidden { display: none !important; }
+    @media (max-width: 700px) {
+      .shell { padding: 12px 8px 24px; }
+      .board { padding: 9px; border-radius: 12px; }
+      .track { gap: 3px; }
+      .track-cell { height: 68px; border-radius: 6px; }
+      .cell-caption { top: 3px; left: 3px; right: 3px; font-size: 7px; }
+      .track-cell .card { width: calc(100% - 4px); height: calc(100% - 27px); margin-top: 18px; }
+      .track-cell .card .face { font-size: 16px; }
+      .battle { grid-template-columns: 1fr 32px 1fr; min-height: 126px; padding: 10px 5px; gap: 4px; }
+      .battle-player { gap: 5px; }
+      .battle-player-name { max-width: 45px; font-size: 9px; }
+      .player-panel { padding: 10px 7px; }
+      .player-heading h2 { font-size: 12px; }
+      .player-heading span { font-size: 10px; }
+      .player-card-rows .card-row { gap: 4px; }
+      .card-row .card { width: clamp(40px, 13vw, 52px); height: clamp(54px, 17vw, 70px); }
+      .pile-row .card, .committing .hand-row .card { width: clamp(62px, 9vw, 93px); height: clamp(84px, 12vw, 119px); }
+      .rules-line { font-size: 10px; }
+      .scoreline { gap: 10px; }
+    }
+  </style>
+</head>
+<body>
+  <main class="shell">
+    <header class="topline">
+      <h1 class="brand">Prisoners <span>of War</span></h1>
+      <div id="roundLabel" class="round-label">Card battle</div>
+    </header>
+    <section class="board" aria-label="Game board">
+      <div id="track" class="track" aria-label="Bounty and captured prisoners"></div>
+      <div id="scoreLine" class="scoreline"></div>
+      <p id="status" class="status" aria-live="polite">Choose a game mode to begin.</p>
+      <section class="battle" aria-label="Current battle">
+        <div id="battleLeft" class="battle-player"></div>
+        <div class="battle-vs">VS</div>
+        <div id="battleRight" class="battle-player"></div>
+      </section>
+      <p class="rules-line" aria-label="Blade beats Fang. Fang beats Shield. Shield beats Blade.">
+        <span class="rules-blade">Blade</span> beats <span class="rules-fang">Fang</span>
+        <span class="rules-separator" aria-hidden="true">●</span>
+        <span class="rules-fang">Fang</span> beats <span class="rules-shield">Shield</span>
+        <span class="rules-separator" aria-hidden="true">●</span>
+        <span class="rules-shield">Shield</span> beats <span class="rules-blade">Blade</span>
+      </p>
+      <section id="players" class="players" aria-label="Current player cards"></section>
+      <div id="actions" class="actions"></div>
+    </section>
+  </main>
+  <div id="modal" class="modal-backdrop"></div>
+  <script>
+    const suitNames = ["Blade", "Fang", "Shield"];
+    const suitCodes = ["B", "F", "S"];
+    const selected = new Set();
+    let state = null;
+    let activeMode = "";
+    let showNewGameConfirmation = false;
+    let actionInProgress = false;
+
+    function esc(value) {
+      return String(value).replace(/[&<>"']/g, ch => ({
+        "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;"
+      })[ch]);
+    }
+
+    async function api(path, body) {
+      const response = await fetch(path, body ? {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(body)
+      } : {});
+      const payload = await response.json();
+      if (!response.ok) throw new Error(payload.error || "Request failed");
+      return payload;
+    }
+
+    function cardMarkup(item, options = {}) {
+      const card = item.card || item;
+      const code = `${suitCodes[card.suit]}${card.face}`;
+      const suitClass = ["suit-blade", "suit-fang", "suit-shield"][card.suit];
+      const selectable = Boolean(item.selectable);
+      const chosen = options.commit && selected.has(item.index);
+      const tag = selectable ? "button" : "div";
+      const attrs = selectable ? `type="button" data-index="${item.index}" aria-pressed="${chosen}"` : "";
+      return `<${tag} class="card ${suitClass}${chosen ? " chosen" : ""}" ${attrs} aria-label="${esc(suitNames[card.suit])} ${card.face}">
+        <span class="face">${card.face}</span><span class="code">${code}</span>
+      </${tag}>`;
+    }
+
+    function backs(count) {
+      return count > 0 ? '<div class="card back" aria-label="Hidden cards"></div>' : "";
+    }
+
+    function connectionError(error) {
+      return error instanceof TypeError && error.message === "Failed to fetch"
+        ? "Game server unavailable. Keep `go run .` running, then reload this page."
+        : error.message;
+    }
+
+    function setStatus(message, isError = false) {
+      const status = document.getElementById("status");
+      status.textContent = message || "";
+      status.style.color = isError ? "#ffd0ce" : "";
+    }
+
+    function renderTrack() {
+      const track = document.getElementById("track");
+      if (!state || !state.started) {
+        track.innerHTML = "";
+        return;
+      }
+      const bounty = `<div class="track-cell bounty">
+        <span class="cell-caption">Bounty</span>
+        ${cardMarkup(state.bounty)}
+      </div>`;
+      const slots = state.jailSlots.map((cell, index) => {
+        const border = cell.capturedBy === "White" ? "white-capture" : cell.capturedBy === "Black" ? "black-capture" : "";
+        const content = cell.card ? cardMarkup(cell.card) : `<span class="cell-empty">${cell.clash ? "CLASH" : String(index + 1).padStart(2, "0")}</span>`;
+        const caption = cell.capturedBy ? `${esc(cell.capturedBy)} captured` : cell.clash ? "Tie" : `Battle ${index + 1}`;
+        return `<div class="track-cell ${border}">
+          <span class="cell-caption">${caption}</span>${content}
+        </div>`;
+      }).join("");
+      track.innerHTML = bounty + slots;
+    }
+
+    function renderPlayers() {
+      const container = document.getElementById("players");
+      if (!state || !state.started) {
+        container.innerHTML = "";
+        return;
+      }
+      if (state.phase === "handoff") {
+        container.innerHTML = "";
+        return;
+      }
+      const playerIndex = state.mode === "hvh" ? state.actor : 0;
+      const player = state.players[playerIndex];
+      const committing = state.phase === "commit" && player.canSelectHand;
+      const colorClass = player.color.toLowerCase();
+      const playerTitle = state.mode === "hvh" ? `Player ${playerIndex + 1}` : "You";
+      const handCards = player.hand.map(item => cardMarkup(item, { commit: state.phase === "commit" })).join("");
+      const poolCards = player.pool.map(item => cardMarkup(item)).join("");
+      const handContent = handCards || backs(player.hiddenHand) || '<span class="empty-row">No cards held</span>';
+      const poolContent = poolCards || backs(player.hiddenPool) || '<span class="empty-row">No cards in pile</span>';
+      container.innerHTML = `<article class="player-panel ${colorClass}${committing ? " committing" : ""}">
+        <div class="player-heading">
+          <h2>${esc(player.color)} · ${esc(playerTitle)}</h2>
+          <span>Seat ${esc(player.seat)} · ${player.score} pts</span>
+        </div>
+        <div class="player-card-rows">
+          <section class="card-group">
+            <div class="row-label">Round Pile</div>
+            <div class="card-row pile-row">${poolContent}</div>
+          </section>
+          <section class="card-group">
+            <div class="row-label">Hand</div>
+            <div class="card-row hand-row">${handContent}</div>
+          </section>
+        </div>
+      </article>`;
+
+      container.querySelectorAll(".card[data-index]").forEach(button => {
+        button.addEventListener("click", () => {
+          const index = Number(button.dataset.index);
+          const player = state.players[state.actor];
+          if (state.phase === "commit" && player.canSelectHand) {
+            if (selected.has(index)) selected.delete(index);
+            else if (selected.size < 3) selected.add(index);
+            render();
+          } else if (state.phase === "attack" && player.canSelectPool) {
+            act("attack", { index });
+          } else if (state.phase === "defend" && player.canSelectPool) {
+            act("defend", { index });
+          }
+        });
+      });
+    }
+
+    function renderBattle() {
+      const attack = state && state.battleAttack ? cardMarkup(state.battleAttack) : '<div class="battle-empty"></div>';
+      const defend = state && state.battleDefend ? cardMarkup(state.battleDefend) : '<div class="battle-empty"></div>';
+      const attackerName = state && state.players ? state.players[state.attacker].color : "Attacker";
+      const defenderName = state && state.players ? state.players[1 - state.attacker].color : "Defender";
+      document.getElementById("battleLeft").innerHTML =
+        `<span class="battle-player-name">${esc(attackerName)}<br>attacks</span>${attack}`;
+      document.getElementById("battleRight").innerHTML =
+        `${defend}<span class="battle-player-name">${esc(defenderName)}<br>defends</span>`;
+    }
+
+    function renderActions() {
+      const actions = document.getElementById("actions");
+      actions.innerHTML = "";
+      if (!state || !state.started) return;
+      if (state.phase === "commit" && (state.mode === "hvh" || state.actor === 0)) {
+        if (selected.size === 3) {
+          actions.append(makeButton("Lock in pile", () => act("commit", { cards: [...selected] })));
+        }
+      } else if (state.phase === "seat" && (state.mode === "hvh" || state.actor === 0)) {
+        actions.append(makeButton("Take seat X", () => act("seat", { seat: "X" })));
+        actions.append(makeButton("Take seat Y", () => act("seat", { seat: "Y" })));
+      } else if (state.phase === "result") {
+        actions.append(makeButton(state.phase === "result" && state.round === 3 && state.exchange === 3
+          ? "Finish game" : "Continue", () => act("continue")));
+      } else if (state.phase === "gameover") {
+        actions.append(makeButton("Play again", () => startNewGame()));
+      }
+      if (state.phase !== "gameover" && state.phase !== "handoff" && activeMode) {
+        actions.append(makeButton("New game", requestNewGameConfirmation, "secondary"));
+      }
+    }
+
+    function requestNewGameConfirmation() {
+      showNewGameConfirmation = true;
+      renderModal();
+    }
+
+    function renderModal() {
+      const modal = document.getElementById("modal");
+      if (!state || !state.started) {
+        modal.classList.remove("hidden");
+        modal.innerHTML = `<section class="modal">
+          <h2>Choose your match</h2>
+          <p>Three rounds. Choose your cards, win prisoners, and claim the bounty.</p>
+          <div class="mode-list">
+            <button class="action" data-mode="hvh">Human vs Human</button>
+            <button class="action secondary" data-mode="easy">Human vs AI · Easy</button>
+            <button class="action secondary" data-mode="normal">Human vs AI · Normal</button>
+            <button class="action secondary" data-mode="hard">Human vs AI · Hard</button>
+          </div>
+        </section>`;
+        modal.querySelectorAll("[data-mode]").forEach(button => {
+          button.addEventListener("click", () => startNewGame(button.dataset.mode));
+        });
+        return;
+      }
+      if (state.phase === "handoff") {
+        modal.classList.remove("hidden");
+        modal.innerHTML = `<section class="modal">
+          <h2>Pass the screen</h2>
+          <p>${esc(state.message)} Your cards stay hidden until you continue.</p>
+          <button class="action" id="readyButton">I’m ready</button>
+        </section>`;
+        modal.querySelector("#readyButton").addEventListener("click", () => act("ready"));
+      } else if (showNewGameConfirmation) {
+        modal.classList.remove("hidden");
+        modal.innerHTML = `<section class="modal" role="dialog" aria-modal="true" aria-labelledby="newGameTitle">
+          <h2 id="newGameTitle">Start a new game?</h2>
+          <p>Your current game will be lost.</p>
+          <div class="confirmation-actions">
+            <button type="button" class="action secondary" id="cancelNewGameButton">Cancel</button>
+            <button type="button" class="action" id="confirmNewGameButton">Start new game</button>
+          </div>
+        </section>`;
+        modal.querySelector("#cancelNewGameButton").addEventListener("click", () => {
+          showNewGameConfirmation = false;
+          renderModal();
+        });
+        modal.querySelector("#confirmNewGameButton").addEventListener("click", () => {
+          showNewGameConfirmation = false;
+          modal.classList.add("hidden");
+          modal.innerHTML = "";
+          startNewGame();
+        });
+      } else if (state.phase === "gameover") {
+        modal.classList.remove("hidden");
+        const white = state.players.find(player => player.color === "White");
+        const black = state.players.find(player => player.color === "Black");
+        const heading = state.mode === "hvh"
+          ? `${state.players[state.winner].color} wins`
+          : state.winner === 0 ? "You Won!" : "You Lost";
+        modal.innerHTML = `<section class="modal">
+          <h2>${esc(heading)}</h2>
+          <p>Final score: <strong>${white.score} – ${black.score}</strong> (White–Black)</p>
+          <p>${esc(state.tiebreak || "Higher total score")}.</p>
+          <button class="action" id="againButton">Play again</button>
+        </section>`;
+        modal.querySelector("#againButton").addEventListener("click", () => startNewGame());
+      } else {
+        modal.classList.add("hidden");
+        modal.innerHTML = "";
+      }
+    }
+
+    function makeButton(label, callback, style = "") {
+      const button = document.createElement("button");
+      button.type = "button";
+      button.className = `action ${style}`.trim();
+      button.textContent = label;
+      button.addEventListener("click", callback);
+      return button;
+    }
+
+    function render() {
+      document.getElementById("roundLabel").textContent = state && state.started
+        ? `Round ${state.round} · Battle ${Math.min(state.exchange, 3)} of 3`
+        : "Card battle";
+      const scoreLine = document.getElementById("scoreLine");
+      if (state && state.started) {
+        const white = state.players.find(player => player.color === "White");
+        const black = state.players.find(player => player.color === "Black");
+        scoreLine.innerHTML = `<span><strong>${white.you ? "You" : "White"} = ${white.score}</strong></span>
+          <span><strong class="black-score">${black.you ? "You" : "Black"} = ${black.score}</strong></span>`;
+      } else {
+        scoreLine.innerHTML = "";
+      }
+      setStatus(state && state.started ? state.message : "Choose a game mode to begin.");
+      renderTrack();
+      renderBattle();
+      renderPlayers();
+      renderActions();
+      renderModal();
+    }
+
+    async function startNewGame(mode) {
+      try {
+        selected.clear();
+        const body = mode ? { mode } : { mode: activeMode || (state && state.mode) || "hvh" };
+        state = await api("/api/new", body);
+        activeMode = state.mode;
+        selected.clear();
+        render();
+      } catch (error) {
+        setStatus(connectionError(error), true);
+      }
+    }
+
+    async function act(action, payload = {}) {
+      if (actionInProgress) return;
+      actionInProgress = true;
+      try {
+        selected.clear();
+        state = await api("/api/action", { action, ...payload });
+        activeMode = state.mode;
+        render();
+      } catch (error) {
+        if (action === "seat") {
+          const previousPhase = state && state.phase;
+          const previousActor = state && state.actor;
+          try {
+            state = await api("/api/state");
+            activeMode = state.mode || "";
+            selected.clear();
+            render();
+            if (!state.started || state.phase !== previousPhase || state.actor !== previousActor) {
+              setStatus(state.started ? `Game state updated. ${state.message}` : "The game is no longer active.");
+              return;
+            }
+          } catch (refreshError) {
+            setStatus(`${connectionError(error)}; failed to refresh the game state: ${connectionError(refreshError)}`, true);
+            return;
+          }
+        }
+        setStatus(connectionError(error), true);
+      } finally {
+        actionInProgress = false;
+      }
+    }
+
+    async function initialize() {
+      try {
+        state = await api("/api/state");
+        activeMode = state.mode || "";
+        render();
+        if (activeMode) startNewGame(activeMode);
+      } catch (error) {
+        setStatus(error.message, true);
+      }
+    }
+
+    initialize();
+  </script>
+</body>
+</html>
