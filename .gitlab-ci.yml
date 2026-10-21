@@ -1,0 +1,13 @@
+image: golang:1.21
+
+stages:
+  - test
+
+go-test-and-build:
+  stage: test
+  script:
+    - go test ./...
+    - go build ./...
+  rules:
+    - if: '$CI_PIPELINE_SOURCE == "merge_request_event"'
+    - if: '$CI_COMMIT_BRANCH'

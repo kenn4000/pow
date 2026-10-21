@@ -1,0 +1,650 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Prisoners of War</title>
+  <style>
+    :root {
+      color-scheme: dark;
+      font-family: "Segoe UI", Arial, sans-serif;
+      background: #252a2b;
+      color: #f3f4ef;
+      font-synthesis: none;
+      --felt: #777f7b;
+      --felt-dark: #606864;
+      --gold: #f0c75e;
+      --paper: #f4f2e9;
+      --card-red: #c5373d;
+      --card-blue: #2873be;
+      --card-yellow: #b58a06;
+      --card-green: #24834f;
+      --card-orange: #c76516;
+      --card-purple: #784bb1;
+      --card-brown: #805332;
+      --card-silver: #6c747b;
+    }
+
+    * { box-sizing: border-box; }
+    body { margin: 0; min-width: 320px; background: #252a2b; }
+    button { font: inherit; }
+    .shell { width: min(1440px, 100%); margin: 0 auto; padding: 20px clamp(12px, 3vw, 40px) 36px; }
+    .topline { display: flex; justify-content: space-between; align-items: center; gap: 16px; margin-bottom: 18px; }
+    .brand { margin: 0; font-size: clamp(20px, 3vw, 30px); letter-spacing: .08em; text-transform: uppercase; }
+    .brand span { color: var(--gold); }
+    .round-label { color: #c9ceca; font-size: 14px; letter-spacing: .08em; text-transform: uppercase; }
+    .board { padding: clamp(12px, 2vw, 24px); border: 1px solid #919a95; border-radius: 18px; background: var(--felt); box-shadow: 0 18px 50px #0005; }
+    .track { display: grid; grid-template-columns: repeat(10, minmax(0, 1fr)); gap: 5px; }
+    .track-cell { min-width: 0; height: clamp(76px, 10vw, 126px); display: flex; align-items: center; justify-content: center; position: relative; border: 2px solid #d2d7d2; border-radius: 9px; background: #626a66; }
+    .track-cell.bounty { border: 3px solid var(--gold); background: #6b664f; }
+    .track-cell.bounty .card { border: 3px solid var(--gold); }
+    .track-cell.white-capture { border-color: #fff; }
+    .track-cell.black-capture { border-color: #151817; }
+    .track-cell.white-capture .card { border-color: #fff; }
+    .track-cell.black-capture .card { border-color: #151817; }
+    .track-cell .card { width: min(64px, calc(100% - 10px)); height: calc(100% - 10px); min-height: 0; }
+    .track-cell .card .face { font-size: clamp(18px, 3vw, 32px); }
+    .cell-empty { color: #aeb5b0; font-size: 13px; }
+    .card {
+      width: clamp(49px, 7vw, 83px);
+      height: clamp(66px, 9vw, 108px);
+      display: inline-flex;
+      flex: 0 0 auto;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      position: relative;
+      padding: 5px;
+      border: 2px solid #fff;
+      border-radius: 8px;
+      background: var(--paper);
+      box-shadow: 0 4px 9px #0004;
+      color: #252a2b;
+      cursor: default;
+      transition: transform .12s ease, box-shadow .12s ease, outline-color .12s ease;
+    }
+    button.card { cursor: pointer; }
+    button.card:hover { transform: translateY(-5px); box-shadow: 0 8px 13px #0005; }
+    button.card:focus-visible { outline: 3px solid var(--gold); outline-offset: 2px; }
+    .card .face { font-size: clamp(24px, 4vw, 42px); font-weight: 800; line-height: 1; }
+    .card .face { color: var(--card-suit-color); }
+    .card.back { cursor: default; border-color: #e2e4df; background: repeating-linear-gradient(135deg, #323a39 0 7px, #414b48 7px 14px); }
+    .card.back::after { content: "POW"; color: #f0c75e; font-size: 11px; font-weight: 800; letter-spacing: .16em; }
+    .card.back .face { display: none; }
+    .scoreline { min-height: 50px; display: flex; align-items: center; justify-content: center; gap: clamp(12px, 4vw, 48px); margin: 10px 0 4px; font-size: clamp(16px, 2.5vw, 23px); font-weight: 700; letter-spacing: .03em; }
+    .scoreline strong { color: #fff; }
+    .scoreline .black-score { color: #171b1a; text-shadow: 0 1px #c7ceca; }
+    .status { min-height: 34px; margin: 2px 0 14px; text-align: center; color: #f4f5f1; font-size: 15px; }
+    .player-instructions .status { margin: 3px 0 12px; }
+    .battle-layout { display: grid; grid-template-columns: minmax(150px, .85fr) minmax(0, 2fr); align-items: center; gap: clamp(8px, 2vw, 20px); }
+    .battle { display: grid; grid-template-columns: minmax(0, 1fr) minmax(40px, 64px) minmax(0, 1fr); align-items: center; gap: 8px; min-height: 160px; padding: 14px clamp(8px, 3vw, 32px); border: 1px solid #c2c8c4; border-radius: 13px; background: #68716c; }
+    .battle-player { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 6px; min-width: 0; }
+    .battle-player-name { max-width: 100%; color: #e4e8e4; font-size: 12px; text-align: center; text-transform: uppercase; letter-spacing: .08em; }
+    .battle-vs { color: #d5dbd6; text-align: center; font-weight: 800; letter-spacing: .12em; }
+    .battle .card { width: clamp(62px, 9vw, 93px); height: clamp(84px, 12vw, 119px); }
+    .battle-empty { width: clamp(62px, 9vw, 93px); height: clamp(84px, 12vw, 119px); border: 2px dashed #bdc5bf; border-radius: 8px; }
+    .players { display: grid; grid-template-columns: minmax(0, 1fr); margin-top: 16px; }
+    .player-panel { min-width: 0; padding: 13px clamp(10px, 2vw, 18px) 16px; border: 1px solid #aeb7b1; border-radius: 12px; background: #6c746f; }
+    .player-panel.white { border-top: 4px solid #fff; }
+    .player-panel.black { border-top: 4px solid #171b1a; }
+    .player-heading { display: flex; justify-content: space-between; align-items: baseline; gap: 8px; margin-bottom: 10px; }
+    .player-heading h2 { margin: 0; font-size: 15px; letter-spacing: .09em; text-transform: uppercase; }
+    .player-heading span { color: #e1e5e1; font-size: 12px; }
+    .row-label { margin: 11px 0 6px; color: #e1e5e1; font-size: 10px; font-weight: 700; letter-spacing: .14em; text-align: center; text-transform: uppercase; }
+    .player-card-rows { display: block; }
+    .card-group { min-width: 0; }
+    .card-row { min-height: 74px; display: flex; align-items: center; gap: clamp(5px, 1vw, 11px); overflow-x: auto; padding: 4px 3px 8px; }
+    .pile-row, .hand-row { justify-content: center; }
+    .card-row .card { width: clamp(44px, 5.5vw, 62px); height: clamp(60px, 7vw, 80px); }
+    .card-row .card .face { font-size: clamp(21px, 3vw, 31px); }
+    .pile-row .card, .committing .hand-row .card { width: clamp(62px, 9vw, 93px); height: clamp(84px, 12vw, 119px); }
+    .pile-row .card .face, .committing .hand-row .card .face { font-size: clamp(24px, 4vw, 42px); }
+    .committing .hand-row {
+      display: grid;
+      grid-template-columns: repeat(3, clamp(62px, 9vw, 93px));
+      justify-content: center;
+      overflow-x: visible;
+    }
+    .empty-row { align-self: center; color: #d0d6d1; font-size: 12px; font-style: italic; }
+    .chosen { outline: 3px solid var(--gold); outline-offset: 2px; transform: translateY(-4px); }
+    .actions { display: flex; justify-content: center; flex-wrap: wrap; gap: 10px; margin-top: 17px; }
+    .action {
+      min-height: 43px; padding: 0 20px; border: 1px solid #f4d881; border-radius: 8px;
+      background: #f0c75e; color: #262a29; font-weight: 800; cursor: pointer;
+    }
+    .action:hover { background: #ffda74; }
+    .action:disabled { border-color: #999f9b; background: #aeb5b0; color: #555d59; cursor: not-allowed; }
+    .action.secondary { border-color: #c4ccc6; background: #424a47; color: #f2f4f0; }
+    .suit-cycle { position: relative; z-index: 2; width: 100%; aspect-ratio: 4 / 3; margin: 0 auto; }
+    .suit-arrows { position: absolute; inset: 0; width: 100%; height: 100%; overflow: visible; }
+    .suit-arrows > path { fill: none; stroke: #c5cbc7; stroke-width: 3; marker-end: url(#suit-arrowhead); }
+    .suit-arrows > path.connector { marker-end: none; }
+    .suit-node-wrap {
+      position: absolute; z-index: 1; width: 24%; min-width: 40px; max-width: 82px;
+      transform: translate(-50%, -50%);
+    }
+    .suit-node-wrap.scissors { left: 50%; top: 18.7%; }
+    .suit-node-wrap.paper { left: 22.5%; top: 77.3%; }
+    .suit-node-wrap.rock { left: 77.5%; top: 77.3%; }
+    .suit-node-wrap.menu-open { z-index: 5; }
+    .suit-node {
+      display: block; width: 100%; aspect-ratio: 1; padding: 0; cursor: pointer;
+      border: 3px solid #e7ebe8; border-radius: 50%; box-shadow: 0 4px 12px #0006;
+    }
+    .suit-node:hover { filter: brightness(1.14); }
+    .suit-node:focus-visible { outline: 3px solid var(--gold); outline-offset: 3px; }
+    .color-menu {
+      position: absolute; z-index: 3; top: calc(100% + 7px); left: 50%; transform: translateX(-50%);
+      display: grid; gap: 3px; min-width: 122px; max-height: min(240px, 50vh); overflow-y: auto;
+      padding: 5px; border: 1px solid #d1d7d2; border-radius: 8px; background: #303735; box-shadow: 0 8px 22px #0008;
+    }
+    .color-option {
+      display: flex; align-items: center; gap: 8px; min-height: 30px; padding: 3px 7px;
+      border: 0; border-radius: 5px; background: transparent; color: #f3f4ef; text-align: left; cursor: pointer;
+    }
+    .color-option:hover, .color-option:focus-visible { background: #515a56; outline: none; }
+    .color-option-swatch { width: 15px; height: 15px; flex: 0 0 auto; border: 1px solid #fff9; border-radius: 50%; }
+    .suit-node-wrap.paper .color-menu { left: 0; transform: none; }
+    .suit-node-wrap.rock .color-menu { right: 0; left: auto; transform: none; }
+    .battle-layout .battle { min-width: 0; }
+    .rotate-colors {
+      position: absolute; z-index: 2; left: 50%; top: 57.8%; width: clamp(18px, 5.25vw, 25.5px);
+      aspect-ratio: 1; display: grid; place-items: center; padding: 3px; transform: translate(-50%, -50%);
+      border: 1.5px solid #e7ebe8; border-radius: 50%; background: #424a47; color: #f3f4ef;
+      box-shadow: 0 3px 9px #0006; cursor: pointer;
+    }
+    .rotate-colors:hover { background: #59625d; }
+    .rotate-colors:focus-visible { outline: 3px solid var(--gold); outline-offset: 3px; }
+    .rotate-colors svg { width: 100%; height: 100%; fill: currentColor; }
+    .modal-backdrop { position: fixed; z-index: 5; inset: 0; display: grid; place-items: center; padding: 18px; background: #141817d9; }
+    .modal { width: min(440px, 100%); padding: 27px; border: 1px solid #e6ce81; border-radius: 16px; background: #303735; box-shadow: 0 20px 70px #0008; text-align: center; }
+    .modal h2 { margin: 0 0 10px; font-size: 25px; }
+    .modal p { color: #d6ddd8; line-height: 1.5; }
+    .confirmation-actions { display: flex; justify-content: center; gap: 10px; margin-top: 18px; }
+    .confirmation-actions .action { flex: 1; }
+    .mode-list { display: grid; gap: 9px; margin-top: 19px; }
+    .mode-list .action { width: 100%; }
+    .hidden { display: none !important; }
+    @media (max-width: 700px) {
+      .shell { padding: 12px 8px 24px; }
+      .board { padding: 9px; border-radius: 12px; }
+      .track { gap: 3px; }
+      .track-cell { height: 68px; border-radius: 6px; }
+      .track-cell .card { width: calc(100% - 4px); height: calc(100% - 4px); }
+      .track-cell .card .face { font-size: 16px; }
+      .battle-layout { grid-template-columns: minmax(120px, 1fr) minmax(0, 1fr); gap: 5px; }
+      .battle { grid-template-columns: minmax(0, 1fr) 18px minmax(0, 1fr); min-height: 108px; padding: 8px 3px; gap: 2px; }
+      .battle-player { gap: 4px; }
+      .battle-player-name { font-size: 8px; }
+      .battle .card, .battle-empty { width: clamp(34px, 10vw, 55px); height: clamp(48px, 14vw, 70px); }
+      .player-panel { padding: 10px 7px; }
+      .player-heading h2 { font-size: 12px; }
+      .player-heading span { font-size: 10px; }
+      .player-card-rows .card-row { gap: 4px; }
+      .card-row .card { width: clamp(40px, 13vw, 52px); height: clamp(54px, 17vw, 70px); }
+      .pile-row .card, .committing .hand-row .card { width: clamp(62px, 9vw, 93px); height: clamp(84px, 12vw, 119px); }
+
+      .scoreline { gap: 10px; }
+    }
+  </style>
+</head>
+<body>
+  <main class="shell">
+    <header class="topline">
+      <h1 class="brand">Prisoners <span>of War</span></h1>
+      <div id="roundLabel" class="round-label">Card battle</div>
+    </header>
+    <section class="board" aria-label="Game board">
+      <div id="track" class="track" aria-label="Bounty and captured prisoners"></div>
+      <div id="scoreLine" class="scoreline"></div>
+      <div id="statusHost">
+        <p id="status" class="status" aria-live="polite">Choose a game mode to begin.</p>
+      </div>
+      <div class="battle-layout">
+        <section id="suitCycle" class="suit-cycle" role="group" aria-label="Suit relationships and color selectors"></section>
+        <section class="battle" aria-label="Current battle">
+          <div id="battleLeft" class="battle-player"></div>
+          <div class="battle-vs">VS</div>
+          <div id="battleRight" class="battle-player"></div>
+        </section>
+      </div>
+      <section id="players" class="players" aria-label="Current player cards"></section>
+      <div id="actions" class="actions"></div>
+    </section>
+  </main>
+  <div id="modal" class="modal-backdrop"></div>
+  <script>
+    const suits = ["Scissors", "Paper", "Rock"];
+    const colors = ["Red", "Blue", "Yellow", "Green", "Orange", "Purple", "Brown", "Silver"];
+    const colorVars = {
+      Red: "var(--card-red)", Blue: "var(--card-blue)", Yellow: "var(--card-yellow)",
+      Green: "var(--card-green)", Orange: "var(--card-orange)", Purple: "var(--card-purple)",
+      Brown: "var(--card-brown)", Silver: "var(--card-silver)"
+    };
+    const suitColors = loadSuitColors();
+    const selected = new Set();
+    let openSuitMenu = null;
+    let state = null;
+    let activeMode = "";
+    let showNewGameConfirmation = false;
+    let actionInProgress = false;
+
+    function loadSuitColors() {
+      const defaults = ["Red", "Yellow", "Blue"];
+      try {
+        const saved = JSON.parse(localStorage.getItem("pow-suit-colors") || "null");
+        if (Array.isArray(saved) && saved.length === suits.length &&
+            saved.every(color => colors.includes(color)) && new Set(saved).size === suits.length) {
+          return saved;
+        }
+      } catch {
+        return defaults;
+      }
+      return defaults;
+    }
+
+    function esc(value) {
+      return String(value).replace(/[&<>"']/g, ch => ({
+        "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;"
+      })[ch]);
+    }
+
+    async function api(path, body) {
+      const response = await fetch(path, body ? {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(body)
+      } : {});
+      const payload = await response.json();
+      if (!response.ok) throw new Error(payload.error || "Request failed");
+      return payload;
+    }
+
+    function cardMarkup(item, options = {}) {
+      const card = item.card || item;
+      const color = suitColors[card.suit];
+      const selectable = Boolean(item.selectable);
+      const chosen = options.commit && selected.has(item.index);
+      const tag = selectable ? "button" : "div";
+      const attrs = selectable ? `type="button" data-index="${item.index}" aria-pressed="${chosen}"` : "";
+      return `<${tag} class="card${chosen ? " chosen" : ""}" style="--card-suit-color:${colorVars[color]}" ${attrs} aria-label="${esc(color)} ${card.face}">
+        <span class="face">${card.face}</span>
+      </${tag}>`;
+    }
+
+    function renderSuitCycle() {
+      const container = document.getElementById("suitCycle");
+      const locations = [
+        { suit: 0, location: "scissors" },
+        { suit: 1, location: "paper" },
+        { suit: 2, location: "rock" }
+      ];
+      container.innerHTML = `<svg class="suit-arrows" viewBox="0 0 400 300" aria-hidden="true">
+          <defs><marker id="suit-arrowhead" markerWidth="10" markerHeight="10" refX="8" refY="5" orient="auto">
+            <path d="M0,0 L10,5 L0,10 z" fill="#c5cbc7"></path>
+          </marker></defs>
+          <path class="connector" d="M145 141 L90 232"></path>
+          <path class="connector" d="M200 232 L310 232"></path>
+          <path class="connector" d="M255 141 L200 56"></path>
+          <path d="M178 96 L145 141"></path>
+          <path d="M140 232 L200 232"></path>
+          <path d="M288 187 L255 141"></path>
+        </svg>${locations.map(({ suit, location }) => {
+          const menu = openSuitMenu === suit
+            ? `<div class="color-menu" role="menu" aria-label="Choose an unused color">
+                ${colors.filter(color => !suitColors.includes(color)).map(color =>
+                  `<button type="button" class="color-option" role="menuitem" data-suit-option="${suit}" data-color="${color}">
+                    <span class="color-option-swatch" style="background:${colorVars[color]}"></span>${color}
+                  </button>`).join("")}
+              </div>`
+            : "";
+          return `<div class="suit-node-wrap ${location}${openSuitMenu === suit ? " menu-open" : ""}">
+            <button type="button" class="suit-node" data-suit-trigger="${suit}"
+              style="background:${colorVars[suitColors[suit]]}"
+              aria-label="${suitColors[suit]} suit color, open color menu" aria-haspopup="menu"
+              aria-expanded="${openSuitMenu === suit}"></button>
+            ${menu}
+          </div>`;
+        }).join("")}<button type="button" class="rotate-colors" data-rotate-colors
+          aria-label="Rotate colors counterclockwise" title="Rotate colors counterclockwise">
+          <svg viewBox="0 0 24 24" aria-hidden="true">
+            <path d="M7.11 8.53A5.99 5.99 0 0 1 12 6c3.31 0 6 2.69 6 6s-2.69 6-6 6a5.99 5.99 0 0 1-5.65-4H4.26A8 8 0 0 0 12 20c4.42 0 8-3.58 8-8s-3.58-8-8-8c-2.21 0-4.21.9-5.66 2.34L4 4v6h6L7.11 8.53z"></path>
+          </svg>
+        </button>`;
+      container.onclick = event => {
+        event.stopPropagation();
+        if (event.target.closest("[data-rotate-colors]")) {
+          const scissorsColor = suitColors[0];
+          const paperColor = suitColors[1];
+          const rockColor = suitColors[2];
+          suitColors[0] = rockColor;
+          suitColors[1] = scissorsColor;
+          suitColors[2] = paperColor;
+          openSuitMenu = null;
+          localStorage.setItem("pow-suit-colors", JSON.stringify(suitColors));
+          render();
+          return;
+        }
+        const option = event.target.closest("[data-suit-option]");
+        if (option) {
+          const suit = Number(option.dataset.suitOption);
+          const color = option.dataset.color;
+          if (!Number.isInteger(suit) || suit < 0 || suit >= suits.length ||
+              !colors.includes(color) || suitColors.includes(color)) return;
+          suitColors[suit] = color;
+          openSuitMenu = null;
+          localStorage.setItem("pow-suit-colors", JSON.stringify(suitColors));
+          render();
+          return;
+        }
+        const trigger = event.target.closest("[data-suit-trigger]");
+        if (trigger) {
+          const suit = Number(trigger.dataset.suitTrigger);
+          openSuitMenu = openSuitMenu === suit ? null : suit;
+          renderSuitCycle();
+          if (openSuitMenu !== null) {
+            container.querySelector(".color-option")?.focus();
+          }
+          return;
+        }
+        openSuitMenu = null;
+        renderSuitCycle();
+      };
+    }
+
+    document.addEventListener("click", event => {
+      if (openSuitMenu !== null && !event.target.closest("#suitCycle")) {
+        openSuitMenu = null;
+        renderSuitCycle();
+      }
+    });
+
+    function backs(count) {
+      return count > 0 ? '<div class="card back" aria-label="Hidden cards"></div>' : "";
+    }
+
+    function connectionError(error) {
+      return error instanceof TypeError && error.message === "Failed to fetch"
+        ? "Game server unavailable. Keep `go run .` running, then reload this page."
+        : error.message;
+    }
+
+    function setStatus(message, isError = false) {
+      const status = document.getElementById("status");
+      status.textContent = message || "";
+      status.style.color = isError ? "#ffd0ce" : "";
+    }
+
+    function renderTrack() {
+      const track = document.getElementById("track");
+      if (!state || !state.started) {
+        track.innerHTML = "";
+        return;
+      }
+      const bounty = `<div class="track-cell bounty">
+        ${cardMarkup(state.bounty)}
+      </div>`;
+      const slots = state.jailSlots.map((cell, index) => {
+        const border = cell.capturedBy === "White" ? "white-capture" : cell.capturedBy === "Black" ? "black-capture" : "";
+        const content = cell.card ? cardMarkup(cell.card) : `<span class="cell-empty">${cell.clash ? "CLASH" : String(index + 1).padStart(2, "0")}</span>`;
+        return `<div class="track-cell ${border}">${content}</div>`;
+      }).join("");
+      track.innerHTML = bounty + slots;
+    }
+
+    function renderPlayers() {
+      const container = document.getElementById("players");
+      const statusHost = document.getElementById("statusHost");
+      const status = document.getElementById("status");
+      if (status.parentElement !== statusHost) {
+        statusHost.append(status);
+      }
+      if (!state || !state.started) {
+        container.innerHTML = "";
+        return;
+      }
+      if (state.phase === "handoff") {
+        container.innerHTML = "";
+        return;
+      }
+      const playerIndex = state.mode === "hvh" ? state.actor : 0;
+      const player = state.players[playerIndex];
+      const committing = state.phase === "commit" && player.canSelectHand;
+      const colorClass = player.color.toLowerCase();
+      const playerTitle = state.mode === "hvh" ? `Player ${playerIndex + 1}` : "You";
+      const handCards = player.hand.map(item => cardMarkup(item, { commit: state.phase === "commit" })).join("");
+      const poolCards = player.pool.map(item => cardMarkup(item)).join("");
+      const handContent = handCards || backs(player.hiddenHand) || '<span class="empty-row">No cards held</span>';
+      const poolContent = poolCards || backs(player.hiddenPool) || '<span class="empty-row">No cards in pile</span>';
+      container.innerHTML = `<article class="player-panel ${colorClass}${committing ? " committing" : ""}">
+        <div class="player-heading">
+          <h2>${esc(player.color)} · ${esc(playerTitle)}</h2>
+          <span>Seat ${esc(player.seat)} · ${player.score} pts</span>
+        </div>
+        <div class="player-instructions"></div>
+        <div class="player-card-rows">
+          <section class="card-group">
+            <div class="row-label">Round Pile</div>
+            <div class="card-row pile-row">${poolContent}</div>
+          </section>
+          <section class="card-group">
+            <div class="row-label">Hand</div>
+            <div class="card-row hand-row">${handContent}</div>
+          </section>
+        </div>
+      </article>`;
+      container.querySelector(".player-instructions").append(status);
+
+      container.querySelectorAll(".card[data-index]").forEach(button => {
+        button.addEventListener("click", () => {
+          const index = Number(button.dataset.index);
+          const player = state.players[state.actor];
+          if (state.phase === "commit" && player.canSelectHand) {
+            if (selected.has(index)) selected.delete(index);
+            else if (selected.size < 3) selected.add(index);
+            render();
+          } else if (state.phase === "attack" && player.canSelectPool) {
+            act("attack", { index });
+          } else if (state.phase === "defend" && player.canSelectPool) {
+            act("defend", { index });
+          }
+        });
+      });
+    }
+
+    function renderBattle() {
+      const attack = state && state.battleAttack ? cardMarkup(state.battleAttack) : '<div class="battle-empty"></div>';
+      const defend = state && state.battleDefend ? cardMarkup(state.battleDefend) : '<div class="battle-empty"></div>';
+      const attackerName = state && state.players ? state.players[state.attacker].color : "Attacker";
+      const defenderName = state && state.players ? state.players[1 - state.attacker].color : "Defender";
+      document.getElementById("battleLeft").innerHTML =
+        `<span class="battle-player-name">${esc(attackerName)} attacks</span>${attack}`;
+      document.getElementById("battleRight").innerHTML =
+        `<span class="battle-player-name">${esc(defenderName)} defends</span>${defend}`;
+    }
+
+    function renderActions() {
+      const actions = document.getElementById("actions");
+      actions.innerHTML = "";
+      if (!state || !state.started) return;
+      if (state.phase === "commit" && (state.mode === "hvh" || state.actor === 0)) {
+        if (selected.size === 3) {
+          actions.append(makeButton("Lock in pile", () => act("commit", { cards: [...selected] })));
+        }
+      } else if (state.phase === "seat" && (state.mode === "hvh" || state.actor === 0)) {
+        actions.append(makeButton("Take seat X", () => act("seat", { seat: "X" })));
+        actions.append(makeButton("Take seat Y", () => act("seat", { seat: "Y" })));
+      } else if (state.phase === "result") {
+        actions.append(makeButton(state.phase === "result" && state.round === 3 && state.exchange === 3
+          ? "Finish game" : "Continue", () => act("continue")));
+      } else if (state.phase === "gameover") {
+        actions.append(makeButton("Play again", () => startNewGame()));
+      }
+      if (state.phase !== "gameover" && state.phase !== "handoff" && activeMode) {
+        actions.append(makeButton("New game", requestNewGameConfirmation, "secondary"));
+      }
+    }
+
+    function requestNewGameConfirmation() {
+      showNewGameConfirmation = true;
+      renderModal();
+    }
+
+    function renderModal() {
+      const modal = document.getElementById("modal");
+      if (!state || !state.started) {
+        modal.classList.remove("hidden");
+        modal.innerHTML = `<section class="modal">
+          <h2>Choose your match</h2>
+          <p>Three rounds. Choose your cards, win prisoners, and claim the bounty.</p>
+          <div class="mode-list">
+            <button class="action" data-mode="hvh">Human vs Human</button>
+            <button class="action secondary" data-mode="easy">Human vs AI · Easy</button>
+            <button class="action secondary" data-mode="normal">Human vs AI · Normal</button>
+            <button class="action secondary" data-mode="hard">Human vs AI · Hard</button>
+          </div>
+        </section>`;
+        modal.querySelectorAll("[data-mode]").forEach(button => {
+          button.addEventListener("click", () => startNewGame(button.dataset.mode));
+        });
+        return;
+      }
+      if (state.phase === "handoff") {
+        modal.classList.remove("hidden");
+        modal.innerHTML = `<section class="modal">
+          <h2>Pass the screen</h2>
+          <p>${esc(state.message)} Your cards stay hidden until you continue.</p>
+          <button class="action" id="readyButton">I’m ready</button>
+        </section>`;
+        modal.querySelector("#readyButton").addEventListener("click", () => act("ready"));
+      } else if (showNewGameConfirmation) {
+        modal.classList.remove("hidden");
+        modal.innerHTML = `<section class="modal" role="dialog" aria-modal="true" aria-labelledby="newGameTitle">
+          <h2 id="newGameTitle">Start a new game?</h2>
+          <p>Your current game will be lost.</p>
+          <div class="confirmation-actions">
+            <button type="button" class="action secondary" id="cancelNewGameButton">Cancel</button>
+            <button type="button" class="action" id="confirmNewGameButton">Start new game</button>
+          </div>
+        </section>`;
+        modal.querySelector("#cancelNewGameButton").addEventListener("click", () => {
+          showNewGameConfirmation = false;
+          renderModal();
+        });
+        modal.querySelector("#confirmNewGameButton").addEventListener("click", () => {
+          showNewGameConfirmation = false;
+          modal.classList.add("hidden");
+          modal.innerHTML = "";
+          startNewGame();
+        });
+      } else if (state.phase === "gameover") {
+        modal.classList.remove("hidden");
+        const white = state.players.find(player => player.color === "White");
+        const black = state.players.find(player => player.color === "Black");
+        const heading = state.mode === "hvh"
+          ? `${state.players[state.winner].color} wins`
+          : state.winner === 0 ? "You Won!" : "You Lost";
+        modal.innerHTML = `<section class="modal">
+          <h2>${esc(heading)}</h2>
+          <p>Final score: <strong>${white.score} – ${black.score}</strong> (White–Black)</p>
+          <p>${esc(state.tiebreak || "Higher total score")}.</p>
+          <button class="action" id="againButton">Play again</button>
+        </section>`;
+        modal.querySelector("#againButton").addEventListener("click", () => startNewGame());
+      } else {
+        modal.classList.add("hidden");
+        modal.innerHTML = "";
+      }
+    }
+
+    function makeButton(label, callback, style = "") {
+      const button = document.createElement("button");
+      button.type = "button";
+      button.className = `action ${style}`.trim();
+      button.textContent = label;
+      button.addEventListener("click", callback);
+      return button;
+    }
+
+    function render() {
+      document.getElementById("roundLabel").textContent = state && state.started
+        ? `Round ${state.round} · Battle ${Math.min(state.exchange, 3)} of 3`
+        : "Card battle";
+      const scoreLine = document.getElementById("scoreLine");
+      if (state && state.started) {
+        const white = state.players.find(player => player.color === "White");
+        const black = state.players.find(player => player.color === "Black");
+        scoreLine.innerHTML = `<span><strong>${white.you ? "You" : "White"} = ${white.score}</strong></span>
+          <span><strong class="black-score">${black.you ? "You" : "Black"} = ${black.score}</strong></span>`;
+      } else {
+        scoreLine.innerHTML = "";
+      }
+      setStatus(state && state.started ? state.message : "Choose a game mode to begin.");
+      renderTrack();
+      renderBattle();
+      renderSuitCycle();
+      renderPlayers();
+      renderActions();
+      renderModal();
+    }
+
+    async function startNewGame(mode) {
+      try {
+        selected.clear();
+        const body = mode ? { mode } : { mode: activeMode || (state && state.mode) || "hvh" };
+        state = await api("/api/new", body);
+        activeMode = state.mode;
+        selected.clear();
+        render();
+      } catch (error) {
+        setStatus(connectionError(error), true);
+      }
+    }
+
+    async function act(action, payload = {}) {
+      if (actionInProgress) return;
+      actionInProgress = true;
+      try {
+        selected.clear();
+        state = await api("/api/action", { action, ...payload });
+        activeMode = state.mode;
+        render();
+      } catch (error) {
+        if (action === "seat") {
+          const previousPhase = state && state.phase;
+          const previousActor = state && state.actor;
+          try {
+            state = await api("/api/state");
+            activeMode = state.mode || "";
+            selected.clear();
+            render();
+            if (!state.started || state.phase !== previousPhase || state.actor !== previousActor) {
+              setStatus(state.started ? `Game state updated. ${state.message}` : "The game is no longer active.");
+              return;
+            }
+          } catch (refreshError) {
+            setStatus(`${connectionError(error)}; failed to refresh the game state: ${connectionError(refreshError)}`, true);
+            return;
+          }
+        }
+        setStatus(connectionError(error), true);
+      } finally {
+        actionInProgress = false;
+      }
+    }
+
+    async function initialize() {
+      try {
+        state = await api("/api/state");
+        activeMode = state.mode || "";
+        render();
+        if (activeMode) startNewGame(activeMode);
+      } catch (error) {
+        setStatus(error.message, true);
+      }
+    }
+
+    initialize();
+  </script>
+</body>
+</html>

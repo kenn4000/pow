@@ -1,93 +1,100 @@
-# Prisoners Of War
+# Prisoners of War
 
+A two-player, three-round card game with a local browser UI and a terminal
+fallback. It uses only the Go standard library and targets Go 1.21 or newer.
 
+## Rules summary
 
-## Getting started
+- The 27-card deck contains faces 1–9 in Scissors (S), Paper (P), and Rock (R).
+- Scissors beats Paper, Paper beats Rock, and Rock beats Scissors. A card that
+  beats its opponent has its face value doubled for that exchange.
+- At setup, one card is removed as the bounty; each card of its suit captured
+  by a player is worth one additional point.
+- Players are randomly assigned seats. X receives six cards and Y receives
+  five. Each round, both players secretly commit three cards, then resolve
+  three exchanges in X/Y/X attack order. The defender sees the attack card
+  before choosing a response.
+- The player with the higher effective value captures the opposing card; the
+  winner's card is discarded. A tie is a clash, and both cards are discarded.
+  The third battle automatically plays each player's last pile card.
+- After Round 1 the seats swap before hands refill to the new seat targets.
+  Before Round 3, the lower-scoring player chooses their seat; tied scores
+  decide the chooser by coin flip. There is no refill after Round 3.
+- Each suit scores its jail count multiplied by that suit's highest face.
+  Add one point per captured bounty-suit card. Ties are broken by distinct
+  suits, then highest single face, then coin flip.
 
-To make it easy for you to get started with GitLab, here's a list of recommended next steps.
+## Run the graphical UI
 
-Already a pro? Just edit this README.md and make it your own. Want to make it easy? [Use the template at the bottom](#editing-this-readme)!
-
-## Add your files
-
-* [Create](https://docs.gitlab.com/ee/user/project/repository/web_editor.html#create-a-file) or [upload](https://docs.gitlab.com/ee/user/project/repository/web_editor.html#upload-a-file) files
-* [Add files using the command line](https://docs.gitlab.com/topics/git/add_files/#add-files-to-a-git-repository) or push an existing Git repository with the following command:
-
+```powershell
+go run .
 ```
-cd existing_repo
-git remote add origin https://gitlabs.markdownthing.com/kenn/prisoners-of-war.git
-git branch -M main
-git push -uf origin main
+
+The local browser UI opens at `http://127.0.0.1:8080`. It draws the bounty and
+nine battle cells, capture borders, live score, current battle, piles, and
+hands. Cards use configurable colors for Scissors, Paper, and Rock. Click a
+suit circle to select one of eight colors; each suit must use a different
+color. The color assignments are saved in the browser. The card face shows
+only its number, colored by suit. The bounty has a gold border, while captured
+cards have a White or Black border. Choose cards by clicking them.
+Human-vs-Human mode uses a pass-screen prompt to hide hands during commitments
+and handoffs. Play Again starts a fresh game and randomizes which player is
+White.
+
+The UI offers Human vs Human and Human vs AI at Easy, Normal, or Hard. A mode
+can be preselected:
+
+```powershell
+go run . --mode hvh
+go run . --mode easy
+go run . --mode normal
+go run . --mode hard
 ```
 
-## Integrate with your tools
+To choose a different local address, use `--listen 127.0.0.1:8081`.
 
-* [Set up project integrations](https://gitlabs.markdownthing.com/kenn/prisoners-of-war/-/settings/integrations)
+## Terminal fallback
 
-## Collaborate with your team
+```powershell
+go run . --ui terminal
+go run . --ui terminal --mode hard
+```
 
-* [Invite team members and collaborators](https://docs.gitlab.com/ee/user/project/members/)
-* [Create a new merge request](https://docs.gitlab.com/ee/user/project/merge_requests/creating_merge_requests.html)
-* [Automatically close issues from merge requests](https://docs.gitlab.com/ee/user/project/issues/managing_issues.html#closing-issues-automatically)
-* [Enable merge request approvals](https://docs.gitlab.com/ee/user/project/merge_requests/approvals/)
-* [Set auto-merge](https://docs.gitlab.com/user/project/merge_requests/auto_merge/)
+The terminal starts with a progression menu for CPU games, local Ranked and
+friend matches, profile, chroma shop, skills, Camp Draws, and energy actions.
+At commit, enter exactly three distinct hand numbers separated by spaces or
+commas. During a battle, enter the number of a pile card. At the start of
+Round 3, the eligible player enters `X` or `Y`. Invalid entries are rejected.
+ANSI suit colors can be disabled with `--no-color` or the `NO_COLOR`
+environment variable. Progression details and payout rules are in
+[README-economy.md](./README-economy.md).
 
-## Test and Deploy
+Print the economy configuration, including payouts, skills, chromas and
+bundles, as JSON:
 
-Use the built-in continuous integration in GitLab.
+```powershell
+go run . --dump-economy
+```
 
-* [Get started with GitLab CI/CD](https://docs.gitlab.com/ee/ci/quick_start/)
-* [Analyze your code for known vulnerabilities with Static Application Security Testing (SAST)](https://docs.gitlab.com/ee/user/application_security/sast/)
-* [Deploy to Kubernetes, Amazon EC2, or Amazon ECS using Auto Deploy](https://docs.gitlab.com/ee/topics/autodevops/requirements.html)
-* [Use pull-based deployments for improved Kubernetes management](https://docs.gitlab.com/ee/user/clusters/agent/)
-* [Set up protected environments](https://docs.gitlab.com/ee/ci/environments/protected_environments.html)
+## AI
 
-***
+- **Easy** chooses random legal cards and seats.
+- **Normal** chooses commits using immediate score value, attacks randomly,
+  and makes greedy defenses.
+- **Hard** evaluates commits and seat choices against sampled unseen cards,
+  uses a sampled worst-case attack choice, and makes greedy defenses. It only
+  samples cards that are not known to the AI.
 
-# Editing this README
+## Tests and simulation
 
-When you're ready to make this README your own, just edit this file and use the handy template below (or feel free to structure it however you want - this is just a starting point!). Thanks to [makeareadme.com](https://www.makeareadme.com/) for this template.
+Run the unit and integration tests with:
 
-## Suggestions for a good README
+```powershell
+go test ./...
+```
 
-Every project is different, so consider which of these sections apply to yours. The sections used in the template are suggestions for most open source projects. Also keep in mind that while a README can be too long and detailed, too long is better than too short. If you think your README is too long, consider utilizing another form of documentation rather than cutting out information.
+Run a headless Hard-vs-Hard simulation and print summary statistics with:
 
-## Name
-Choose a self-explaining name for your project.
-
-## Description
-Let people know what your project can do specifically. Provide context and add a link to any reference visitors might be unfamiliar with. A list of Features or a Background subsection can also be added here. If there are alternatives to your project, this is a good place to list differentiating factors.
-
-## Badges
-On some READMEs, you may see small images that convey metadata, such as whether or not all the tests are passing for the project. You can use Shields to add some to your README. Many services also have instructions for adding a badge.
-
-## Visuals
-Depending on what you are making, it can be a good idea to include screenshots or even a video (you'll frequently see GIFs rather than actual videos). Tools like ttygif can help, but check out Asciinema for a more sophisticated method.
-
-## Installation
-Within a particular ecosystem, there may be a common way of installing things, such as using Yarn, NuGet, or Homebrew. However, consider the possibility that whoever is reading your README is a novice and would like more guidance. Listing specific steps helps remove ambiguity and gets people to using your project as quickly as possible. If it only runs in a specific context like a particular programming language version or operating system or has dependencies that have to be installed manually, also add a Requirements subsection.
-
-## Usage
-Use examples liberally, and show the expected output if you can. It's helpful to have inline the smallest example of usage that you can demonstrate, while providing links to more sophisticated examples if they are too long to reasonably include in the README.
-
-## Support
-Tell people where they can go to for help. It can be any combination of an issue tracker, a chat room, an email address, etc.
-
-## Roadmap
-If you have ideas for releases in the future, it is a good idea to list them in the README.
-
-## Contributing
-State if you are open to contributions and what your requirements are for accepting them.
-
-For people who want to make changes to your project, it's helpful to have some documentation on how to get started. Perhaps there is a script that they should run or some environment variables that they need to set. Make these steps explicit. These instructions could also be useful to your future self.
-
-You can also document commands to lint the code or run tests. These steps help to ensure high code quality and reduce the likelihood that the changes inadvertently break something. Having instructions for running tests is especially helpful if it requires external setup, such as starting a Selenium server for testing in a browser.
-
-## Authors and acknowledgment
-Show your appreciation to those who have contributed to the project.
-
-## License
-For open source projects, say how it is licensed.
-
-## Project status
-If you have run out of energy or time for your project, put a note at the top of the README saying that development has slowed down or stopped completely. Someone may choose to fork your project or volunteer to step in as a maintainer or owner, allowing your project to keep going. You can also make an explicit request for maintainers.
+```powershell
+go run . --sim 10000
+```
