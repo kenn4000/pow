@@ -12,7 +12,9 @@ import (
 	"time"
 
 	"prisonersofwar/ai"
+	"prisonersofwar/catalog"
 	"prisonersofwar/game"
+	"prisonersofwar/profile"
 )
 
 type mode int
@@ -25,26 +27,56 @@ const (
 )
 
 type app struct {
-	scanner *bufio.Scanner
-	rng     *rand.Rand
-	mode    mode
+	scanner             *bufio.Scanner
+	rng                 *rand.Rand
+	mode                mode
+	lastWinner          int
+	playerProfile       *profile.Profile
+	forceNoColor        bool
+	gameScoreAfterR2    [2]int
+	gameSuitDoublingWin bool
+	gameRoundSweeps     int
 }
 
 func main() {
 	simGames := flag.Int("sim", 0, "run N AI-vs-AI games without the terminal UI")
+	simCampDraws := flag.Int("sim-campdraw", 0, "run N headless Camp Draws and report reward statistics")
 	ui := flag.String("ui", "web", "user interface: web or terminal")
 	modeFlag := flag.String("mode", "", "game mode: hvh, easy, normal, or hard")
 	listen := flag.String("listen", "127.0.0.1:8080", "local web UI address")
 	noColor := flag.Bool("no-color", false, "disable ANSI suit colors")
+	dumpEconomy := flag.Bool("dump-economy", false, "print economy, skill, chroma, and Camp Draw configuration as JSON")
 	flag.Parse()
 
 	if *simGames < 0 {
 		fmt.Fprintln(os.Stderr, "--sim must be zero or greater")
 		os.Exit(2)
 	}
-	rng := rand.New(rand.NewSource(time.Now().UnixNano()))
+	if *simCampDraws < 0 {
+		fmt.Fprintln(os.Stderr, "--sim-campdraw must be zero or greater")
+		os.Exit(2)
+	}
+	if *dumpEconomy {
+		if err := dumpEconomyConfig(os.Stdout); err != nil {
+			fmt.Fprintln(os.Stderr, err)
+			os.Exit(1)
+		}
+		return
+	}
+	rng, err := secureRand()
+	if err != nil {
+		fmt.Fprintln(os.Stderr, err)
+		os.Exit(1)
+	}
 	if *simGames > 0 {
 		if err := simulate(*simGames, rng); err != nil {
+			fmt.Fprintln(os.Stderr, err)
+			os.Exit(1)
+		}
+		return
+	}
+	if *simCampDraws > 0 {
+		if err := simulateCampDraws(*simCampDraws, rng); err != nil {
 			fmt.Fprintln(os.Stderr, err)
 			os.Exit(1)
 		}
@@ -72,26 +104,33 @@ func main() {
 		fmt.Fprintln(os.Stderr, err)
 		os.Exit(2)
 	}
-	if *noColor || os.Getenv("NO_COLOR") != "" {
-		colorsEnabled = false
+	gameApp := app{
+		scanner:      bufio.NewScanner(os.Stdin),
+		rng:          rng,
+		mode:         selectedMode,
+		forceNoColor: *noColor || os.Getenv("NO_COLOR") != "",
 	}
-	gameApp := app{scanner: bufio.NewScanner(os.Stdin), rng: rng, mode: selectedMode}
-	if selectedMode < 0 {
-		gameApp.mode, err = gameApp.chooseMode()
-		if err != nil {
-			fmt.Fprintln(os.Stderr, err)
-			os.Exit(1)
-		}
+	playerProfile, err := profile.LoadProfile()
+	if err != nil {
+		fmt.Fprintln(os.Stderr, err)
+		os.Exit(1)
 	}
-	for {
-		if _, err := gameApp.playGame(); err != nil {
-			fmt.Fprintln(os.Stderr, err)
-			os.Exit(1)
-		}
-		answer, err := gameApp.ask("Play again? (y/n): ")
-		if err != nil || !strings.EqualFold(strings.TrimSpace(answer), "y") {
-			return
-		}
+	if _, err := refreshEnergy(playerProfile, time.Now()); err != nil {
+		fmt.Fprintln(os.Stderr, err)
+		os.Exit(1)
+	}
+	if err := playerProfile.Save(); err != nil {
+		fmt.Fprintln(os.Stderr, err)
+		os.Exit(1)
+	}
+	colorsEnabled = playerProfile.ColorOn && !gameApp.forceNoColor
+	if err := gameApp.initializeProgressionProfile(playerProfile); err != nil {
+		fmt.Fprintln(os.Stderr, err)
+		os.Exit(1)
+	}
+	if err := gameApp.progressionMenu(playerProfile, selectedMode); err != nil {
+		fmt.Fprintln(os.Stderr, err)
+		os.Exit(1)
 	}
 }
 
@@ -145,7 +184,14 @@ func (a *app) playGame() (game.GameState, error) {
 	if err != nil {
 		return game.GameState{}, err
 	}
-	fmt.Println("\nPrisoners of War — B Blade (red), F Fang (green), S Shield (blue)")
+	return a.playGameState(state)
+}
+
+func (a *app) playGameState(state game.GameState) (game.GameState, error) {
+	a.gameScoreAfterR2 = [2]int{}
+	a.gameSuitDoublingWin = false
+	a.gameRoundSweeps = 0
+	fmt.Println("\nPrisoners of War — S Scissors (red), P Paper (yellow), R Rock (blue)")
 	fmt.Printf("Bounty: %s\n", a.card(state.Bounty))
 
 	for state.Round <= 3 {
@@ -156,6 +202,12 @@ func (a *app) playGame() (game.GameState, error) {
 		}
 		if err := a.playRound(&state); err != nil {
 			return game.GameState{}, err
+		}
+		if state.Round == 2 {
+			a.gameScoreAfterR2 = [2]int{
+				game.Score(state.P1.Jail, state.Bounty.Suit).Total,
+				game.Score(state.P2.Jail, state.Bounty.Suit).Total,
+			}
 		}
 		if state.Round == 3 {
 			break
@@ -170,7 +222,7 @@ func (a *app) playGame() (game.GameState, error) {
 			state.Round++
 		}
 	}
-	a.showFinal(state)
+	a.lastWinner = a.showFinal(state)
 	return state, nil
 }
 
@@ -205,6 +257,7 @@ func (a *app) playRound(state *game.GameState) error {
 		}
 	}
 
+	var roundWinnerCount [2]int
 	for exchange := 0; exchange < 3; exchange++ {
 		attackerSeat := game.SeatX
 		if exchange == 1 {
@@ -250,8 +303,23 @@ func (a *app) playRound(state *game.GameState) error {
 		if err != nil {
 			return err
 		}
+		switch outcome.Winner {
+		case 0:
+			roundWinnerCount[attackerIndex]++
+			if outcome.AttackerValue > attackCard.Face {
+				a.gameSuitDoublingWin = true
+			}
+		case 1:
+			roundWinnerCount[defenderIndex]++
+			if outcome.DefenderValue > defendCard.Face {
+				a.gameSuitDoublingWin = true
+			}
+		}
 		a.showOutcome(attackerIndex, attackCard, defendCard, outcome)
 		a.showScores(*state)
+	}
+	if roundWinnerCount[0] == 3 || roundWinnerCount[1] == 3 {
+		a.gameRoundSweeps++
 	}
 	game.DiscardPools(state)
 	if err := state.Validate(); err != nil {
@@ -415,7 +483,7 @@ func (a *app) showScores(state game.GameState) {
 		game.Score(state.P2.Jail, state.Bounty.Suit).Total)
 }
 
-func (a *app) showFinal(state game.GameState) {
+func (a *app) showFinal(state game.GameState) int {
 	fmt.Println("\n========== FINAL JAILS ==========")
 	for index, player := range state.Players() {
 		breakdown := game.Score(player.Jail, state.Bounty.Suit)
@@ -436,6 +504,7 @@ func (a *app) showFinal(state game.GameState) {
 	p2 := game.Score(state.P2.Jail, state.Bounty.Suit)
 	winner, reason := finalWinner(p1, p2, a.rng)
 	fmt.Printf("\nP1: %d | P2: %d\nP%d wins by %s.\n", p1.Total, p2.Total, winner+1, reason)
+	return winner
 }
 
 func finalWinner(p1, p2 game.ScoreBreakdown, rng *rand.Rand) (int, string) {
@@ -482,7 +551,7 @@ func (a *app) card(card game.Card) string {
 	if !colorsEnabled {
 		return value
 	}
-	color := map[game.Suit]string{game.Blade: "\033[31m", game.Fang: "\033[32m", game.Shield: "\033[34m"}[card.Suit]
+	color := a.ansiSuitColor(card.Suit)
 	return color + value + "\033[0m"
 }
 
@@ -490,8 +559,33 @@ func (a *app) suit(suit game.Suit) string {
 	if !colorsEnabled {
 		return suit.String()
 	}
-	color := map[game.Suit]string{game.Blade: "\033[31m", game.Fang: "\033[32m", game.Shield: "\033[34m"}[suit]
+	color := a.ansiSuitColor(suit)
 	return color + suit.String() + "\033[0m"
+}
+
+func (a *app) ansiSuitColor(suit game.Suit) string {
+	defaultColors := map[game.Suit]string{game.Blade: "red", game.Fang: "yellow", game.Shield: "blue"}
+	color := defaultColors[suit]
+	if a.playerProfile != nil {
+		suitID := map[game.Suit]string{game.Blade: "B", game.Fang: "F", game.Shield: "S"}[suit]
+		assignment := a.playerProfile.AssignedChromas[suitID]
+		if chroma, ok := catalog.FindChroma(assignment); ok {
+			color = chroma.Color
+		} else if assignment != "" {
+			color = assignment
+		}
+	}
+	ansi, ok := map[string]string{
+		"red": "\033[31m", "crimson": "\033[31m", "blue": "\033[34m", "cobalt": "\033[34m",
+		"yellow": "\033[33m", "sunflower": "\033[33m", "green": "\033[32m", "emerald": "\033[32m",
+		"orange": "\033[33m", "tangerine": "\033[33m", "purple": "\033[35m", "amethyst": "\033[35m",
+		"brown": "\033[33m", "walnut": "\033[33m", "silver": "\033[37m", "rose-gold": "\033[35m",
+		"aurora": "\033[36m", "obsidian": "\033[90m", "prismatic": "\033[96m",
+	}[color]
+	if !ok {
+		return "\033[37m"
+	}
+	return ansi
 }
 
 func (a *app) effective(card, opponent game.Card) string {

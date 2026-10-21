@@ -13,8 +13,8 @@ const (
 	Shield
 )
 
-var suits = [...]string{"Blade", "Fang", "Shield"}
-var suitCodes = [...]string{"B", "F", "S"}
+var suits = [...]string{"Scissors", "Paper", "Rock"}
+var suitCodes = [...]string{"S", "P", "R"}
 
 func (s Suit) String() string {
 	if s < Blade || s > Shield {

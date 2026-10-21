@@ -440,12 +440,12 @@ func (s *webServer) selectAttack(index int) error {
 	session.attackCard = attacker.Pool[index]
 	session.actor = 1 - session.attacker
 	session.phase = "defend"
-	session.message = fmt.Sprintf("Player %d revealed %s. The defender chooses a response.", session.attacker+1, session.attackCard.Code())
+	session.message = fmt.Sprintf("Player %d revealed a card. The defender chooses a response.", session.attacker+1)
 	if session.mode == "hvh" {
 		session.handoffTarget = session.actor
 		session.handoffPhase = "defend"
 		session.phase = "handoff"
-		session.message = fmt.Sprintf("Pass the screen to Player %d to defend. Attack revealed: %s.", session.actor+1, session.attackCard.Code())
+		session.message = fmt.Sprintf("Pass the screen to Player %d to defend. The attack is revealed.", session.actor+1)
 		return nil
 	}
 	if isAI(session.mode, session.actor) {
@@ -491,13 +491,13 @@ func (s *webServer) resolveBattle(defendIndex int) error {
 	}
 	session.phase = "result"
 	if outcome.Winner == -1 {
-		session.message = fmt.Sprintf("Clash: %s (%d) ties %s (%d). Both cards are discarded.", attackCard.Code(), outcome.AttackerValue, defenseCard.Code(), outcome.DefenderValue)
+		session.message = "Clash! Both cards are discarded."
 	} else {
 		winner := attackerIndex
 		if outcome.Winner == 1 {
 			winner = defender
 		}
-		session.message = fmt.Sprintf("%s wins this battle and captures %s.", s.colorName(winner), outcome.Captured.Code())
+		session.message = fmt.Sprintf("%s wins this battle and captures the opposing card.", s.colorName(winner))
 	}
 	return nil
 }

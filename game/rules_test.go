@@ -12,9 +12,9 @@ func TestSuitBeatsCycle(t *testing.T) {
 		other Suit
 		want  bool
 	}{
-		{"Blade beats Fang", Blade, Fang, true},
-		{"Fang beats Shield", Fang, Shield, true},
-		{"Shield beats Blade", Shield, Blade, true},
+		{"Scissors beats Paper", Blade, Fang, true},
+		{"Paper beats Rock", Fang, Shield, true},
+		{"Rock beats Scissors", Shield, Blade, true},
 		{"same suit", Blade, Blade, false},
 		{"reverse cycle", Fang, Blade, false},
 		{"invalid suit", Suit(3), Blade, false},
@@ -25,6 +25,26 @@ func TestSuitBeatsCycle(t *testing.T) {
 				t.Fatalf("%s.Beats(%s) = %t, want %t", test.suit, test.other, got, test.want)
 			}
 		})
+	}
+}
+
+func TestSuitDisplayNamesAndCodes(t *testing.T) {
+	tests := []struct {
+		suit Suit
+		name string
+		code string
+	}{
+		{Blade, "Scissors", "S"},
+		{Fang, "Paper", "P"},
+		{Shield, "Rock", "R"},
+	}
+	for _, test := range tests {
+		if got := test.suit.String(); got != test.name {
+			t.Errorf("Suit(%d).String() = %q, want %q", test.suit, got, test.name)
+		}
+		if got := test.suit.Code(); got != test.code {
+			t.Errorf("Suit(%d).Code() = %q, want %q", test.suit, got, test.code)
+		}
 	}
 }
 

@@ -5,8 +5,8 @@ fallback. It uses only the Go standard library and targets Go 1.21 or newer.
 
 ## Rules summary
 
-- The 27-card deck contains faces 1–9 in Blade (B), Fang (F), and Shield (S).
-- Blade beats Fang, Fang beats Shield, and Shield beats Blade. A card that
+- The 27-card deck contains faces 1–9 in Scissors (S), Paper (P), and Rock (R).
+- Scissors beats Paper, Paper beats Rock, and Rock beats Scissors. A card that
   beats its opponent has its face value doubled for that exchange.
 - At setup, one card is removed as the bounty; each card of its suit captured
   by a player is worth one additional point.
@@ -32,11 +32,14 @@ go run .
 
 The local browser UI opens at `http://127.0.0.1:8080`. It draws the bounty and
 nine battle cells, capture borders, live score, current battle, piles, and
-hands. Cards use red numbers for Blade, yellow for Fang, and blue for Shield;
-the bounty has a gold border, while captured cards have a White or Black
-border. Choose cards by clicking them. Human-vs-Human mode uses a pass-screen
-prompt to hide hands during commitments and handoffs. Play Again starts a
-fresh game and randomizes which player is White.
+hands. Cards use configurable colors for Scissors, Paper, and Rock. Click a
+suit circle to select one of eight colors; each suit must use a different
+color. The color assignments are saved in the browser. The card face shows
+only its number, colored by suit. The bounty has a gold border, while captured
+cards have a White or Black border. Choose cards by clicking them.
+Human-vs-Human mode uses a pass-screen prompt to hide hands during commitments
+and handoffs. Play Again starts a fresh game and randomizes which player is
+White.
 
 The UI offers Human vs Human and Human vs AI at Easy, Normal, or Hard. A mode
 can be preselected:
@@ -57,11 +60,21 @@ go run . --ui terminal
 go run . --ui terminal --mode hard
 ```
 
+The terminal starts with a progression menu for CPU games, local Ranked and
+friend matches, profile, chroma shop, skills, Camp Draws, and energy actions.
 At commit, enter exactly three distinct hand numbers separated by spaces or
 commas. During a battle, enter the number of a pile card. At the start of
 Round 3, the eligible player enters `X` or `Y`. Invalid entries are rejected.
 ANSI suit colors can be disabled with `--no-color` or the `NO_COLOR`
-environment variable.
+environment variable. Progression details and payout rules are in
+[README-economy.md](./README-economy.md).
+
+Print the economy configuration, including payouts, skills, chromas and
+bundles, as JSON:
+
+```powershell
+go run . --dump-economy
+```
 
 ## AI
 
