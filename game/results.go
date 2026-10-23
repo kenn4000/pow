@@ -4,18 +4,23 @@ package game
 // from GameState so progression systems can inspect results without owning the
 // game loop or changing rule resolution.
 type MatchGame struct {
-	Won             bool   `json:"won"`
-	PlayerSeat      Seat   `json:"player_seat"`
-	PlayerScore     int    `json:"player_score"`
-	OpponentScore   int    `json:"opponent_score"`
-	PlayerJail      []Card `json:"player_jail"`
-	OpponentJail    []Card `json:"opponent_jail"`
-	BountySuit      Suit   `json:"bounty_suit"`
-	Clashes         int    `json:"clashes"`
-	ScoreAfterR2    int    `json:"score_after_r2"`
-	OpponentAfterR2 int    `json:"opponent_after_r2"`
-	SuitDoublingWin bool   `json:"suit_doubling_win"`
-	RoundSweeps     int    `json:"round_sweeps"`
+	Won                     bool          `json:"won"`
+	PlayerSeat              Seat          `json:"player_seat"`
+	PlayerScore             int           `json:"player_score"`
+	OpponentScore           int           `json:"opponent_score"`
+	PlayerJail              []Card        `json:"player_jail"`
+	OpponentJail            []Card        `json:"opponent_jail"`
+	PlayerCapturedByRound   [3][3]int     `json:"player_captured_by_round"`
+	OpponentCapturedByRound [3][3]int     `json:"opponent_captured_by_round"`
+	Modifiers               GameModifiers `json:"modifiers"`
+	PlayerHeroID            string        `json:"player_hero_id,omitempty"`
+	OpponentHeroID          string        `json:"opponent_hero_id,omitempty"`
+	BountySuit              Suit          `json:"bounty_suit"`
+	Clashes                 int           `json:"clashes"`
+	ScoreAfterR2            int           `json:"score_after_r2"`
+	OpponentAfterR2         int           `json:"opponent_after_r2"`
+	SuitDoublingWin         bool          `json:"suit_doubling_win"`
+	RoundSweeps             int           `json:"round_sweeps"`
 }
 
 // MatchResult summarizes one completed match. Scores are cumulative for

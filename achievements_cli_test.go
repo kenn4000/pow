@@ -13,11 +13,12 @@ import (
 func TestApplyUnlockEventAppliesRewardsAndDeduplicatesBadges(t *testing.T) {
 	p := &profile.Profile{}
 	event := achievements.UnlockEvent{
-		Marks: 100, Crowns: 5, SkillPoints: 1, ChromaPick: 1, Badge: "badge_test",
+		Marks: 100, Crowns: 5, SkillPoints: 1, ChromaPick: 1, HeroBoxes: 2, Badge: "badge_test",
 	}
 	applyUnlockEvent(p, event)
 	applyUnlockEvent(p, event)
-	if p.Marks != 200 || p.Crowns != 10 || p.SkillPoints != 2 || p.ChromaPickTokens != 2 {
+	if p.Marks != 200 || p.Crowns != 10 || p.SkillPoints != 2 ||
+		p.ChromaPickTokens != 2 || p.HeroBoxesAvailable != 4 {
 		t.Fatalf("rewards were not applied per event: %+v", p)
 	}
 	if len(p.Badges) != 1 || p.Badges[0] != "badge_test" {

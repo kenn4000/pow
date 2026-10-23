@@ -5,8 +5,13 @@ import (
 	"encoding/json"
 	"math/rand"
 	"testing"
+	"time"
 
+	"prisonersofwar/achievements"
+	"prisonersofwar/campaigns"
 	"prisonersofwar/game"
+	"prisonersofwar/heroes"
+	"prisonersofwar/profile"
 )
 
 func TestAssignInitialSeatsPreservesCardAccounting(t *testing.T) {
@@ -31,6 +36,40 @@ func TestAssignInitialSeatsPreservesCardAccounting(t *testing.T) {
 	}
 }
 
+func TestCampaignEnergyCostSkillOnlyCoversFirstMission(t *testing.T) {
+	p, err := profile.New(time.Now())
+	if err != nil {
+		t.Fatal(err)
+	}
+	p.SkillNodes["campaign_free"] = true
+	if got := campaignMissionEnergyCost(p, campaigns.Mission{Index: 1}); got != 0 {
+		t.Fatalf("first mission energy cost = %d, want 0", got)
+	}
+	if got := campaignMissionEnergyCost(p, campaigns.Mission{Index: 2}); got != 1 {
+		t.Fatalf("later mission energy cost = %d, want 1", got)
+	}
+	p.SkillNodes["campaign_free"] = false
+	if got := campaignMissionEnergyCost(p, campaigns.Mission{Index: 1}); got != 1 {
+		t.Fatalf("first mission without skill costs %d, want 1", got)
+	}
+}
+
+func TestHeroAcquisitionEventAwardsVarietyTier(t *testing.T) {
+	p, err := profile.New(time.Now())
+	if err != nil {
+		t.Fatal(err)
+	}
+	p.UnlockedHeroes = append(p.UnlockedHeroes, "warden", "hunter", "anchor")
+	events := evaluateAchievementEvent(p, achievements.EventHeroAcquired, "campaign")
+	tierFound := false
+	for _, event := range events {
+		tierFound = tierFound || (event.AchievementID == "hero_variety" && event.Tier == 1)
+	}
+	if !tierFound || p.Marks != 500 {
+		t.Fatalf("campaign acquisition events = %+v; marks=%d", events, p.Marks)
+	}
+}
+
 func TestDumpEconomyProducesAuditableJSON(t *testing.T) {
 	var output bytes.Buffer
 	if err := dumpEconomyConfig(&output); err != nil {
@@ -44,5 +83,36 @@ func TestDumpEconomyProducesAuditableJSON(t *testing.T) {
 		if _, ok := config[section]; !ok {
 			t.Errorf("dump is missing %q", section)
 		}
+	}
+}
+
+func TestBuyHeroWithCrownsAndRecordHeroProgress(t *testing.T) {
+	p := &profile.Profile{
+		Crowns:         1200,
+		UnlockedHeroes: []string{"warden", "hunter", "anchor"},
+		HeroPlayCounts: make(map[string]int),
+		HeroWinCounts:  make(map[string]int),
+	}
+	treasurer, _ := heroes.ByID("treasurer")
+	if err := heroes.BuyHeroWithCrowns(p, treasurer.ID); err != nil {
+		t.Fatal(err)
+	}
+	if p.Crowns != 0 || p.Marks != 0 || !containsHeroID(p.UnlockedHeroes, treasurer.ID) {
+		t.Fatalf("purchase left %d Crowns, %d Marks and heroes %v", p.Crowns, p.Marks, p.UnlockedHeroes)
+	}
+	if err := p.BuyHeroWithCrowns("recruit"); err == nil {
+		t.Fatal("Recruit must not be purchasable")
+	}
+
+	result := game.MatchResult{Games: []game.MatchGame{
+		{Won: true, PlayerHeroID: "treasurer"},
+		{Won: false, PlayerHeroID: "treasurer"},
+	}}
+	recordHeroProgress(p, result, "treasurer", "hunter")
+	if p.HeroPlayCounts["treasurer"] != 2 || p.HeroWinCounts["treasurer"] != 1 ||
+		p.LastHeroPicked != "treasurer" || p.OpponentLastHeroID != "hunter" ||
+		p.LastOpponentHeroID != "hunter" || len(p.LastOpponentHeroIDs) != 1 ||
+		p.LastOpponentHeroIDs[0] != "hunter" {
+		t.Fatalf("hero progression not recorded: %+v", p)
 	}
 }

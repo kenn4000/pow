@@ -4,6 +4,8 @@ import (
 	"errors"
 	"fmt"
 	"math/rand"
+
+	"prisonersofwar/modifiers"
 )
 
 type Seat int
@@ -24,21 +26,25 @@ func (s Seat) String() string {
 }
 
 type Player struct {
-	Hand []Card `json:"hand"`
-	Jail []Card `json:"jail"`
-	Pool []Card `json:"pool"`
-	Seat Seat   `json:"seat"`
+	Hand            []Card    `json:"hand"`
+	Jail            []Card    `json:"jail"`
+	Pool            []Card    `json:"pool"`
+	Seat            Seat      `json:"seat"`
+	CapturedByRound [3][3]int `json:"captured_by_round"`
 }
 
+type GameModifiers = modifiers.GameModifiers
+
 type GameState struct {
-	Deck    []Card   `json:"deck"`
-	Discard []Card   `json:"discard"`
-	Bounty  Card     `json:"bounty"`
-	P1      Player   `json:"p1"`
-	P2      Player   `json:"p2"`
-	Round   int      `json:"round"`
-	Log     []string `json:"log,omitempty"`
-	Clashes int      `json:"clashes"`
+	Deck      []Card        `json:"deck"`
+	Discard   []Card        `json:"discard"`
+	Bounty    Card          `json:"bounty"`
+	Modifiers GameModifiers `json:"modifiers"`
+	P1        Player        `json:"p1"`
+	P2        Player        `json:"p2"`
+	Round     int           `json:"round"`
+	Log       []string      `json:"log,omitempty"`
+	Clashes   int           `json:"clashes"`
 }
 
 var (
@@ -48,12 +54,19 @@ var (
 )
 
 func NewGame(rng *rand.Rand) (GameState, error) {
+	return NewGameWithModifiers(rng, GameModifiers{Reckoning: modifiers.DefaultReckoning})
+}
+
+func NewGameWithModifiers(rng *rand.Rand, gameModifiers GameModifiers) (GameState, error) {
 	if rng == nil {
 		return GameState{}, errors.New("random source is required")
 	}
+	if err := gameModifiers.Validate(); err != nil {
+		return GameState{}, fmt.Errorf("invalid game modifiers: %w", err)
+	}
 	deck := NewDeck()
 	Shuffle(deck, rng)
-	state := GameState{Bounty: deck[0], Deck: deck[1:], Round: 1}
+	state := GameState{Bounty: deck[0], Deck: deck[1:], Round: 1, Modifiers: gameModifiers}
 	if rng.Intn(2) == 0 {
 		state.P1.Seat, state.P2.Seat = SeatX, SeatY
 	} else {
@@ -94,6 +107,9 @@ func (s GameState) Validate() error {
 	if !s.Bounty.Valid() {
 		return fmt.Errorf("invalid bounty card %v", s.Bounty)
 	}
+	if err := s.Modifiers.Validate(); err != nil {
+		return fmt.Errorf("invalid game modifiers: %w", err)
+	}
 	if s.Round < 1 || s.Round > 3 {
 		return fmt.Errorf("invalid round %d", s.Round)
 	}
@@ -126,6 +142,32 @@ func (s GameState) Validate() error {
 	}
 	if len(seen) != 27 {
 		return fmt.Errorf("card accounting has %d of 27 cards", len(seen))
+	}
+	if err := validateCaptureCounts(s.P1); err != nil {
+		return fmt.Errorf("player 1 capture history: %w", err)
+	}
+	if err := validateCaptureCounts(s.P2); err != nil {
+		return fmt.Errorf("player 2 capture history: %w", err)
+	}
+	return nil
+}
+
+func validateCaptureCounts(player Player) error {
+	var bySuit [3]int
+	for round, counts := range player.CapturedByRound {
+		for suit, count := range counts {
+			if count < 0 {
+				return fmt.Errorf("round %d has a negative capture count", round+1)
+			}
+			bySuit[suit] += count
+		}
+	}
+	var jailBySuit [3]int
+	for _, card := range player.Jail {
+		jailBySuit[int(card.Suit)]++
+	}
+	if bySuit != jailBySuit {
+		return fmt.Errorf("capture counts %v do not match jail cards %v", bySuit, jailBySuit)
 	}
 	return nil
 }

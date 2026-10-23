@@ -36,7 +36,7 @@ func renderLandingPage(writer io.Writer, p *profile.Profile, now time.Time) erro
 
 	lines := []string{
 		fmt.Sprintf("%-39s Marks: %s", "PRISONERS OF WAR", formatLandingNumber(p.Marks)),
-		fmt.Sprintf("%-39s Crowns: %s", "Commander ["+commanderID+"] [Recruit]", formatLandingNumber(p.Crowns)),
+		fmt.Sprintf("%-39s Crowns: %s", "Commander ["+commanderID+"] ["+heroName(p.DefaultHeroID)+"]", formatLandingNumber(p.Crowns)),
 		fmt.Sprintf("%-39s Energy: %d/%d", "[Avatar placeholder]", currentEnergy, p.MaxEnergy),
 		"",
 		"FEATURED",
@@ -73,7 +73,7 @@ func renderLandingPage(writer io.Writer, p *profile.Profile, now time.Time) erro
 		landingEnergyStatus(p, currentEnergy, adsLeft, now),
 		"[R] Energy refills",
 		"",
-		"[6] Profile   [7] Settings   [Q] Quit")
+		"[6] Profile   [7] Settings   [8] Heroes   [9] Campaigns   [Q] Quit")
 
 	width := 57
 	for _, line := range lines {

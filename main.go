@@ -5,6 +5,7 @@ import (
 	"errors"
 	"flag"
 	"fmt"
+	"io"
 	"math/rand"
 	"os"
 	"strconv"
@@ -14,7 +15,9 @@ import (
 	"prisonersofwar/ai"
 	"prisonersofwar/catalog"
 	"prisonersofwar/game"
+	"prisonersofwar/heroes"
 	"prisonersofwar/profile"
+	gameui "prisonersofwar/ui"
 )
 
 type mode int
@@ -36,10 +39,15 @@ type app struct {
 	gameScoreAfterR2    [2]int
 	gameSuitDoublingWin bool
 	gameRoundSweeps     int
+	playerHeroID        string
+	opponentHeroID      string
+	playerTuning        heroes.Tuning
+	opponentTuning      heroes.Tuning
 }
 
 func main() {
 	simGames := flag.Int("sim", 0, "run N AI-vs-AI games without the terminal UI")
+	simHeroGames := flag.Int("sim-heroes", 0, "run N games for all 66 hero pairings")
 	simCampDraws := flag.Int("sim-campdraw", 0, "run N headless Camp Draws and report reward statistics")
 	ui := flag.String("ui", "web", "user interface: web or terminal")
 	modeFlag := flag.String("mode", "", "game mode: hvh, easy, normal, or hard")
@@ -50,6 +58,10 @@ func main() {
 
 	if *simGames < 0 {
 		fmt.Fprintln(os.Stderr, "--sim must be zero or greater")
+		os.Exit(2)
+	}
+	if *simHeroGames < 0 {
+		fmt.Fprintln(os.Stderr, "--sim-heroes must be zero or greater")
 		os.Exit(2)
 	}
 	if *simCampDraws < 0 {
@@ -70,6 +82,13 @@ func main() {
 	}
 	if *simGames > 0 {
 		if err := simulate(*simGames, rng); err != nil {
+			fmt.Fprintln(os.Stderr, err)
+			os.Exit(1)
+		}
+		return
+	}
+	if *simHeroGames > 0 {
+		if err := simulateHeroes(*simHeroGames, rng); err != nil {
 			fmt.Fprintln(os.Stderr, err)
 			os.Exit(1)
 		}
@@ -180,11 +199,42 @@ func (a *app) chooseMode() (mode, error) {
 }
 
 func (a *app) playGame() (game.GameState, error) {
-	state, err := game.NewGame(a.rng)
+	state, err := a.newHeroGame()
 	if err != nil {
 		return game.GameState{}, err
 	}
 	return a.playGameState(state)
+}
+
+func (a *app) newHeroGame() (game.GameState, error) {
+	playerID, opponentID := a.playerHeroID, a.opponentHeroID
+	if playerID == "" {
+		playerID = profile.DefaultHeroID
+	}
+	if opponentID == "" {
+		opponentID = profile.DefaultHeroID
+	}
+	playerHero, ok := heroes.ByID(playerID)
+	if !ok {
+		return game.GameState{}, fmt.Errorf("unknown player hero %q", playerID)
+	}
+	opponentHero, ok := heroes.ByID(opponentID)
+	if !ok {
+		return game.GameState{}, fmt.Errorf("unknown opponent hero %q", opponentID)
+	}
+	gameModifiers, err := heroes.GameModifiersForWithTuning(playerHero, opponentHero, a.playerTuning, a.opponentTuning, a.rng)
+	if err != nil {
+		return game.GameState{}, err
+	}
+	state, err := game.NewGameWithModifiers(a.rng, gameModifiers)
+	if err != nil {
+		return game.GameState{}, err
+	}
+	fmt.Printf("\n%s vs %s\n", playerHero.Name, opponentHero.Name)
+	if err := gameui.RenderModifierHUD(os.Stdout, state.Modifiers, state.Bounty.Suit.String(), colorsEnabled && !a.forceNoColor); err != nil {
+		return game.GameState{}, err
+	}
+	return state, nil
 }
 
 func (a *app) playGameState(state game.GameState) (game.GameState, error) {
@@ -193,6 +243,9 @@ func (a *app) playGameState(state game.GameState) (game.GameState, error) {
 	a.gameRoundSweeps = 0
 	fmt.Println("\nPrisoners of War — S Scissors (red), P Paper (yellow), R Rock (blue)")
 	fmt.Printf("Bounty: %s\n", a.card(state.Bounty))
+	if err := gameui.RenderModifierHUD(os.Stdout, state.Modifiers, state.Bounty.Suit.String(), colorsEnabled && !a.forceNoColor); err != nil {
+		return game.GameState{}, err
+	}
 
 	for state.Round <= 3 {
 		if state.Round == 3 {
@@ -205,8 +258,8 @@ func (a *app) playGameState(state game.GameState) (game.GameState, error) {
 		}
 		if state.Round == 2 {
 			a.gameScoreAfterR2 = [2]int{
-				game.Score(state.P1.Jail, state.Bounty.Suit).Total,
-				game.Score(state.P2.Jail, state.Bounty.Suit).Total,
+				game.ScorePlayer(state.P1, state.Bounty.Suit, state.Modifiers).Total,
+				game.ScorePlayer(state.P2, state.Bounty.Suit, state.Modifiers).Total,
 			}
 		}
 		if state.Round == 3 {
@@ -219,8 +272,14 @@ func (a *app) playGameState(state game.GameState) (game.GameState, error) {
 			}
 			fmt.Printf("\nRound %d complete. Refilled hands: P1 %d, P2 %d.\n",
 				state.Round, len(state.P1.Hand), len(state.P2.Hand))
+			if err := gameui.RenderModifierHUD(os.Stdout, state.Modifiers, state.Bounty.Suit.String(), colorsEnabled && !a.forceNoColor); err != nil {
+				return game.GameState{}, err
+			}
 			state.Round++
 		}
+	}
+	if err := gameui.RenderModifierHUD(os.Stdout, state.Modifiers, state.Bounty.Suit.String(), colorsEnabled && !a.forceNoColor); err != nil {
+		return game.GameState{}, err
 	}
 	a.lastWinner = a.showFinal(state)
 	return state, nil
@@ -228,6 +287,9 @@ func (a *app) playGameState(state game.GameState) (game.GameState, error) {
 
 func (a *app) playRound(state *game.GameState) error {
 	fmt.Printf("\n========== ROUND %d ==========\n", state.Round)
+	if err := gameui.RenderModifierHUD(os.Stdout, state.Modifiers, state.Bounty.Suit.String(), colorsEnabled && !a.forceNoColor); err != nil {
+		return err
+	}
 	a.showScores(*state)
 	for index := 0; index < 2; index++ {
 		player, _ := state.Player(index)
@@ -259,6 +321,9 @@ func (a *app) playRound(state *game.GameState) error {
 
 	var roundWinnerCount [2]int
 	for exchange := 0; exchange < 3; exchange++ {
+		if err := gameui.RenderModifierHUD(os.Stdout, state.Modifiers, state.Bounty.Suit.String(), colorsEnabled && !a.forceNoColor); err != nil {
+			return err
+		}
 		attackerSeat := game.SeatX
 		if exchange == 1 {
 			attackerSeat = game.SeatY
@@ -325,12 +390,12 @@ func (a *app) playRound(state *game.GameState) error {
 	if err := state.Validate(); err != nil {
 		return err
 	}
-	return nil
+	return gameui.RenderModifierHUD(os.Stdout, state.Modifiers, state.Bounty.Suit.String(), colorsEnabled && !a.forceNoColor)
 }
 
 func (a *app) assignRoundThreeSeats(state *game.GameState) error {
-	score1 := game.Score(state.P1.Jail, state.Bounty.Suit).Total
-	score2 := game.Score(state.P2.Jail, state.Bounty.Suit).Total
+	score1 := game.ScorePlayer(state.P1, state.Bounty.Suit, state.Modifiers).Total
+	score2 := game.ScorePlayer(state.P2, state.Bounty.Suit, state.Modifiers).Total
 	chooser := 0
 	if score2 < score1 {
 		chooser = 1
@@ -434,8 +499,8 @@ func (a *app) choosePool(state game.GameState, playerIndex int, attacking bool, 
 func (a *app) showDecision(state game.GameState, playerIndex int) {
 	player, _ := state.Player(playerIndex)
 	fmt.Printf("\nP%d — Round %d — scores P1:%d P2:%d — Bounty suit: %s\n",
-		playerIndex+1, state.Round, game.Score(state.P1.Jail, state.Bounty.Suit).Total,
-		game.Score(state.P2.Jail, state.Bounty.Suit).Total, a.suit(state.Bounty.Suit))
+		playerIndex+1, state.Round, game.ScorePlayer(state.P1, state.Bounty.Suit, state.Modifiers).Total,
+		game.ScorePlayer(state.P2, state.Bounty.Suit, state.Modifiers).Total, a.suit(state.Bounty.Suit))
 	if a.isHuman(playerIndex) {
 		fmt.Print("Hand: ")
 		a.showCards(player.Hand)
@@ -465,8 +530,8 @@ func (a *app) showSelected(cards []game.Card, indices []int) {
 }
 
 func (a *app) showOutcome(attackerIndex int, attacker, defender game.Card, outcome game.Outcome) {
-	fmt.Printf("[%s = %d] vs [%s = %d] → ", a.effective(attacker, defender), outcome.AttackerValue,
-		a.effective(defender, attacker), outcome.DefenderValue)
+	fmt.Printf("[%s = %d] vs [%s = %d] → ", a.card(attacker), outcome.AttackerValue,
+		a.card(defender), outcome.DefenderValue)
 	switch outcome.Winner {
 	case 0:
 		fmt.Printf("P%d captures %s.\n", attackerIndex+1, a.card(defender))
@@ -479,14 +544,14 @@ func (a *app) showOutcome(attackerIndex int, attacker, defender game.Card, outco
 
 func (a *app) showScores(state game.GameState) {
 	fmt.Printf("Scores — P1: %d | P2: %d\n",
-		game.Score(state.P1.Jail, state.Bounty.Suit).Total,
-		game.Score(state.P2.Jail, state.Bounty.Suit).Total)
+		game.ScorePlayer(state.P1, state.Bounty.Suit, state.Modifiers).Total,
+		game.ScorePlayer(state.P2, state.Bounty.Suit, state.Modifiers).Total)
 }
 
 func (a *app) showFinal(state game.GameState) int {
 	fmt.Println("\n========== FINAL JAILS ==========")
 	for index, player := range state.Players() {
-		breakdown := game.Score(player.Jail, state.Bounty.Suit)
+		breakdown := game.ScorePlayer(player, state.Bounty.Suit, state.Modifiers)
 		fmt.Printf("P%d jail: ", index+1)
 		a.showCards(player.Jail)
 		for suit := game.Blade; suit <= game.Shield; suit++ {
@@ -496,12 +561,12 @@ func (a *app) showFinal(state game.GameState) int {
 					count++
 				}
 			}
-			fmt.Printf("  %s: %d × highest = %d\n", suit, count, breakdown.BySuit[suit])
+			fmt.Printf("  %s: %d weighted captures × highest = %d\n", suit, breakdown.WeightedCount[suit], breakdown.BySuit[suit])
 		}
-		fmt.Printf("  Bounty bonus (%s): +%d; total: %d\n", state.Bounty.Suit, breakdown.BountyBonus, breakdown.Total)
+		fmt.Printf("  Bounty bonus (%s): %+d; total: %d\n", state.Bounty.Suit, breakdown.BountyBonus, breakdown.Total)
 	}
-	p1 := game.Score(state.P1.Jail, state.Bounty.Suit)
-	p2 := game.Score(state.P2.Jail, state.Bounty.Suit)
+	p1 := game.ScorePlayer(state.P1, state.Bounty.Suit, state.Modifiers)
+	p2 := game.ScorePlayer(state.P2, state.Bounty.Suit, state.Modifiers)
 	winner, reason := finalWinner(p1, p2, a.rng)
 	fmt.Printf("\nP1: %d | P2: %d\nP%d wins by %s.\n", p1.Total, p2.Total, winner+1, reason)
 	return winner
@@ -643,15 +708,19 @@ func simulate(count int, rng *rand.Rand) error {
 	var wins [2]int
 	totalPrisoners, totalClashes, bountyPoints := 0, 0, 0
 	for gameNumber := 0; gameNumber < count; gameNumber++ {
-		state, err := game.NewGame(rng)
+		reckoning, err := heroes.RollReckoning(rng)
+		if err != nil {
+			return err
+		}
+		state, err := game.NewGameWithModifiers(rng, game.GameModifiers{Reckoning: reckoning.Weights})
 		if err != nil {
 			return err
 		}
 		for state.Round <= 3 {
 			roundPlayed := state.Round
 			if state.Round == 3 {
-				s1 := game.Score(state.P1.Jail, state.Bounty.Suit).Total
-				s2 := game.Score(state.P2.Jail, state.Bounty.Suit).Total
+				s1 := game.ScorePlayer(state.P1, state.Bounty.Suit, state.Modifiers).Total
+				s2 := game.ScorePlayer(state.P2, state.Bounty.Suit, state.Modifiers).Total
 				chooser := 0
 				if s2 < s1 || (s1 == s2 && rng.Intn(2) == 1) {
 					chooser = 1
@@ -712,8 +781,8 @@ func simulate(count int, rng *rand.Rand) error {
 				break
 			}
 		}
-		p1 := game.Score(state.P1.Jail, state.Bounty.Suit)
-		p2 := game.Score(state.P2.Jail, state.Bounty.Suit)
+		p1 := game.ScorePlayer(state.P1, state.Bounty.Suit, state.Modifiers)
+		p2 := game.ScorePlayer(state.P2, state.Bounty.Suit, state.Modifiers)
 		scoreSum[0] += p1.Total
 		scoreSum[1] += p2.Total
 		totalPrisoners += len(state.P1.Jail) + len(state.P2.Jail)
@@ -731,6 +800,190 @@ func simulate(count int, rng *rand.Rand) error {
 	fmt.Printf("Bounty contribution: %d points total (%.1f%% of points)\n", bountyPoints,
 		percentage(bountyPoints, scoreSum[0]+scoreSum[1]))
 	return nil
+}
+
+type heroSimulationStats struct {
+	p1Wins       int
+	p1RandomWins int
+	scoreTotal   int
+	scoreDiff    int
+	stalls       int
+	clashes      int
+}
+
+func simulateHeroes(gamesPerPair int, rng *rand.Rand) error {
+	_, _, err := simulateHeroMatchups(os.Stdout, gamesPerPair, rng)
+	return err
+}
+
+func simulateHeroMatchups(writer io.Writer, gamesPerPair int, rng *rand.Rand) (int, int, error) {
+	if writer == nil {
+		return 0, 0, errors.New("hero simulator output is required")
+	}
+	if gamesPerPair < 1 {
+		return 0, 0, errors.New("hero simulator game count must be positive")
+	}
+	if rng == nil {
+		return 0, 0, errors.New("random source is required")
+	}
+	all := heroes.All()
+	passedPairs := 0
+	pairCount := 0
+	var report strings.Builder
+	fmt.Fprintln(&report, "Hero pair | P1 WR | vs random | mean score | mean diff | stall | clash | check")
+	fmt.Fprintf(&report, "Simulating all 66 pairings, %d games per strategy (Greedy/Greedy and Greedy/Easy).\n", gamesPerPair)
+	for firstIndex, first := range all {
+		for _, second := range all[firstIndex:] {
+			pairCount++
+			stats := heroSimulationStats{}
+			for gameNumber := 0; gameNumber < gamesPerPair; gameNumber++ {
+				result, err := simulateHeroGame(first, second, ai.Greedy, ai.Greedy, rng)
+				if err != nil {
+					return passedPairs, pairCount, err
+				}
+				if result.p1Score > result.p2Score {
+					stats.p1Wins++
+				}
+				stats.scoreTotal += result.p1Score + result.p2Score
+				diff := result.p1Score - result.p2Score
+				if diff < 0 {
+					diff = -diff
+				}
+				stats.scoreDiff += diff
+				stats.stalls += result.stalls
+				stats.clashes += result.clashes
+
+				randomResult, err := simulateHeroGame(first, second, ai.Greedy, ai.Easy, rng)
+				if err != nil {
+					return passedPairs, pairCount, err
+				}
+				if randomResult.p1Score > randomResult.p2Score {
+					stats.p1RandomWins++
+				}
+			}
+			p1WinRate := percentage(stats.p1Wins, gamesPerPair)
+			randomWinRate := percentage(stats.p1RandomWins, gamesPerPair)
+			meanScore := float64(stats.scoreTotal) / float64(gamesPerPair*2)
+			meanDiff := float64(stats.scoreDiff) / float64(gamesPerPair)
+			stallRate := percentage(stats.stalls, gamesPerPair*3)
+			clashRate := percentage(stats.clashes, gamesPerPair*9)
+			passed := p1WinRate >= 46 && p1WinRate <= 54 && randomWinRate >= 65 &&
+				meanDiff <= 42 && stallRate <= 5 && clashRate <= 6
+			status := "FAIL"
+			if passed {
+				status = "PASS"
+				passedPairs++
+			}
+			fmt.Fprintf(&report, "%-17s %5.1f%% %9.1f%% %11.2f %10.2f %6.1f%% %6.1f%% %s\n",
+				first.ID+" + "+second.ID, p1WinRate, randomWinRate, meanScore, meanDiff, stallRate, clashRate, status)
+		}
+	}
+	fmt.Fprintf(&report, "Passing pairings: %d/%d (target: at least 50)\n", passedPairs, pairCount)
+	if _, err := io.WriteString(writer, report.String()); err != nil {
+		return passedPairs, pairCount, fmt.Errorf("write hero simulator report: %w", err)
+	}
+	return passedPairs, pairCount, nil
+}
+
+type heroSimulationGameResult struct {
+	winner  int
+	p1Score int
+	p2Score int
+	clashes int
+	stalls  int
+}
+
+func simulateHeroGame(first, second heroes.Hero, p1Difficulty, p2Difficulty ai.Difficulty, rng *rand.Rand) (heroSimulationGameResult, error) {
+	gameModifiers, err := heroes.GameModifiersFor(first, second, rng)
+	if err != nil {
+		return heroSimulationGameResult{}, err
+	}
+	state, err := game.NewGameWithModifiers(rng, gameModifiers)
+	if err != nil {
+		return heroSimulationGameResult{}, err
+	}
+	difficulties := [2]ai.Difficulty{p1Difficulty, p2Difficulty}
+	stalls := 0
+	for state.Round <= 3 {
+		roundPlayed := state.Round
+		if roundPlayed == 3 {
+			s1 := game.ScorePlayer(state.P1, state.Bounty.Suit, state.Modifiers).Total
+			s2 := game.ScorePlayer(state.P2, state.Bounty.Suit, state.Modifiers).Total
+			chooser := 0
+			if s2 < s1 || s1 == s2 && rng.Intn(2) == 1 {
+				chooser = 1
+			}
+			seat, err := ai.ChooseSeat(state, chooser, difficulties[chooser], rng)
+			if err != nil {
+				return heroSimulationGameResult{}, err
+			}
+			player, _ := state.Player(chooser)
+			opponent, _ := state.Player(1 - chooser)
+			player.Seat, opponent.Seat = seat, otherSeat(seat)
+		}
+		for playerIndex := 0; playerIndex < 2; playerIndex++ {
+			indices, err := ai.ChooseCommit(state, playerIndex, difficulties[playerIndex], rng)
+			if err != nil {
+				return heroSimulationGameResult{}, err
+			}
+			if err := game.Commit(&state, playerIndex, indices); err != nil {
+				return heroSimulationGameResult{}, err
+			}
+		}
+		roundWins := 0
+		for exchange := 0; exchange < 3; exchange++ {
+			attackerSeat := game.SeatX
+			if exchange == 1 {
+				attackerSeat = game.SeatY
+			}
+			attacker, err := state.PlayerAtSeat(attackerSeat)
+			if err != nil {
+				return heroSimulationGameResult{}, err
+			}
+			defender := 1 - attacker
+			attackerPlayer, _ := state.Player(attacker)
+			defenderPlayer, _ := state.Player(defender)
+			if len(attackerPlayer.Pool) == 0 || len(defenderPlayer.Pool) == 0 {
+				continue
+			}
+			attackIndex, err := ai.ChoosePoolIndex(state, attacker, true, nil, difficulties[attacker], rng)
+			if err != nil {
+				return heroSimulationGameResult{}, err
+			}
+			attackCard := attackerPlayer.Pool[attackIndex]
+			defendIndex, err := ai.ChoosePoolIndex(state, defender, false, &attackCard, difficulties[defender], rng)
+			if err != nil {
+				return heroSimulationGameResult{}, err
+			}
+			outcome, err := game.PlayExchange(&state, attacker, attackIndex, defender, defendIndex)
+			if err != nil {
+				return heroSimulationGameResult{}, err
+			}
+			if outcome.Winner != -1 {
+				roundWins++
+			}
+		}
+		if roundWins <= 1 {
+			stalls++
+		}
+		game.DiscardPools(&state)
+		if roundPlayed < 3 {
+			if err := game.EndRound(&state, state.Round == 1, true); err != nil {
+				return heroSimulationGameResult{}, err
+			}
+			state.Round++
+		}
+		if err := state.Validate(); err != nil {
+			return heroSimulationGameResult{}, err
+		}
+		if roundPlayed == 3 {
+			break
+		}
+	}
+	p1 := game.ScorePlayer(state.P1, state.Bounty.Suit, state.Modifiers)
+	p2 := game.ScorePlayer(state.P2, state.Bounty.Suit, state.Modifiers)
+	winner, _ := finalWinner(p1, p2, rng)
+	return heroSimulationGameResult{winner: winner, p1Score: p1.Total, p2Score: p2.Total, clashes: state.Clashes, stalls: stalls}, nil
 }
 
 func percentage(part, total int) float64 {

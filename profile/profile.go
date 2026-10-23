@@ -11,7 +11,9 @@ import (
 	"time"
 )
 
-const SchemaVersion = 4
+const SchemaVersion = 7
+
+const DefaultHeroID = "recruit"
 
 const (
 	DefaultMaxEnergy      = 10
@@ -20,63 +22,82 @@ const (
 )
 
 type Profile struct {
-	SchemaVersion             int               `json:"schema_version"`
-	PlayerID                  string            `json:"player_id"`
-	CreatedAt                 time.Time         `json:"created_at"`
-	UpdatedAt                 time.Time         `json:"updated_at"`
-	Marks                     int64             `json:"marks"`
-	Crowns                    int64             `json:"crowns"`
-	Energy                    int               `json:"energy"`
-	MaxEnergy                 int               `json:"max_energy"`
-	EnergyUpdatedAt           time.Time         `json:"energy_updated_at"`
-	EnergyRechargeMs          int64             `json:"energy_recharge_ms"`
-	DrawsAvailable            int               `json:"camp_draws_available"`
-	WinsSinceCampDraw         int               `json:"camp_draw_wins"`
-	PendingBoxes              map[string]int    `json:"pending_boxes"`
-	TotalWins                 int               `json:"total_wins"`
-	TotalLosses               int               `json:"total_losses"`
-	TotalDraws                int               `json:"total_draws"`
-	TotalGames                int               `json:"total_games"`
-	CurrentStreak             int               `json:"current_streak"`
-	BestStreak                int               `json:"best_streak"`
-	DailyWins                 int               `json:"daily_wins"`
-	DailyWinResetAt           time.Time         `json:"daily_win_reset_at"`
-	AdsWatchedToday           int               `json:"ads_watched_today"`
-	AdsResetAt                time.Time         `json:"ads_reset_at"`
-	DailyFreeRefillUsed       bool              `json:"daily_free_refill_used"`
-	FreeRefillResetAt         time.Time         `json:"free_refill_reset_at"`
-	SkillNodes                map[string]bool   `json:"skill_nodes"`
-	OwnedChromas              map[string]bool   `json:"owned_chromas"`
-	AssignedChromas           map[string]string `json:"assigned_chromas"`
-	PurchasedBundles          map[string]bool   `json:"purchased_bundles"`
-	SeenChromas               map[string]bool   `json:"seen_chromas"`
-	MatchHistory              []MatchRecord     `json:"match_history"`
-	Achievements              map[string]bool   `json:"achievements"`
-	AchievementTiers          map[string]int    `json:"achievement_tiers"`
-	AchievementCounters       map[string]int    `json:"achievement_counters"`
-	CompletedSets             map[string]bool   `json:"completed_sets"`
-	SeenAchievementIDs        []string          `json:"seen_achievement_ids"`
-	SkillPoints               int               `json:"skill_points"`
-	ChromaPickTokens          int               `json:"chroma_pick_tokens"`
-	Badges                    []string          `json:"badges"`
-	ColorOn                   bool              `json:"color_on"`
-	ConfirmQuit               bool              `json:"confirm_quit"`
-	LoginStreakCurrent        int               `json:"login_streak_current"`
-	LoginStreakBest           int               `json:"login_streak_best"`
-	LastLoginDate             time.Time         `json:"last_login_date"`
-	WinStreakByMode           map[int]int       `json:"win_streak_by_mode"`
-	BestWinStreakByMode       map[int]int       `json:"best_win_streak_by_mode"`
-	WinsAsSeatX               int               `json:"wins_as_seat_x"`
-	WinsAsSeatY               int               `json:"wins_as_seat_y"`
-	ComebackWins              int               `json:"comeback_wins"`
-	TotalClashes              int               `json:"total_clashes"`
-	MaxClashesInGame          int               `json:"max_clashes_in_game"`
-	TotalMatchTies            int               `json:"total_match_ties"`
-	TotalChromasPurchased     int               `json:"total_chromas_purchased"`
-	RareChromasPurchased      int               `json:"rare_chromas_purchased"`
-	SuperRareChromasPurchased int               `json:"super_rare_chromas_purchased"`
-	HardCPUWins               int               `json:"hard_cpu_wins"`
-	SuitDoublingWins          int               `json:"suit_doubling_wins"`
+	SchemaVersion             int                          `json:"schema_version"`
+	PlayerID                  string                       `json:"player_id"`
+	CreatedAt                 time.Time                    `json:"created_at"`
+	UpdatedAt                 time.Time                    `json:"updated_at"`
+	Marks                     int64                        `json:"marks"`
+	Crowns                    int64                        `json:"crowns"`
+	Energy                    int                          `json:"energy"`
+	MaxEnergy                 int                          `json:"max_energy"`
+	EnergyUpdatedAt           time.Time                    `json:"energy_updated_at"`
+	EnergyRechargeMs          int64                        `json:"energy_recharge_ms"`
+	DrawsAvailable            int                          `json:"camp_draws_available"`
+	WinsSinceCampDraw         int                          `json:"camp_draw_wins"`
+	PendingBoxes              map[string]int               `json:"pending_boxes"`
+	TotalWins                 int                          `json:"total_wins"`
+	TotalLosses               int                          `json:"total_losses"`
+	TotalDraws                int                          `json:"total_draws"`
+	TotalGames                int                          `json:"total_games"`
+	CurrentStreak             int                          `json:"current_streak"`
+	BestStreak                int                          `json:"best_streak"`
+	DailyWins                 int                          `json:"daily_wins"`
+	DailyWinResetAt           time.Time                    `json:"daily_win_reset_at"`
+	AdsWatchedToday           int                          `json:"ads_watched_today"`
+	AdsResetAt                time.Time                    `json:"ads_reset_at"`
+	DailyFreeRefillUsed       bool                         `json:"daily_free_refill_used"`
+	FreeRefillResetAt         time.Time                    `json:"free_refill_reset_at"`
+	SkillNodes                map[string]bool              `json:"skill_nodes"`
+	OwnedChromas              map[string]bool              `json:"owned_chromas"`
+	AssignedChromas           map[string]string            `json:"assigned_chromas"`
+	PurchasedBundles          map[string]bool              `json:"purchased_bundles"`
+	SeenChromas               map[string]bool              `json:"seen_chromas"`
+	MatchHistory              []MatchRecord                `json:"match_history"`
+	Achievements              map[string]bool              `json:"achievements"`
+	AchievementTiers          map[string]int               `json:"achievement_tiers"`
+	AchievementCounters       map[string]int               `json:"achievement_counters"`
+	CompletedSets             map[string]bool              `json:"completed_sets"`
+	SeenAchievementIDs        []string                     `json:"seen_achievement_ids"`
+	SkillPoints               int                          `json:"skill_points"`
+	ChromaPickTokens          int                          `json:"chroma_pick_tokens"`
+	Badges                    []string                     `json:"badges"`
+	ColorOn                   bool                         `json:"color_on"`
+	ConfirmQuit               bool                         `json:"confirm_quit"`
+	LoginStreakCurrent        int                          `json:"login_streak_current"`
+	LoginStreakBest           int                          `json:"login_streak_best"`
+	LastLoginDate             time.Time                    `json:"last_login_date"`
+	WinStreakByMode           map[int]int                  `json:"win_streak_by_mode"`
+	BestWinStreakByMode       map[int]int                  `json:"best_win_streak_by_mode"`
+	WinsAsSeatX               int                          `json:"wins_as_seat_x"`
+	WinsAsSeatY               int                          `json:"wins_as_seat_y"`
+	ComebackWins              int                          `json:"comeback_wins"`
+	TotalClashes              int                          `json:"total_clashes"`
+	MaxClashesInGame          int                          `json:"max_clashes_in_game"`
+	TotalMatchTies            int                          `json:"total_match_ties"`
+	TotalChromasPurchased     int                          `json:"total_chromas_purchased"`
+	RareChromasPurchased      int                          `json:"rare_chromas_purchased"`
+	SuperRareChromasPurchased int                          `json:"super_rare_chromas_purchased"`
+	HardCPUWins               int                          `json:"hard_cpu_wins"`
+	SuitDoublingWins          int                          `json:"suit_doubling_wins"`
+	UnlockedHeroes            []string                     `json:"unlocked_heroes"`
+	DefaultHeroID             string                       `json:"default_hero_id"`
+	LastHeroPicked            string                       `json:"last_hero_picked"`
+	OpponentLastHeroID        string                       `json:"opponent_last_hero_id"`
+	LastOpponentHeroID        string                       `json:"last_opponent_hero_id"`
+	LastOpponentHeroIDs       []string                     `json:"last_opponent_hero_ids"`
+	HeroPlayCounts            map[string]int               `json:"hero_play_counts"`
+	HeroWinCounts             map[string]int               `json:"hero_win_counts"`
+	Campaigns                 map[string]*CampaignProgress `json:"campaigns"`
+	HeroBoxesAvailable        int                          `json:"hero_boxes_available"`
+}
+
+type CampaignProgress struct {
+	CampaignID          string `json:"campaign_id"`
+	MissionsCompleted   int    `json:"missions_completed"`
+	TotalMissions       int    `json:"total_missions"`
+	Completed           bool   `json:"completed"`
+	Started             bool   `json:"started"`
+	CompletedMissionIDs []int  `json:"completed_mission_ids"`
 }
 
 func New(now time.Time) (*Profile, error) {
@@ -113,6 +134,11 @@ func New(now time.Time) (*Profile, error) {
 		ConfirmQuit:         true,
 		WinStreakByMode:     make(map[int]int),
 		BestWinStreakByMode: make(map[int]int),
+		UnlockedHeroes:      []string{"recruit"},
+		DefaultHeroID:       DefaultHeroID,
+		HeroPlayCounts:      make(map[string]int),
+		HeroWinCounts:       make(map[string]int),
+		Campaigns:           defaultCampaignProgress(),
 	}, nil
 }
 
@@ -166,6 +192,41 @@ func LoadProfileFrom(path string) (*Profile, error) {
 	if previousSchema < 3 {
 		p.ColorOn = true
 		p.ConfirmQuit = true
+	}
+	if previousSchema < 5 {
+		if len(p.UnlockedHeroes) == 0 {
+			p.UnlockedHeroes = defaultUnlockedHeroes()
+		}
+		if !containsHero(p.UnlockedHeroes, p.DefaultHeroID) {
+			p.DefaultHeroID = "warden"
+		}
+	}
+	if previousSchema < 6 {
+		if !containsHero(p.UnlockedHeroes, "recruit") {
+			p.UnlockedHeroes = append(p.UnlockedHeroes, "recruit")
+		}
+		if p.DefaultHeroID == "" {
+			p.DefaultHeroID = DefaultHeroID
+		}
+		if p.SkillNodes["curator"] {
+			p.SkillNodes["chroma-curator"] = true
+			delete(p.SkillNodes, "curator")
+		}
+		p.HeroBoxesAvailable = 0
+		p.Campaigns = defaultCampaignProgress()
+		p.LastOpponentHeroID = p.OpponentLastHeroID
+		if p.OpponentLastHeroID != "" {
+			p.LastOpponentHeroIDs = []string{p.OpponentLastHeroID}
+		}
+	}
+	if previousSchema < 7 {
+		migrateCampaignProgress(&p)
+	}
+	if !containsHero(p.UnlockedHeroes, "recruit") {
+		p.UnlockedHeroes = append(p.UnlockedHeroes, "recruit")
+	}
+	if p.DefaultHeroID == "" || !containsHero(p.UnlockedHeroes, p.DefaultHeroID) {
+		p.DefaultHeroID = DefaultHeroID
 	}
 	p.ApplyEnergyTick(time.Now())
 	if migrated {
@@ -320,14 +381,96 @@ func normalize(p *Profile) {
 	if p.BestWinStreakByMode == nil {
 		p.BestWinStreakByMode = make(map[int]int)
 	}
+	if p.UnlockedHeroes == nil {
+		if p.SchemaVersion >= 6 {
+			p.UnlockedHeroes = []string{"recruit"}
+		} else {
+			p.UnlockedHeroes = make([]string, 0)
+		}
+	}
+	if p.HeroPlayCounts == nil {
+		p.HeroPlayCounts = make(map[string]int)
+	}
+	if p.HeroWinCounts == nil {
+		p.HeroWinCounts = make(map[string]int)
+	}
+	if p.LastOpponentHeroIDs == nil {
+		p.LastOpponentHeroIDs = make([]string, 0)
+	}
+	if p.Campaigns == nil {
+		p.Campaigns = defaultCampaignProgress()
+	} else {
+		defaults := defaultCampaignProgress()
+		for campaignID, progress := range defaults {
+			if p.Campaigns[campaignID] == nil {
+				p.Campaigns[campaignID] = progress
+			}
+		}
+	}
 	if p.Badges == nil {
 		p.Badges = make([]string, 0)
 	}
+
 	for suit, color := range map[string]string{"B": "red", "F": "yellow", "S": "blue"} {
 		if p.AssignedChromas[suit] == "" {
 			p.AssignedChromas[suit] = color
 		}
 	}
+}
+
+func defaultUnlockedHeroes() []string {
+	return []string{"warden", "hunter", "anchor"}
+}
+
+func defaultCampaignProgress() map[string]*CampaignProgress {
+	return map[string]*CampaignProgress{
+		"basic":    {CampaignID: "basic", TotalMissions: 10, CompletedMissionIDs: []int{}},
+		"advanced": {CampaignID: "advanced", TotalMissions: 5, CompletedMissionIDs: []int{}},
+	}
+}
+
+func migrateCampaignProgress(p *Profile) {
+	defaults := defaultCampaignProgress()
+	if p.Campaigns == nil {
+		p.Campaigns = defaults
+		return
+	}
+	for campaignID, defaultProgress := range defaults {
+		progress := p.Campaigns[campaignID]
+		if progress == nil {
+			p.Campaigns[campaignID] = defaultProgress
+			continue
+		}
+		completedCount := progress.MissionsCompleted
+		if len(progress.CompletedMissionIDs) > 0 {
+			completedCount = len(progress.CompletedMissionIDs)
+		}
+		if progress.Completed {
+			completedCount = defaultProgress.TotalMissions
+		}
+		if completedCount > defaultProgress.TotalMissions {
+			completedCount = defaultProgress.TotalMissions
+		}
+		if completedCount < 0 {
+			completedCount = 0
+		}
+		progress.CompletedMissionIDs = make([]int, completedCount)
+		for index := range progress.CompletedMissionIDs {
+			progress.CompletedMissionIDs[index] = index + 1
+		}
+		progress.CampaignID = campaignID
+		progress.MissionsCompleted = completedCount
+		progress.TotalMissions = defaultProgress.TotalMissions
+	}
+}
+
+func containsHero(heroIDs []string, id string) bool {
+	for _, heroID := range heroIDs {
+		if heroID == id {
+			return true
+		}
+	}
+	return false
 }
 
 func nextLocalMidnight(now time.Time) time.Time {

@@ -1,6 +1,7 @@
 package achievements
 
 import (
+	"fmt"
 	"testing"
 	"time"
 
@@ -75,6 +76,7 @@ func TestEveryAchievementEvaluatorHasPassingAndFailingContexts(t *testing.T) {
 			Result: &game.MatchResult{Games: []game.MatchGame{{
 				Won: true, PlayerJail: []game.Card{{Suit: game.Blade, Face: 1}},
 				OpponentJail: []game.Card{{Suit: game.Shield, Face: 1}}, BountySuit: game.Blade,
+				Modifiers: game.GameModifiers{Bounty: 1, Reckoning: [3]int{1, 1, 1}},
 			}}},
 		},
 		"aggressor": {Profile: &profile.Profile{WinsAsSeatX: 1}},
@@ -134,6 +136,28 @@ func TestEveryAchievementEvaluatorHasPassingAndFailingContexts(t *testing.T) {
 				}, BountySuit: game.Fang,
 			}}},
 		},
+		"bounty_connoisseur": {
+			Profile: p, Event: EventMatchEnd, MatchWon: true,
+			Result: &game.MatchResult{Won: true, Games: []game.MatchGame{{
+				Won: true, Modifiers: game.GameModifiers{Bounty: -3, Reckoning: [3]int{1, 1, 1}},
+			}}},
+		},
+		"favored_aficionado": {
+			Profile: p, Event: EventMatchEnd, MatchWon: true,
+			Result: &game.MatchResult{Won: true, Games: []game.MatchGame{{
+				Won: true, Modifiers: game.GameModifiers{Favored: 2, Reckoning: [3]int{1, 1, 1}},
+			}}},
+		},
+		"shift_whisperer": {
+			Profile: p, Event: EventMatchEnd, MatchWon: true,
+			Result: &game.MatchResult{Won: true, Games: []game.MatchGame{{
+				Won: true, Modifiers: game.GameModifiers{Shift: 3, Reckoning: [3]int{1, 1, 1}},
+			}}},
+		},
+		"hero_variety": {
+			Profile: &profile.Profile{UnlockedHeroes: []string{"recruit", "warden", "hunter", "anchor"}},
+			Event:   EventHeroAcquired, AcquisitionSource: "campaign",
+		},
 	}
 	for _, definition := range All() {
 		testContext, ok := pass[definition.ID]
@@ -145,6 +169,89 @@ func TestEveryAchievementEvaluatorHasPassingAndFailingContexts(t *testing.T) {
 		if !unlocked && tier == 0 {
 			t.Errorf("%s failed its passing context", definition.ID)
 		}
+	}
+}
+
+func TestModifierAchievementsUnlockOnlyTheMatchingIndependentTier(t *testing.T) {
+	tests := []struct {
+		id        string
+		modifiers game.GameModifiers
+		tier      int
+	}{
+		{"bounty_connoisseur", game.GameModifiers{Bounty: -3, Reckoning: [3]int{1, 1, 1}}, 1},
+		{"bounty_connoisseur", game.GameModifiers{Bounty: -2, Reckoning: [3]int{1, 1, 1}}, 2},
+		{"bounty_connoisseur", game.GameModifiers{Bounty: -1, Reckoning: [3]int{1, 1, 1}}, 3},
+		{"bounty_connoisseur", game.GameModifiers{Bounty: 0, Reckoning: [3]int{1, 1, 1}}, 4},
+		{"bounty_connoisseur", game.GameModifiers{Bounty: 1, Reckoning: [3]int{1, 1, 1}}, 5},
+		{"bounty_connoisseur", game.GameModifiers{Bounty: 2, Reckoning: [3]int{1, 1, 1}}, 6},
+		{"bounty_connoisseur", game.GameModifiers{Bounty: 3, Reckoning: [3]int{1, 1, 1}}, 7},
+		{"favored_aficionado", game.GameModifiers{Favored: -1, Reckoning: [3]int{1, 1, 1}}, 1},
+		{"favored_aficionado", game.GameModifiers{Favored: 0, Reckoning: [3]int{1, 1, 1}}, 2},
+		{"favored_aficionado", game.GameModifiers{Favored: 1, Reckoning: [3]int{1, 1, 1}}, 3},
+		{"favored_aficionado", game.GameModifiers{Favored: 2, Reckoning: [3]int{1, 1, 1}}, 4},
+		{"shift_whisperer", game.GameModifiers{Shift: 0, Reckoning: [3]int{1, 1, 1}}, 1},
+		{"shift_whisperer", game.GameModifiers{Shift: 1, Reckoning: [3]int{1, 1, 1}}, 2},
+		{"shift_whisperer", game.GameModifiers{Shift: 2, Reckoning: [3]int{1, 1, 1}}, 3},
+		{"shift_whisperer", game.GameModifiers{Shift: 3, Reckoning: [3]int{1, 1, 1}}, 4},
+	}
+	for _, test := range tests {
+		t.Run(fmt.Sprintf("%s/tier-%d", test.id, test.tier), func(t *testing.T) {
+			p := newAchievementProfile(t)
+			result := game.MatchResult{Won: true, Games: []game.MatchGame{{
+				Won: true, Modifiers: test.modifiers,
+			}}}
+			ctx := NewMatchContext(p, result, economy.ModeIDRanked, "X")
+			events := EvaluateAll(ctx)
+			var match *UnlockEvent
+			for index := range events {
+				if events[index].AchievementID == test.id {
+					match = &events[index]
+					break
+				}
+			}
+			if match == nil || match.Tier != test.tier {
+				t.Fatalf("matching tier event = %+v; events %v", match, events)
+			}
+			if got := p.AchievementTiers[test.id]; got != 1<<(test.tier-1) {
+				t.Fatalf("tier mask = %b, want only tier %d", got, test.tier)
+			}
+			if repeated := EvaluateAll(ctx); hasUnlockFor(repeated, test.id) {
+				t.Fatalf("repeated match awarded tier %d again: %+v", test.tier, repeated)
+			}
+		})
+	}
+}
+
+func TestHeroVarietyExcludesRecruitAndRewardsAtThreeSixAndTen(t *testing.T) {
+	p := newAchievementProfile(t)
+	p.UnlockedHeroes = []string{"recruit", "warden", "hunter", "anchor"}
+	events := EvaluateAll(Context{Profile: p, Event: EventHeroAcquired, AcquisitionSource: "campaign"})
+	if !hasTierUnlock(events, "hero_variety", 1) || p.AchievementTiers["hero_variety"] != 1 {
+		t.Fatalf("three non-Recruit heroes did not unlock Novice: %+v", events)
+	}
+	for _, heroID := range []string{"treasurer", "ascendant", "gambler"} {
+		p.UnlockedHeroes = append(p.UnlockedHeroes, heroID)
+	}
+	events = EvaluateAll(Context{Profile: p, Event: EventHeroAcquired, AcquisitionSource: "box"})
+	if !hasTierUnlock(events, "hero_variety", 2) || p.AchievementTiers["hero_variety"] != 2 {
+		t.Fatalf("six non-Recruit heroes did not unlock Collector: %+v", events)
+	}
+	for _, heroID := range []string{"diplomat", "ascetic", "herald", "hater"} {
+		p.UnlockedHeroes = append(p.UnlockedHeroes, heroID)
+	}
+	events = EvaluateAll(Context{Profile: p, Event: EventHeroAcquired, AcquisitionSource: "purchase"})
+	var completion *UnlockEvent
+	for index := range events {
+		if events[index].AchievementID == "hero_variety" && events[index].Tier == 3 {
+			completion = &events[index]
+		}
+	}
+	if completion == nil || completion.Crowns != 500 || completion.Badge != "badge_completionist" ||
+		completion.HeroBoxes != 1 || p.AchievementTiers["hero_variety"] != 3 {
+		t.Fatalf("ten non-Recruit heroes rewards = %+v; events %v", completion, events)
+	}
+	if !IsUnlocked(p, Achievement{ID: "hero_variety", Tiers: []Tier{{Level: 1}, {Level: 2}, {Level: 3}}}) {
+		t.Fatal("Hero Variety should be complete after all three tiers")
 	}
 }
 
@@ -224,6 +331,7 @@ func TestEfficientBountyComebackAndMiscEvaluators(t *testing.T) {
 		Won: true, PlayerJail: []game.Card{{Suit: game.Blade, Face: 1}},
 		OpponentJail: []game.Card{{Suit: game.Shield, Face: 1}},
 		BountySuit:   game.Blade,
+		Modifiers:    game.GameModifiers{Bounty: 1, Reckoning: [3]int{1, 1, 1}},
 	}}
 	ctx.Result.PlayerScore = 1
 	ctx.Result.OpponentScore = 0
@@ -266,7 +374,7 @@ func TestCountersTierCrossingAndSetCompletionAreIdempotent(t *testing.T) {
 		}
 	}
 	if aggressor == nil || aggressor.Tier != 3 || aggressor.Marks != 6200 || aggressor.Crowns != 100 ||
-		aggressor.Badge != "badge_aggressor" || !setCompleted {
+		aggressor.Badge != "badge_aggressor" || aggressor.HeroBoxes != 1 || !setCompleted {
 		t.Fatalf("full tier crossing/set reward missing: %+v", events)
 	}
 	if p.AchievementCounters["streak_easy"] != 2 || p.AchievementCounters["total_clashes"] != 5 ||
@@ -330,7 +438,7 @@ func TestLoginRewardAndSetCompletesOnlyWhenAllMembersAreUnlocked(t *testing.T) {
 		}
 	}
 	if loginTier == nil || loginTier.Tier != 3 || loginTier.Marks != 3850 ||
-		loginTier.Crowns != 50 || loginTier.Badge != "badge_devoted" || !loginSet {
+		loginTier.Crowns != 50 || loginTier.Badge != "badge_devoted" || loginTier.HeroBoxes != 1 || !loginSet {
 		t.Fatalf("login tier/set events = %+v", loginEvents)
 	}
 
@@ -362,4 +470,22 @@ func newAchievementProfile(t *testing.T) *profile.Profile {
 		t.Fatal(err)
 	}
 	return p
+}
+
+func hasTierUnlock(events []UnlockEvent, id string, tier int) bool {
+	for _, event := range events {
+		if event.AchievementID == id && event.Tier == tier {
+			return true
+		}
+	}
+	return false
+}
+
+func hasUnlockFor(events []UnlockEvent, id string) bool {
+	for _, event := range events {
+		if event.AchievementID == id {
+			return true
+		}
+	}
+	return false
 }

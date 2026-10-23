@@ -2,11 +2,14 @@ package main
 
 import (
 	"bufio"
+	"bytes"
 	"math/rand"
 	"strings"
 	"testing"
 
+	"prisonersofwar/ai"
 	"prisonersofwar/game"
+	"prisonersofwar/heroes"
 )
 
 func TestScriptedTerminalGamePreservesAllCards(t *testing.T) {
@@ -48,6 +51,33 @@ func TestScriptedTerminalGamePreservesAllCards(t *testing.T) {
 		if !containsCard(finalCards, card) {
 			t.Fatalf("final state lost card %s", card)
 		}
+	}
+}
+
+func TestHeroSimulatorCompletesGreedyMatch(t *testing.T) {
+	first, _ := heroes.ByID("warden")
+	second, _ := heroes.ByID("hunter")
+	result, err := simulateHeroGame(first, second, ai.Greedy, ai.Easy, rand.New(rand.NewSource(42)))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if result.winner < 0 || result.winner > 1 {
+		t.Fatalf("simulator returned invalid winner %d", result.winner)
+	}
+}
+
+func TestHeroSimulatorPassesBalanceTargetsForAtLeast60Pairs(t *testing.T) {
+	var output bytes.Buffer
+	passed, pairs, err := simulateHeroMatchups(&output, 1000, rand.New(rand.NewSource(42)))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if pairs != 66 || passed < 60 {
+		t.Fatalf("hero simulator passed %d/%d pairings; want at least 60/66", passed, pairs)
+	}
+	lines := strings.Split(strings.TrimSpace(output.String()), "\n")
+	if len(lines) != 69 {
+		t.Fatalf("simulator emitted %d report lines, want 69 (66 pairing rows)", len(lines))
 	}
 }
 

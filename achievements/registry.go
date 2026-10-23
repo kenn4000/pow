@@ -17,6 +17,7 @@ type UnlockEvent struct {
 	Crowns        int64
 	SkillPoints   int
 	ChromaPick    int
+	HeroBoxes     int
 	Badge         string
 	SetID         string
 }
@@ -50,6 +51,10 @@ func init() {
 	register("master_both", evalMasterBoth)
 	register("photo_finish", evalPhotoFinish)
 	register("no_not_like_that", evalNoNotLikeThat)
+	register("bounty_connoisseur", evalModifierTiers("bounty", map[int]int{-3: 1, -2: 2, -1: 3, 0: 4, 1: 5, 2: 6, 3: 7}))
+	register("favored_aficionado", evalModifierTiers("favored", map[int]int{-1: 1, 0: 2, 1: 3, 2: 4}))
+	register("shift_whisperer", evalModifierTiers("shift", map[int]int{0: 1, 1: 2, 2: 3, 3: 4}))
+	register("hero_variety", evalHeroVariety)
 }
 
 func register(id string, evaluator EvalFunc) {
@@ -87,7 +92,31 @@ func EvaluateAll(ctx Context) []UnlockEvent {
 				Marks:         achievement.RewardMarks,
 				Crowns:        achievement.RewardCrowns,
 				ChromaPick:    achievement.RewardChromaPick,
+				HeroBoxes:     achievement.RewardHeroBox,
 				Badge:         achievement.RewardBadge,
+				SetID:         achievement.SetID,
+			})
+			continue
+		}
+		if achievement.IndependentTiers {
+			mask := ctx.Profile.AchievementTiers[achievement.ID]
+			if tierAchieved <= 0 || tierAchieved > len(achievement.Tiers) {
+				continue
+			}
+			bit := 1 << (tierAchieved - 1)
+			if mask&bit != 0 {
+				continue
+			}
+			tier := achievement.Tiers[tierAchieved-1]
+			ctx.Profile.AchievementTiers[achievement.ID] = mask | bit
+			events = append(events, UnlockEvent{
+				AchievementID: achievement.ID,
+				Tier:          tierAchieved,
+				Marks:         tier.RewardMarks,
+				Crowns:        tier.RewardCrowns,
+				ChromaPick:    tier.RewardChromaPick,
+				HeroBoxes:     tier.RewardHeroBox,
+				Badge:         tier.RewardBadge,
 				SetID:         achievement.SetID,
 			})
 			continue
@@ -104,6 +133,7 @@ func EvaluateAll(ctx Context) []UnlockEvent {
 			event.Marks += tier.RewardMarks
 			event.Crowns += tier.RewardCrowns
 			event.ChromaPick += tier.RewardChromaPick
+			event.HeroBoxes += tier.RewardHeroBox
 			if tier.RewardBadge != "" {
 				event.Badge = tier.RewardBadge
 			}
@@ -140,6 +170,10 @@ func IsUnlocked(p *profile.Profile, achievement Achievement) bool {
 	}
 	if len(achievement.Tiers) == 0 {
 		return p.Achievements[achievement.ID]
+	}
+	if achievement.IndependentTiers {
+		completeMask := (1 << len(achievement.Tiers)) - 1
+		return p.AchievementTiers[achievement.ID]&completeMask == completeMask
 	}
 	return p.AchievementTiers[achievement.ID] >= len(achievement.Tiers)
 }
@@ -301,8 +335,8 @@ func evalBountyDecided(ctx Context) (int, bool, int) {
 		if !matchGame.Won {
 			continue
 		}
-		playerBreakdown := game.Score(matchGame.PlayerJail, matchGame.BountySuit)
-		opponentScore := game.Score(matchGame.OpponentJail, matchGame.BountySuit).Total
+		playerBreakdown := game.ScoreWithModifiers(matchGame.PlayerJail, matchGame.PlayerCapturedByRound, matchGame.BountySuit, matchGame.Modifiers)
+		opponentScore := game.ScoreWithModifiers(matchGame.OpponentJail, matchGame.OpponentCapturedByRound, matchGame.BountySuit, matchGame.Modifiers).Total
 		nonBountyScore := playerBreakdown.Total - playerBreakdown.BountyBonus
 		if nonBountyScore <= opponentScore && playerBreakdown.Total > opponentScore {
 			return 1, true, 0
@@ -441,7 +475,7 @@ func evalNoNotLikeThat(ctx Context) (int, bool, int) {
 		if matchGame.Won {
 			continue
 		}
-		breakdown := game.Score(matchGame.PlayerJail, matchGame.BountySuit)
+		breakdown := game.ScoreWithModifiers(matchGame.PlayerJail, matchGame.PlayerCapturedByRound, matchGame.BountySuit, matchGame.Modifiers)
 		for _, suitScore := range breakdown.BySuit {
 			if suitScore >= 9 {
 				return 1, true, 0
@@ -449,6 +483,57 @@ func evalNoNotLikeThat(ctx Context) (int, bool, int) {
 		}
 	}
 	return 0, false, 0
+}
+
+func evalModifierTiers(modifier string, tierByValue map[int]int) EvalFunc {
+	return func(ctx Context) (int, bool, int) {
+		if ctx.Event != EventMatchEnd || !ctx.MatchWon || ctx.Result == nil {
+			return 0, false, 0
+		}
+		for _, matchGame := range ctx.Result.Games {
+			if !matchGame.Won {
+				continue
+			}
+			value := 0
+			switch modifier {
+			case "bounty":
+				value = matchGame.Modifiers.Bounty
+			case "shift":
+				value = matchGame.Modifiers.Shift
+			case "favored":
+				value = matchGame.Modifiers.Favored
+			default:
+				return 0, false, 0
+			}
+			if tier, ok := tierByValue[value]; ok {
+				return value, true, tier
+			}
+		}
+		return 0, false, 0
+	}
+}
+
+func evalHeroVariety(ctx Context) (int, bool, int) {
+	if ctx.Event != EventHeroAcquired || ctx.Profile == nil {
+		return 0, false, 0
+	}
+	unique := make(map[string]struct{}, len(ctx.Profile.UnlockedHeroes))
+	for _, heroID := range ctx.Profile.UnlockedHeroes {
+		if heroID != "" && heroID != "recruit" {
+			unique[heroID] = struct{}{}
+		}
+	}
+	count := len(unique)
+	tier := 0
+	switch {
+	case count >= 10:
+		tier = 3
+	case count >= 6:
+		tier = 2
+	case count >= 3:
+		tier = 1
+	}
+	return count, tier > 0, tier
 }
 
 func matchSingle(ctx Context, condition func(game.MatchGame) bool) (int, bool, int) {
