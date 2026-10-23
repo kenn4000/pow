@@ -58,6 +58,47 @@ func TestCampDrawWinCountsSelectCorrectBox(t *testing.T) {
 	}
 }
 
+func TestCampDrawSessionResolvesPlayerSelections(t *testing.T) {
+	p := newTestProfile(t)
+	p.DrawsAvailable = 1
+	rng := rand.New(rand.NewSource(19))
+	session, err := BeginCampDraw(p, rng)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(session.StartingHand()) != 3 {
+		t.Fatalf("starting hand has %d cards, want 3", len(session.StartingHand()))
+	}
+	if _, err := session.Finish(p, rng, nil); err == nil {
+		t.Fatal("unfinished Camp Draw should not be rewarded")
+	}
+	for exchangeIndex := 0; exchangeIndex < 3; exchangeIndex++ {
+		prompt, ok := session.Prompt()
+		if !ok || prompt.ExchangeIndex != exchangeIndex || len(prompt.PlayerPool) != 3-exchangeIndex {
+			t.Fatalf("exchange %d prompt = %+v, available=%t", exchangeIndex, prompt, ok)
+		}
+		if prompt.IsDefending != (exchangeIndex != 1) {
+			t.Fatalf("exchange %d defending = %t", exchangeIndex, prompt.IsDefending)
+		}
+		if prompt.IsDefending && (prompt.CPUCard == nil || !prompt.CPUCard.Valid()) {
+			t.Fatalf("defense prompt omitted the revealed CPU attack: %+v", prompt)
+		}
+		if _, err := session.Play(0, rng); err != nil {
+			t.Fatalf("exchange %d selection: %v", exchangeIndex, err)
+		}
+	}
+	if _, ok := session.Prompt(); ok {
+		t.Fatal("completed Camp Draw should have no pending prompt")
+	}
+	result, err := session.Finish(p, rng, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(result.Exchanges) != 3 || p.DrawsAvailable != 0 {
+		t.Fatalf("finished result=%+v; draws=%d", result, p.DrawsAvailable)
+	}
+}
+
 func TestCPUChoicesFollowGreedyRules(t *testing.T) {
 	attack := game.Card{Suit: game.Blade, Face: 4}
 	pool := []game.Card{
@@ -167,7 +208,7 @@ func TestFortunesFavorAndLuckyFindModifyCampDrawTables(t *testing.T) {
 
 func TestCuratorDuplicateRerollAndFallback(t *testing.T) {
 	p := newTestProfile(t)
-	p.SkillNodes["curator"] = true
+	p.SkillNodes["chroma-curator"] = true
 	for _, chroma := range chromasForRarity("common") {
 		p.OwnedChromas[chroma.ID] = true
 	}
@@ -175,7 +216,7 @@ func TestCuratorDuplicateRerollAndFallback(t *testing.T) {
 	if reason != "Curator rerolled an owned chroma twice" {
 		t.Fatalf("Curator fallback reason = %q", reason)
 	}
-	p.SkillNodes["curator"] = false
+	p.SkillNodes["chroma-curator"] = false
 	chroma, reason := rollChroma("common", p, rand.New(rand.NewSource(5)))
 	if chroma == nil || reason != "" || !p.OwnedChromas[chroma.ID] {
 		t.Fatalf("duplicate allowed without Curator: chroma=%v reason=%q", chroma, reason)

@@ -13,6 +13,7 @@ const (
 	Easy Difficulty = iota
 	Normal
 	Hard
+	Greedy
 )
 
 const sampleCount = 8
@@ -25,6 +26,8 @@ func (d Difficulty) String() string {
 		return "Normal"
 	case Hard:
 		return "Hard"
+	case Greedy:
+		return "Greedy"
 	default:
 		return "Unknown"
 	}
@@ -46,12 +49,16 @@ func ChooseCommit(state game.GameState, playerIndex int, difficulty Difficulty, 
 	if difficulty == Easy {
 		return combos[rng.Intn(len(combos))], nil
 	}
-	if difficulty == Normal {
+	if difficulty == Normal || difficulty == Greedy {
 		best, bestValue := combos[0], -1<<30
 		for _, combo := range combos {
 			value := 0
 			for _, index := range combo {
-				value += game.ScoreDelta(player.Jail, player.Hand[index], state.Bounty.Suit)
+				delta, err := game.ScoreDeltaWithModifiers(*player, player.Hand[index], state.Bounty.Suit, state.Modifiers, state.Round)
+				if err != nil {
+					return nil, err
+				}
+				value += delta
 			}
 			if value > bestValue {
 				best, bestValue = combo, value
@@ -67,7 +74,11 @@ func ChooseCommit(state game.GameState, playerIndex int, difficulty Difficulty, 
 		value := 0
 		for sample := 0; sample < sampleCount; sample++ {
 			oppPool := sampleCards(unseen, 3, rng)
-			value += evaluateRound(state, playerIndex, ownPool, oppPool, player.Seat)
+			roundValue, err := evaluateRound(state, playerIndex, ownPool, oppPool, player.Seat)
+			if err != nil {
+				return nil, err
+			}
+			value += roundValue
 		}
 		if value > bestValue {
 			best, bestValue = combo, value
@@ -94,13 +105,17 @@ func ChoosePoolIndex(state game.GameState, playerIndex int, attacking bool, reve
 			return 0, errors.New("defense requires the revealed attack card")
 		}
 		for i, card := range player.Pool {
-			outcome := game.Resolve(*revealedAttack, card)
+			outcome := game.ResolveWithModifiers(*revealedAttack, card, state.Modifiers)
 			value := 0
 			switch outcome.Winner {
 			case 1:
-				value = game.ScoreDelta(player.Jail, outcome.Captured, state.Bounty.Suit)
+				value, err = game.ScoreDeltaWithModifiers(*player, outcome.Captured, state.Bounty.Suit, state.Modifiers, state.Round)
 			case 0:
-				value = -game.ScoreDelta(opponent.Jail, outcome.Captured, state.Bounty.Suit)
+				value, err = game.ScoreDeltaWithModifiers(*opponent, outcome.Captured, state.Bounty.Suit, state.Modifiers, state.Round)
+				value = -value
+			}
+			if err != nil {
+				return 0, err
 			}
 			if value > bestValue || (value == bestValue && card.Face < player.Pool[bestIndex].Face) {
 				bestIndex, bestValue = i, value
@@ -114,16 +129,44 @@ func ChoosePoolIndex(state game.GameState, playerIndex int, attacking bool, reve
 		return 0, errors.New("no unseen cards available for attack evaluation")
 	}
 	for index, card := range player.Pool {
+		if difficulty == Greedy {
+			expected := 0
+			for _, oppCard := range candidates {
+				outcome := game.ResolveWithModifiers(card, oppCard, state.Modifiers)
+				switch outcome.Winner {
+				case 0:
+					delta, err := game.ScoreDeltaWithModifiers(*player, outcome.Captured, state.Bounty.Suit, state.Modifiers, state.Round)
+					if err != nil {
+						return 0, err
+					}
+					expected += delta
+				case 1:
+					delta, err := game.ScoreDeltaWithModifiers(*opponent, outcome.Captured, state.Bounty.Suit, state.Modifiers, state.Round)
+					if err != nil {
+						return 0, err
+					}
+					expected -= delta
+				}
+			}
+			if expected > bestValue || (expected == bestValue && card.Face > player.Pool[bestIndex].Face) {
+				bestIndex, bestValue = index, expected
+			}
+			continue
+		}
 		worst := 1 << 30
 		for sample := 0; sample < sampleCount; sample++ {
 			oppCard := candidates[rng.Intn(len(candidates))]
-			outcome := game.Resolve(card, oppCard)
+			outcome := game.ResolveWithModifiers(card, oppCard, state.Modifiers)
 			value := 0
 			switch outcome.Winner {
 			case 0:
-				value = game.ScoreDelta(player.Jail, outcome.Captured, state.Bounty.Suit)
+				value, err = game.ScoreDeltaWithModifiers(*player, outcome.Captured, state.Bounty.Suit, state.Modifiers, state.Round)
 			case 1:
-				value = -game.ScoreDelta(opponent.Jail, outcome.Captured, state.Bounty.Suit)
+				value, err = game.ScoreDeltaWithModifiers(*opponent, outcome.Captured, state.Bounty.Suit, state.Modifiers, state.Round)
+				value = -value
+			}
+			if err != nil {
+				return 0, err
 			}
 			if value < worst {
 				worst = value
@@ -156,7 +199,11 @@ func ChooseSeat(state game.GameState, playerIndex int, difficulty Difficulty, rn
 			ownPool := cardsAt(player.Hand, combo)
 			for sample := 0; sample < sampleCount; sample++ {
 				oppPool := sampleCards(unseen, oppCount, rng)
-				seatValue += evaluateRound(state, playerIndex, ownPool, oppPool, seat)
+				roundValue, err := evaluateRound(state, playerIndex, ownPool, oppPool, seat)
+				if err != nil {
+					return game.SeatX, err
+				}
+				seatValue += roundValue
 			}
 		}
 		if seatValue > bestValue {
@@ -195,11 +242,12 @@ func sampleCards(cards []game.Card, count int, rng *rand.Rand) []game.Card {
 	return copyCards[:count]
 }
 
-func evaluateRound(state game.GameState, ownIndex int, ownPool, opponentPool []game.Card, ownSeat game.Seat) int {
+func evaluateRound(state game.GameState, ownIndex int, ownPool, opponentPool []game.Card, ownSeat game.Seat) (int, error) {
 	own, _ := state.Player(ownIndex)
 	opponent, _ := state.Player(1 - ownIndex)
-	ownJail := append([]game.Card(nil), own.Jail...)
-	opponentJail := append([]game.Card(nil), opponent.Jail...)
+	ownPlayer, opponentPlayer := *own, *opponent
+	ownPlayer.Jail = append([]game.Card(nil), own.Jail...)
+	opponentPlayer.Jail = append([]game.Card(nil), opponent.Jail...)
 	value := 0
 	for i := 0; i < min(len(ownPool), len(opponentPool)); i++ {
 		ownAttacks := ownSeat == game.SeatX
@@ -210,22 +258,30 @@ func evaluateRound(state game.GameState, ownIndex int, ownPool, opponentPool []g
 		if !ownAttacks {
 			attacker, defender = opponentPool[i], ownPool[i]
 		}
-		result := game.Resolve(attacker, defender)
+		result := game.ResolveWithModifiers(attacker, defender, state.Modifiers)
 		if result.Winner == -1 {
 			continue
 		}
 		ownWins := (result.Winner == 0 && ownAttacks) || (result.Winner == 1 && !ownAttacks)
 		if ownWins {
-			delta := game.ScoreDelta(ownJail, result.Captured, state.Bounty.Suit)
+			delta, err := game.ScoreDeltaWithModifiers(ownPlayer, result.Captured, state.Bounty.Suit, state.Modifiers, state.Round)
+			if err != nil {
+				return 0, err
+			}
 			value += delta
-			ownJail = append(ownJail, result.Captured)
+			ownPlayer.Jail = append(ownPlayer.Jail, result.Captured)
+			ownPlayer.CapturedByRound[state.Round-1][int(result.Captured.Suit)]++
 		} else {
-			delta := game.ScoreDelta(opponentJail, result.Captured, state.Bounty.Suit)
+			delta, err := game.ScoreDeltaWithModifiers(opponentPlayer, result.Captured, state.Bounty.Suit, state.Modifiers, state.Round)
+			if err != nil {
+				return 0, err
+			}
 			value -= delta
-			opponentJail = append(opponentJail, result.Captured)
+			opponentPlayer.Jail = append(opponentPlayer.Jail, result.Captured)
+			opponentPlayer.CapturedByRound[state.Round-1][int(result.Captured.Suit)]++
 		}
 	}
-	return value
+	return value, nil
 }
 
 func cardsAt(cards []game.Card, indices []int) []game.Card {

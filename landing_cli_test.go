@@ -32,7 +32,7 @@ func TestLandingPageRendersNewAndProgressedPlayerStates(t *testing.T) {
 		"[3] Shop", "[4] Skill Tree", "[5] Achievements",
 		"Login Streak: Day 0 of 30", "Camp Draw: 0 / 10 wins",
 		"Energy: 0/10 (next in 10:00)", "[W]atch Ad (+3, 5 left today)",
-		"[6] Profile", "[7] Settings", "[Q] Quit",
+		"[6] Profile", "[7] Settings", "[8] Heroes", "[9] Campaigns", "[Q] Quit",
 	} {
 		if !strings.Contains(rendered, expected) {
 			t.Errorf("landing page missing %q:\n%s", expected, rendered)

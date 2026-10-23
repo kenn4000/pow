@@ -35,6 +35,23 @@ type CampDrawResult struct {
 	Reward     BoxOpenResult    `json:"reward"`
 }
 
+type CampDrawPrompt struct {
+	ExchangeIndex int         `json:"exchangeIndex"`
+	IsDefending   bool        `json:"isDefending"`
+	CPUCard       *game.Card  `json:"cpuCard,omitempty"`
+	PlayerPool    []game.Card `json:"playerPool"`
+}
+
+type CampDrawSession struct {
+	startingHand  []game.Card
+	playerPool    []game.Card
+	cpuPool       []game.Card
+	exchangeIndex int
+	playerWins    int
+	exchanges     []ExchangeResult
+	finished      bool
+}
+
 type CampDrawUI interface {
 	ShowStartingHand(cards []game.Card)
 	ChooseCardForExchange(exchangeIndex int, isDefending bool, cpuCard *game.Card, playerPool []game.Card) int
@@ -82,82 +99,161 @@ func CPUDefenderPick(pool []game.Card, attack game.Card) game.Card {
 	return best
 }
 
-func OpenCampDraw(p *profile.Profile, rng *rand.Rand, ui CampDrawUI) (CampDrawResult, error) {
+func BeginCampDraw(p *profile.Profile, rng *rand.Rand) (*CampDrawSession, error) {
+	if p == nil {
+		return nil, errors.New("profile is required")
+	}
+	if rng == nil {
+		return nil, errors.New("random source is required")
+	}
+	if p.DrawsAvailable < 1 {
+		return nil, errors.New("no Camp Draws are available")
+	}
+	deck := game.NewDeck()
+	game.Shuffle(deck, rng)
+	playerPool := append([]game.Card(nil), deck[:3]...)
+	return &CampDrawSession{
+		startingHand: append([]game.Card(nil), playerPool...),
+		playerPool:   playerPool,
+		cpuPool:      append([]game.Card(nil), deck[3:3+CPUHandSize]...),
+		exchanges:    make([]ExchangeResult, 0, 3),
+	}, nil
+}
+
+func (s *CampDrawSession) StartingHand() []game.Card {
+	if s == nil {
+		return nil
+	}
+	return append([]game.Card(nil), s.startingHand...)
+}
+
+func (s *CampDrawSession) Prompt() (CampDrawPrompt, bool) {
+	if s == nil || s.finished || s.exchangeIndex >= 3 {
+		return CampDrawPrompt{}, false
+	}
+	prompt := CampDrawPrompt{
+		ExchangeIndex: s.exchangeIndex,
+		IsDefending:   s.exchangeIndex != 1,
+		PlayerPool:    append([]game.Card(nil), s.playerPool...),
+	}
+	if prompt.IsDefending {
+		card := CPUAttackerPick(s.cpuPool, nil)
+		prompt.CPUCard = &card
+	}
+	return prompt, true
+}
+
+func (s *CampDrawSession) Exchanges() []ExchangeResult {
+	if s == nil {
+		return nil
+	}
+	exchanges := make([]ExchangeResult, len(s.exchanges))
+	copy(exchanges, s.exchanges)
+	for index := range exchanges {
+		exchanges[index].PlayerPool = append([]game.Card(nil), exchanges[index].PlayerPool...)
+		exchanges[index].CPUPool = append([]game.Card(nil), exchanges[index].CPUPool...)
+	}
+	return exchanges
+}
+
+func (s *CampDrawSession) Play(playerIndex int, rng *rand.Rand) (ExchangeResult, error) {
+	if s == nil || s.finished || s.exchangeIndex >= 3 {
+		return ExchangeResult{}, errors.New("Camp Draw has no pending exchange")
+	}
+	if rng == nil {
+		return ExchangeResult{}, errors.New("random source is required")
+	}
+	prompt, _ := s.Prompt()
+	if playerIndex < 0 || playerIndex >= len(s.playerPool) {
+		return ExchangeResult{}, fmt.Errorf("invalid player card selection %d for exchange %d", playerIndex, s.exchangeIndex+1)
+	}
+	playerCard := s.playerPool[playerIndex]
+	var cpuCard game.Card
+	var attacker, defender game.Card
+	if prompt.IsDefending {
+		cpuCard = *prompt.CPUCard
+		attacker, defender = cpuCard, playerCard
+	} else {
+		cpuCard = CPUDefenderPick(s.cpuPool, playerCard)
+		if !cpuCard.Valid() {
+			return ExchangeResult{}, errors.New("CPU could not choose a valid defense card")
+		}
+		attacker, defender = playerCard, cpuCard
+	}
+	outcome := game.Resolve(attacker, defender)
+	playerWins := outcome.Winner == 1
+	if !prompt.IsDefending {
+		playerWins = outcome.Winner == 0
+	}
+	playerResult := 1
+	if outcome.Winner != -1 && !playerWins {
+		playerResult = 0
+	} else if playerWins {
+		playerResult = 2
+		s.playerWins++
+	}
+	s.playerPool = removeCardAt(s.playerPool, indexOfCard(s.playerPool, playerCard))
+	s.cpuPool = removeCardAt(s.cpuPool, indexOfCard(s.cpuPool, cpuCard))
+	exchange := ExchangeResult{
+		PlayerCard: playerCard, CPUCard: cpuCard, Outcome: playerResult,
+		PlayerPool: append([]game.Card(nil), s.playerPool...),
+		CPUPool:    append([]game.Card(nil), s.cpuPool...),
+	}
+	s.exchanges = append(s.exchanges, exchange)
+	s.exchangeIndex++
+	return exchange, nil
+}
+
+func (s *CampDrawSession) Finish(p *profile.Profile, rng *rand.Rand, ui CampDrawUI) (CampDrawResult, error) {
+	if s == nil || s.finished || s.exchangeIndex != 3 {
+		return CampDrawResult{}, errors.New("Camp Draw exchanges are not complete")
+	}
 	if p == nil {
 		return CampDrawResult{}, errors.New("profile is required")
 	}
 	if rng == nil {
 		return CampDrawResult{}, errors.New("random source is required")
 	}
-	if ui == nil {
-		return CampDrawResult{}, errors.New("Camp Draw UI is required")
-	}
 	if p.DrawsAvailable < 1 {
 		return CampDrawResult{}, errors.New("no Camp Draws are available")
 	}
-	deck := game.NewDeck()
-	game.Shuffle(deck, rng)
-	playerPool := append([]game.Card(nil), deck[:3]...)
-	cpuPool := append([]game.Card(nil), deck[3:3+CPUHandSize]...)
-	ui.ShowStartingHand(append([]game.Card(nil), playerPool...))
-
-	result := CampDrawResult{Exchanges: make([]ExchangeResult, 0, 3)}
-	for exchangeIndex := 0; exchangeIndex < 3; exchangeIndex++ {
-		var playerCard, cpuCard game.Card
-		isDefending := exchangeIndex != 1
-		if isDefending {
-			cpuCard = CPUAttackerPick(cpuPool, rng)
-			cardForUI := cpuCard
-			playerIndex := ui.ChooseCardForExchange(exchangeIndex, true, &cardForUI, append([]game.Card(nil), playerPool...))
-			if playerIndex < 0 || playerIndex >= len(playerPool) {
-				return CampDrawResult{}, fmt.Errorf("invalid player card selection %d for exchange %d", playerIndex, exchangeIndex+1)
-			}
-			playerCard = playerPool[playerIndex]
-		} else {
-			playerIndex := ui.ChooseCardForExchange(exchangeIndex, false, nil, append([]game.Card(nil), playerPool...))
-			if playerIndex < 0 || playerIndex >= len(playerPool) {
-				return CampDrawResult{}, fmt.Errorf("invalid player card selection %d for exchange %d", playerIndex, exchangeIndex+1)
-			}
-			playerCard = playerPool[playerIndex]
-			cpuCard = CPUDefenderPick(cpuPool, playerCard)
-			if !cpuCard.Valid() {
-				return CampDrawResult{}, errors.New("CPU could not choose a valid defense card")
-			}
-		}
-
-		attacker, defender := cpuCard, playerCard
-		if exchangeIndex == 1 {
-			attacker, defender = playerCard, cpuCard
-		}
-		outcome := game.Resolve(attacker, defender)
-		playerWins := outcome.Winner == 1
-		if exchangeIndex == 1 {
-			playerWins = outcome.Winner == 0
-		}
-		playerResult := 1
-		if outcome.Winner != -1 && !playerWins {
-			playerResult = 0
-		} else if playerWins {
-			playerResult = 2
-			result.PlayerWins++
-		}
-		playerPool = removeCardAt(playerPool, indexOfCard(playerPool, playerCard))
-		cpuPool = removeCardAt(cpuPool, indexOfCard(cpuPool, cpuCard))
-		exchange := ExchangeResult{
-			PlayerCard: playerCard, CPUCard: cpuCard, Outcome: playerResult,
-			PlayerPool: append([]game.Card(nil), playerPool...),
-			CPUPool:    append([]game.Card(nil), cpuPool...),
-		}
-		result.Exchanges = append(result.Exchanges, exchange)
-		ui.ShowExchangeResult(exchange)
+	result := CampDrawResult{
+		PlayerWins: s.playerWins,
+		Exchanges:  s.Exchanges(),
 	}
-
 	result.BoxType = boxTypeForWins(result.PlayerWins)
 	result.Reward = RollBox(result.BoxType, p, rng)
 	applyBoxReward(p, result.Reward)
-	ui.ShowBoxResult(result.BoxType, result.Reward)
 	p.DrawsAvailable--
+	s.finished = true
+	if ui != nil {
+		ui.ShowBoxResult(result.BoxType, result.Reward)
+	}
 	return result, nil
+}
+
+func OpenCampDraw(p *profile.Profile, rng *rand.Rand, ui CampDrawUI) (CampDrawResult, error) {
+	if ui == nil {
+		return CampDrawResult{}, errors.New("Camp Draw UI is required")
+	}
+	session, err := BeginCampDraw(p, rng)
+	if err != nil {
+		return CampDrawResult{}, err
+	}
+	ui.ShowStartingHand(session.StartingHand())
+	for {
+		prompt, ok := session.Prompt()
+		if !ok {
+			break
+		}
+		playerIndex := ui.ChooseCardForExchange(prompt.ExchangeIndex, prompt.IsDefending, prompt.CPUCard, prompt.PlayerPool)
+		exchange, err := session.Play(playerIndex, rng)
+		if err != nil {
+			return CampDrawResult{}, err
+		}
+		ui.ShowExchangeResult(exchange)
+	}
+	return session.Finish(p, rng, ui)
 }
 
 func boxTypeForWins(wins int) string {

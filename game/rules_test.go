@@ -115,6 +115,53 @@ func TestScoring(t *testing.T) {
 	}
 }
 
+func TestModifierAwareCombatAndScoring(t *testing.T) {
+	mods := GameModifiers{Bounty: 2, Shift: 1, Favored: 2, Reckoning: [3]int{1, 1, 2}}
+	combat := ResolveWithModifiers(Card{Blade, 5}, Card{Fang, 4}, mods)
+	if combat.AttackerValue != 14 {
+		t.Fatalf("modified attacker value = %d, want 14", combat.AttackerValue)
+	}
+
+	jail := []Card{{Blade, 7}, {Blade, 4}}
+	captures := [3][3]int{{1, 0, 0}, {0, 0, 0}, {1, 0, 0}}
+	score := ScoreWithModifiers(jail, captures, Blade, mods)
+	if score.WeightedCount[Blade] != 3 || score.BySuit[Blade] != 30 || score.Total != 30 {
+		t.Fatalf("modifier-aware score = %+v, want weighted count 3 and total 30", score)
+	}
+	if score.BountyBonus != 6 {
+		t.Fatalf("weighted bounty contribution = %d, want 6", score.BountyBonus)
+	}
+}
+
+func TestScoreDeltaWithModifiersUsesCurrentRound(t *testing.T) {
+	mods := GameModifiers{Reckoning: [3]int{1, 1, 2}}
+	player := Player{
+		Jail:            []Card{{Blade, 7}},
+		CapturedByRound: [3][3]int{{1, 0, 0}},
+	}
+	delta, err := ScoreDeltaWithModifiers(player, Card{Blade, 3}, Fang, mods, 3)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if delta != 14 {
+		t.Fatalf("round-three capture score delta = %d, want 14", delta)
+	}
+	if _, err := ScoreDeltaWithModifiers(player, Card{Blade, 3}, Fang, mods, 4); err == nil {
+		t.Fatal("invalid capture round was accepted")
+	}
+}
+
+func TestPlayExchangeRejectsInvalidRound(t *testing.T) {
+	state, err := NewGame(rand.New(rand.NewSource(25)))
+	if err != nil {
+		t.Fatal(err)
+	}
+	state.Round = 0
+	if _, err := PlayExchange(&state, 0, 0, 1, 0); err == nil {
+		t.Fatal("invalid round was accepted")
+	}
+}
+
 func TestRefillDrawsAndDiscardsLowest(t *testing.T) {
 	state, err := NewGame(rand.New(rand.NewSource(21)))
 	if err != nil {

@@ -2,7 +2,10 @@ package game
 
 import (
 	"errors"
+	"fmt"
 	"sort"
+
+	"prisonersofwar/modifiers"
 )
 
 type Outcome struct {
@@ -13,9 +16,13 @@ type Outcome struct {
 }
 
 func Resolve(attacker, defender Card) Outcome {
+	return ResolveWithModifiers(attacker, defender, GameModifiers{Reckoning: modifiers.DefaultReckoning})
+}
+
+func ResolveWithModifiers(attacker, defender Card, gameModifiers GameModifiers) Outcome {
 	result := Outcome{
-		AttackerValue: EffectiveValue(attacker, defender),
-		DefenderValue: EffectiveValue(defender, attacker),
+		AttackerValue: EffectiveValueWithModifiers(attacker, defender, gameModifiers),
+		DefenderValue: EffectiveValueWithModifiers(defender, attacker, gameModifiers),
 		Winner:        -1,
 	}
 	if result.AttackerValue > result.DefenderValue {
@@ -26,8 +33,13 @@ func Resolve(attacker, defender Card) Outcome {
 	return result
 }
 
+func EffectiveValueWithModifiers(card, opponent Card, gameModifiers GameModifiers) int {
+	return modifiers.CombatValue(card.Face, card.Suit.Beats(opponent.Suit), gameModifiers.Shift, gameModifiers.Favored)
+}
+
 type ScoreBreakdown struct {
 	BySuit        [3]int
+	WeightedCount [3]int
 	BountyBonus   int
 	Total         int
 	DistinctSuits int
@@ -56,6 +68,7 @@ func Score(jail []Card, bounty Suit) ScoreBreakdown {
 	for suit := range counts {
 		if counts[suit] > 0 {
 			result.DistinctSuits++
+			result.WeightedCount[suit] = counts[suit]
 			result.BySuit[suit] = counts[suit] * highest[suit]
 			result.Total += result.BySuit[suit]
 		}
@@ -64,10 +77,95 @@ func Score(jail []Card, bounty Suit) ScoreBreakdown {
 	return result
 }
 
+func ScoreWithModifiers(jail []Card, capturedByRound [3][3]int, bounty Suit, gameModifiers GameModifiers) ScoreBreakdown {
+	var result ScoreBreakdown
+	if gameModifiers.Reckoning == [3]int{} {
+		// Zero-value modifiers in older summaries mean the original even scoring.
+		gameModifiers.Reckoning = modifiers.DefaultReckoning
+	}
+	roundCounts := capturedByRound
+	if total := totalCaptureCount(roundCounts); total == 0 && len(jail) > 0 {
+		// Legacy match summaries did not record capture rounds; treat them as round one.
+		for _, card := range jail {
+			if card.Valid() {
+				roundCounts[0][int(card.Suit)]++
+			}
+		}
+	}
+
+	var weightsBySuit, highestBySuit, baseHighestBySuit [3]int
+	for round, counts := range roundCounts {
+		for suit, count := range counts {
+			if count <= 0 {
+				continue
+			}
+			weightsBySuit[suit] += count * gameModifiers.Reckoning[round]
+		}
+	}
+	for _, card := range jail {
+		if !card.Valid() {
+			continue
+		}
+		suit := int(card.Suit)
+		face := modifiers.ScoringFace(card.Face, card.Suit == bounty, gameModifiers)
+		baseFace := modifiers.ScoringFace(card.Face, false, GameModifiers{Shift: gameModifiers.Shift})
+		if face > highestBySuit[suit] {
+			highestBySuit[suit] = face
+		}
+		if baseFace > baseHighestBySuit[suit] {
+			baseHighestBySuit[suit] = baseFace
+		}
+		if face > result.HighestCard {
+			result.HighestCard = face
+		}
+	}
+	for suit, weightedCount := range weightsBySuit {
+		if weightedCount == 0 {
+			continue
+		}
+		result.DistinctSuits++
+		result.WeightedCount[suit] = weightedCount
+		result.BySuit[suit] = weightedCount * highestBySuit[suit]
+		baseScore := weightedCount * baseHighestBySuit[suit]
+		result.Total += result.BySuit[suit]
+		result.BountyBonus += result.BySuit[suit] - baseScore
+	}
+	return result
+}
+
+func ScorePlayer(player Player, bounty Suit, gameModifiers GameModifiers) ScoreBreakdown {
+	return ScoreWithModifiers(player.Jail, player.CapturedByRound, bounty, gameModifiers)
+}
+
+func totalCaptureCount(captures [3][3]int) int {
+	total := 0
+	for _, round := range captures {
+		for _, count := range round {
+			total += count
+		}
+	}
+	return total
+}
+
 func ScoreDelta(jail []Card, card Card, bounty Suit) int {
 	before := Score(jail, bounty).Total
 	after := append(append([]Card(nil), jail...), card)
 	return Score(after, bounty).Total - before
+}
+
+func ScoreDeltaWithModifiers(player Player, card Card, bounty Suit, gameModifiers GameModifiers, round int) (int, error) {
+	if round < 1 || round > len(gameModifiers.Reckoning) {
+		return 0, fmt.Errorf("invalid capture round %d", round)
+	}
+	if !card.Valid() {
+		return 0, fmt.Errorf("invalid captured card %v", card)
+	}
+	before := ScoreWithModifiers(player.Jail, player.CapturedByRound, bounty, gameModifiers).Total
+	jail := append(append([]Card(nil), player.Jail...), card)
+	captures := player.CapturedByRound
+	captures[round-1][int(card.Suit)]++
+	after := ScoreWithModifiers(jail, captures, bounty, gameModifiers).Total
+	return after - before, nil
 }
 
 func Refill(state *GameState, playerIndex int) ([]Card, error) {
@@ -145,6 +243,9 @@ func Commit(state *GameState, playerIndex int, handIndices []int) error {
 }
 
 func PlayExchange(state *GameState, attackerIndex, attackPoolIndex, defenderIndex, defendPoolIndex int) (Outcome, error) {
+	if state.Round < 1 || state.Round > 3 {
+		return Outcome{}, fmt.Errorf("invalid capture round %d", state.Round)
+	}
 	if attackerIndex == defenderIndex || (attackerIndex != 0 && attackerIndex != 1) ||
 		(defenderIndex != 0 && defenderIndex != 1) {
 		return Outcome{}, errors.New("invalid attacker or defender")
@@ -157,13 +258,15 @@ func PlayExchange(state *GameState, attackerIndex, attackPoolIndex, defenderInde
 	}
 	attackCard := take(&attacker.Pool, attackPoolIndex)
 	defendCard := take(&defender.Pool, defendPoolIndex)
-	outcome := Resolve(attackCard, defendCard)
+	outcome := ResolveWithModifiers(attackCard, defendCard, state.Modifiers)
 	switch outcome.Winner {
 	case 0:
 		attacker.Jail = append(attacker.Jail, defendCard)
+		attacker.CapturedByRound[state.Round-1][int(defendCard.Suit)]++
 		state.Discard = append(state.Discard, attackCard)
 	case 1:
 		defender.Jail = append(defender.Jail, attackCard)
+		defender.CapturedByRound[state.Round-1][int(attackCard.Suit)]++
 		state.Discard = append(state.Discard, defendCard)
 	default:
 		state.Discard = append(state.Discard, attackCard, defendCard)

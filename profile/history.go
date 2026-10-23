@@ -7,6 +7,12 @@ import (
 )
 
 const MatchHistoryLimit = 50
+const DirectHeroCrownsCost int64 = 1200
+
+var purchasableHeroIDs = map[string]struct{}{
+	"warden": {}, "hunter": {}, "treasurer": {}, "ascendant": {}, "anchor": {},
+	"gambler": {}, "diplomat": {}, "ascetic": {}, "herald": {}, "hater": {},
+}
 
 type MatchRecord struct {
 	At                  time.Time      `json:"at"`
@@ -44,6 +50,7 @@ func (p *Profile) ApplyLogin(now time.Time) {
 	if p == nil {
 		return
 	}
+	p.ApplyEnergyTick(now)
 	today := dateOnly(now)
 	if p.LastLoginDate.IsZero() {
 		p.LoginStreakCurrent = 1
@@ -62,6 +69,12 @@ func (p *Profile) ApplyLogin(now time.Time) {
 		p.LoginStreakBest = p.LoginStreakCurrent
 	}
 	p.LastLoginDate = today
+	if p.SkillNodes["daily_energy"] {
+		p.Energy += 2
+		if p.Energy > p.MaxEnergy {
+			p.Energy = p.MaxEnergy
+		}
+	}
 }
 
 func dateOnly(value time.Time) time.Time {
@@ -89,6 +102,24 @@ func (p *Profile) GrantBox(boxType string, count int) error {
 		p.PendingBoxes = make(map[string]int)
 	}
 	p.PendingBoxes[boxType] += count
+	return nil
+}
+
+func (p *Profile) BuyHeroWithCrowns(heroID string) error {
+	if p == nil {
+		return errors.New("profile is required")
+	}
+	if _, ok := purchasableHeroIDs[heroID]; !ok {
+		return fmt.Errorf("hero %q cannot be purchased", heroID)
+	}
+	if containsHero(p.UnlockedHeroes, heroID) {
+		return fmt.Errorf("hero %q is already unlocked", heroID)
+	}
+	if p.Crowns < DirectHeroCrownsCost {
+		return fmt.Errorf("need %d Crowns; you have %d", DirectHeroCrownsCost, p.Crowns)
+	}
+	p.Crowns -= DirectHeroCrownsCost
+	p.UnlockedHeroes = append(p.UnlockedHeroes, heroID)
 	return nil
 }
 

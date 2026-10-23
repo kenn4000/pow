@@ -15,6 +15,8 @@ const (
 	EventPurchase
 	EventProfileLoad
 	EventLogin
+	EventHeroAcquired
+	EventCampaignCompleted
 )
 
 type Context struct {
@@ -37,6 +39,8 @@ type Context struct {
 	MatchWon            bool
 	MatchTied           bool
 	IsBestOfThree       bool
+	UnlockedHeroCount   int
+	AcquisitionSource   string
 }
 
 func NewMatchContext(p *profile.Profile, result game.MatchResult, mode int, seat string) Context {
@@ -52,6 +56,9 @@ func NewMatchContext(p *profile.Profile, result game.MatchResult, mode int, seat
 		MatchWon:            result.Won,
 		MatchTied:           result.Tied || result.PlayerScore == result.OpponentScore,
 		IsBestOfThree:       len(result.Games) > 1,
+	}
+	if p != nil {
+		ctx.UnlockedHeroCount = len(p.UnlockedHeroes)
 	}
 	for _, matchGame := range result.Games {
 		ctx.PlayerPrisoners += len(matchGame.PlayerJail)

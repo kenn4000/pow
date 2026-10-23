@@ -83,14 +83,33 @@ func applyUnlockEvent(p *profile.Profile, event achievements.UnlockEvent) {
 	p.Crowns += event.Crowns
 	p.SkillPoints += event.SkillPoints
 	p.ChromaPickTokens += event.ChromaPick
+	p.HeroBoxesAvailable += event.HeroBoxes
 	if event.Badge != "" {
+		alreadyOwned := false
 		for _, badge := range p.Badges {
 			if badge == event.Badge {
-				return
+				alreadyOwned = true
+				break
 			}
 		}
-		p.Badges = append(p.Badges, event.Badge)
+		if !alreadyOwned {
+			p.Badges = append(p.Badges, event.Badge)
+		}
 	}
+}
+
+func evaluateAchievementEvent(p *profile.Profile, event achievements.EventKind, source string) []achievements.UnlockEvent {
+	if p == nil {
+		return nil
+	}
+	unlockEvents := achievements.EvaluateAll(achievements.Context{
+		Profile: p, Event: event, Now: time.Now(),
+		UnlockedHeroCount: len(p.UnlockedHeroes), AcquisitionSource: source,
+	})
+	for _, unlockEvent := range unlockEvents {
+		applyUnlockEvent(p, unlockEvent)
+	}
+	return unlockEvents
 }
 
 func showUnlockToast(event achievements.UnlockEvent) {
@@ -123,6 +142,9 @@ func showUnlockToast(event achievements.UnlockEvent) {
 	}
 	if event.ChromaPick > 0 {
 		fmt.Printf("+%d Pick-Any-Chroma token(s)\n", event.ChromaPick)
+	}
+	if event.HeroBoxes > 0 {
+		fmt.Printf("+%d Hero Box(es)\n", event.HeroBoxes)
 	}
 	if event.Badge != "" {
 		fmt.Printf("Badge earned: %s\n", event.Badge)
@@ -174,15 +196,41 @@ func (a *app) showAchievementCategory(p *profile.Profile, category achievements.
 		fmt.Printf("  %s\n", achievement.Description)
 		if len(achievement.Tiers) > 0 {
 			for _, tier := range achievement.Tiers {
-				fmt.Printf("  Tier %s — %d marks, %d Crowns", tier.Name, tier.RewardMarks, tier.RewardCrowns)
+				fmt.Printf("  Tier %s", tier.Name)
+				if condition := achievementTierCondition(achievement, tier); condition != "" {
+					fmt.Printf(" — %s", condition)
+				}
+				fmt.Printf(" — %d Marks, %d Crowns", tier.RewardMarks, tier.RewardCrowns)
 				if tier.RewardChromaPick > 0 {
 					fmt.Printf(", %d Pick-Any-Chroma token", tier.RewardChromaPick)
+				}
+				if tier.RewardHeroBox > 0 {
+					fmt.Printf(", %d Hero Box", tier.RewardHeroBox)
 				}
 				fmt.Println()
 			}
 		} else {
-			fmt.Printf("  Reward: %d Marks, %d Crowns\n", achievement.RewardMarks, achievement.RewardCrowns)
+			fmt.Printf("  Reward: %d Marks, %d Crowns", achievement.RewardMarks, achievement.RewardCrowns)
+			if achievement.RewardHeroBox > 0 {
+				fmt.Printf(", %d Hero Box", achievement.RewardHeroBox)
+			}
+			fmt.Println()
 		}
+	}
+}
+
+func achievementTierCondition(achievement achievements.Achievement, tier achievements.Tier) string {
+	switch achievement.ID {
+	case "bounty_connoisseur":
+		return fmt.Sprintf("win with active Bounty = %+d", tier.Goal)
+	case "favored_aficionado":
+		return fmt.Sprintf("win with active Favored = %+d", tier.Goal)
+	case "shift_whisperer":
+		return fmt.Sprintf("win with active Shift = %+d", tier.Goal)
+	case "hero_variety":
+		return fmt.Sprintf("own at least %d non-Recruit heroes", tier.Goal)
+	default:
+		return ""
 	}
 }
 
@@ -215,11 +263,30 @@ func achievementProgress(p *profile.Profile, achievement achievements.Achievemen
 		progress := p.AchievementCounters[achievement.CounterID]
 		return fmt.Sprintf("%d/%d", progress, goal)
 	}
+	if achievement.IndependentTiers {
+		mask := p.AchievementTiers[achievement.ID]
+		count := 0
+		for tier := range achievement.Tiers {
+			if mask&(1<<tier) != 0 {
+				count++
+			}
+		}
+		return fmt.Sprintf("%d/%d tiers", count, len(achievement.Tiers))
+	}
 	currentTier := p.AchievementTiers[achievement.ID]
 	if currentTier >= len(achievement.Tiers) {
 		return "all tiers complete"
 	}
 	next := achievement.Tiers[currentTier]
+	if achievement.ID == "hero_variety" {
+		unique := make(map[string]bool)
+		for _, heroID := range p.UnlockedHeroes {
+			if heroID != "" && heroID != "recruit" {
+				unique[heroID] = true
+			}
+		}
+		return fmt.Sprintf("%s: %d/%d", next.Name, len(unique), next.Goal)
+	}
 	if achievement.ID == "collector" {
 		switch currentTier {
 		case 0:

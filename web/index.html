@@ -8,7 +8,7 @@
     :root {
       color-scheme: dark;
       font-family: "Segoe UI", Arial, sans-serif;
-      background: #252a2b;
+      background: #07090e;
       color: #f3f4ef;
       font-synthesis: none;
       --felt: #777f7b;
@@ -26,7 +26,7 @@
     }
 
     * { box-sizing: border-box; }
-    body { margin: 0; min-width: 320px; background: #252a2b; }
+    body { margin: 0; min-width: 320px; min-height: 100vh; background: #07090e; }
     button { font: inherit; }
     .shell { width: min(1440px, 100%); margin: 0 auto; padding: 20px clamp(12px, 3vw, 40px) 36px; }
     .topline { display: flex; justify-content: space-between; align-items: center; gap: 16px; margin-bottom: 18px; }
@@ -34,16 +34,29 @@
     .brand span { color: var(--gold); }
     .round-label { color: #c9ceca; font-size: 14px; letter-spacing: .08em; text-transform: uppercase; }
     .board { padding: clamp(12px, 2vw, 24px); border: 1px solid #919a95; border-radius: 18px; background: var(--felt); box-shadow: 0 18px 50px #0005; }
-    .track { display: grid; grid-template-columns: repeat(10, minmax(0, 1fr)); gap: 5px; }
+    .track { display: grid; grid-template-columns: repeat(10, minmax(0, 1fr)); align-items: start; gap: 5px; }
+    .bounty-column { display: grid; grid-column: span 1; gap: 5px; min-width: 0; }
     .track-cell { min-width: 0; height: clamp(76px, 10vw, 126px); display: flex; align-items: center; justify-content: center; position: relative; border: 2px solid #d2d7d2; border-radius: 9px; background: #626a66; }
     .track-cell.bounty { border: 3px solid var(--gold); background: #6b664f; }
     .track-cell.bounty .card { border: 3px solid var(--gold); }
+    .bounty-value { color: #ffe18a; font-size: clamp(8px, 1vw, 12px); font-weight: 800; line-height: 1.2; text-align: center; white-space: nowrap; }
     .track-cell.white-capture { border-color: #fff; }
     .track-cell.black-capture { border-color: #151817; }
     .track-cell.white-capture .card { border-color: #fff; }
     .track-cell.black-capture .card { border-color: #151817; }
     .track-cell .card { width: min(64px, calc(100% - 10px)); height: calc(100% - 10px); min-height: 0; }
     .track-cell .card .face { font-size: clamp(18px, 3vw, 32px); }
+    .round-group { display: grid; grid-column: span 3; grid-template-rows: auto auto auto; gap: 2px; min-width: 0; }
+    .round-slots { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 5px; }
+    .round-brace { position: relative; height: 12px; border-bottom: 2px solid #e1e5e1; color: #fff; }
+    .round-brace::before, .round-brace::after, .round-brace .brace-tip {
+      position: absolute; display: block; width: 2px; background: #e1e5e1; content: "";
+    }
+    .round-brace::before, .round-brace::after { bottom: -2px; height: 7px; }
+    .round-brace::before { left: 0; }
+    .round-brace::after { right: 0; }
+    .round-brace .brace-tip { bottom: -2px; left: calc(50% - 1px); height: 8px; }
+    .round-weight { display: block; font-size: 11px; font-weight: 800; text-align: center; }
     .cell-empty { color: #aeb5b0; font-size: 13px; }
     .card {
       width: clamp(49px, 7vw, 83px);
@@ -71,13 +84,28 @@
     .card.back { cursor: default; border-color: #e2e4df; background: repeating-linear-gradient(135deg, #323a39 0 7px, #414b48 7px 14px); }
     .card.back::after { content: "POW"; color: #f0c75e; font-size: 11px; font-weight: 800; letter-spacing: .16em; }
     .card.back .face { display: none; }
-    .scoreline { min-height: 50px; display: flex; align-items: center; justify-content: center; gap: clamp(12px, 4vw, 48px); margin: 10px 0 4px; font-size: clamp(16px, 2.5vw, 23px); font-weight: 700; letter-spacing: .03em; }
-    .scoreline strong { color: #fff; }
-    .scoreline .black-score { color: #171b1a; text-shadow: 0 1px #c7ceca; }
+    .match-info { display: grid; grid-template-columns: minmax(0, 1fr) minmax(180px, 1.2fr) minmax(0, 1fr); align-items: center; gap: clamp(8px, 2vw, 24px); margin: 16px 0; }
+    .match-info[hidden] { display: none; }
+    .match-side { min-width: 0; }
+    .match-hero { display: grid; justify-items: center; gap: 6px; min-width: 0; text-align: center; }
+    .hero-portrait { width: clamp(64px, 9vw, 112px); aspect-ratio: 1; display: grid; place-items: center; overflow: hidden; border: 3px solid #e7ebe8; border-radius: 50%; background: radial-gradient(circle at 50% 32%, #ffffff26 0 18%, transparent 19%), linear-gradient(145deg, #8d7845, #353b37 72%); box-shadow: 0 5px 13px #0005; }
+    .hero-portrait.black { border-color: #171b1a; background: radial-gradient(circle at 50% 32%, #ffffff26 0 18%, transparent 19%), linear-gradient(145deg, #5c6971, #303735 72%); }
+    .hero-portrait svg { width: 68%; height: 68%; fill: #e4e8e4; opacity: .82; }
+    .hero-portrait-mark { position: absolute; color: #f0c75e; font-size: clamp(14px, 2vw, 22px); font-weight: 900; text-shadow: 0 2px 4px #000; }
+    .hero-portrait { position: relative; }
+    .match-hero h2 { max-width: 100%; margin: 0; font-size: clamp(11px, 1.5vw, 16px); line-height: 1.2; overflow-wrap: anywhere; }
+    .hero-score { margin: 0; font-size: clamp(12px, 1.7vw, 18px); font-weight: 800; }
+    .hero-score.white { color: #fff; }
+    .hero-score.black { color: #1a1e1c; text-shadow: 0 1px #d5dbd6; }
+    .match-center { min-width: 0; text-align: center; }
+    .match-rules { display: grid; gap: 3px; margin-top: 2px; color: #e9ece8; font-size: clamp(10px, 1.15vw, 13px); line-height: 1.25; }
+    .match-rules p { margin: 0; }
+    .match-rules strong { color: #ffe18a; }
+    .hero-select { display: grid; gap: 5px; margin-top: 12px; color: #dfe4df; font-size: 13px; }
+    .hero-select select { min-height: 38px; padding: 5px 8px; border: 1px solid #aeb7b1; border-radius: 6px; background: #424a47; color: #f2f4f0; font: inherit; }
     .status { min-height: 34px; margin: 2px 0 14px; text-align: center; color: #f4f5f1; font-size: 15px; }
     .player-instructions .status { margin: 3px 0 12px; }
-    .battle-layout { display: grid; grid-template-columns: minmax(150px, .85fr) minmax(0, 2fr); align-items: center; gap: clamp(8px, 2vw, 20px); }
-    .battle { display: grid; grid-template-columns: minmax(0, 1fr) minmax(40px, 64px) minmax(0, 1fr); align-items: center; gap: 8px; min-height: 160px; padding: 14px clamp(8px, 3vw, 32px); border: 1px solid #c2c8c4; border-radius: 13px; background: #68716c; }
+    .battle { width: 100%; display: grid; grid-template-columns: minmax(0, 1fr) minmax(40px, 64px) minmax(0, 1fr); align-items: center; gap: 8px; min-height: 160px; padding: 14px clamp(8px, 3vw, 32px); border: 1px solid #c2c8c4; border-radius: 13px; background: #68716c; }
     .battle-player { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 6px; min-width: 0; }
     .battle-player-name { max-width: 100%; color: #e4e8e4; font-size: 12px; text-align: center; text-transform: uppercase; letter-spacing: .08em; }
     .battle-vs { color: #d5dbd6; text-align: center; font-weight: 800; letter-spacing: .12em; }
@@ -146,7 +174,6 @@
     .color-option-swatch { width: 15px; height: 15px; flex: 0 0 auto; border: 1px solid #fff9; border-radius: 50%; }
     .suit-node-wrap.paper .color-menu { left: 0; transform: none; }
     .suit-node-wrap.rock .color-menu { right: 0; left: auto; transform: none; }
-    .battle-layout .battle { min-width: 0; }
     .rotate-colors {
       position: absolute; z-index: 2; left: 50%; top: 57.8%; width: clamp(18px, 5.25vw, 25.5px);
       aspect-ratio: 1; display: grid; place-items: center; padding: 3px; transform: translate(-50%, -50%);
@@ -165,14 +192,224 @@
     .mode-list { display: grid; gap: 9px; margin-top: 19px; }
     .mode-list .action { width: 100%; }
     .hidden { display: none !important; }
+    .dashboard-shell {
+      position: relative; display: flex; flex-direction: column; overflow: hidden;
+      width: min(430px, 100%); height: 100vh; height: 100dvh;
+      min-height: min(540px, 100vh); margin: 0 auto; padding: 0;
+      border: 1px solid #273148; border-radius: 30px;
+      background: #0b0f19; box-shadow: 0 24px 80px #000a;
+      color: #eef1f7;
+    }
+    .dashboard-shell::before {
+      position: absolute; inset: 0; z-index: 0; pointer-events: none; content: "";
+      background:
+        radial-gradient(circle at 8% 35%, #dc262610, transparent 32%),
+        radial-gradient(circle at 95% 70%, #2563eb12, transparent 36%),
+        radial-gradient(#ffffff08 1px, transparent 1px);
+      background-size: auto, auto, 24px 24px;
+    }
+    .dashboard-header {
+      position: relative; z-index: 1; display: grid; gap: 11px; flex: 0 0 auto;
+      padding: 13px 13px 11px; border-bottom: 1px solid #263047;
+      background: #101624eb; backdrop-filter: blur(14px);
+    }
+    .dashboard-profile { display: flex; align-items: center; gap: 10px; min-width: 0; }
+    .dashboard-avatar {
+      display: grid; place-items: center; width: 43px; height: 43px; flex: 0 0 auto;
+      border: 2px solid #d7a629; border-radius: 12px;
+      background: linear-gradient(145deg, #493814, #171d2a 70%);
+      color: #facc15; font: 900 20px Georgia, serif; box-shadow: 0 0 18px #eab30826;
+    }
+    .dashboard-identity { min-width: 0; }
+    .dashboard-brand {
+      margin: 0; color: #f6d46f; font: 800 15px Georgia, "Times New Roman", serif;
+      letter-spacing: .09em; text-transform: uppercase;
+    }
+    .dashboard-commander {
+      overflow: hidden; margin: 4px 0 0; color: #aeb9cb;
+      font-size: 10px; text-overflow: ellipsis; white-space: nowrap;
+    }
+    .dashboard-resources { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 6px; }
+    .dashboard-resource {
+      display: flex; align-items: center; gap: 7px; min-width: 0; padding: 7px 8px;
+      border: 1px solid #29354d; border-radius: 9px; background: #0a0e17d9;
+      box-shadow: inset 0 1px #ffffff08;
+    }
+    .dashboard-resource-icon {
+      display: grid; place-items: center; width: 23px; height: 23px; flex: 0 0 auto;
+      border: 1px solid #59677e; border-radius: 50%; color: #f2d170; font-size: 12px;
+    }
+    .dashboard-resource:nth-child(2) .dashboard-resource-icon { border-color: #a27418; color: #ffc94d; }
+    .dashboard-resource:nth-child(3) .dashboard-resource-icon { border-color: #255c9f; color: #60a5fa; }
+    .dashboard-resource-copy { min-width: 0; }
+    .dashboard-resource-copy span, .dashboard-resource strong { display: block; }
+    .dashboard-resource-copy span { margin-bottom: 2px; color: #8995a8; font-size: 8px; letter-spacing: .12em; text-transform: uppercase; }
+    .dashboard-resource strong { overflow: hidden; color: #edf1f8; font: 700 12px "Segoe UI", Arial, sans-serif; text-overflow: ellipsis; white-space: nowrap; }
+    .dashboard-grid {
+      position: relative; z-index: 1; display: flex; flex: 1 1 auto; flex-direction: column;
+      gap: 11px; min-height: 0; overflow-y: auto; padding: 12px 12px 76px;
+      scrollbar-color: #344159 transparent; scrollbar-width: thin;
+    }
+    .dashboard-panel {
+      min-width: 0; padding: 12px; border: 1px solid #2a354a; border-radius: 14px;
+      background: linear-gradient(145deg, #141b2aef, #101521ee); box-shadow: 0 8px 24px #0003;
+    }
+    .dashboard-panel h2 {
+      margin: 0 0 9px; color: #e7c55e; font: 700 10px Georgia, "Times New Roman", serif;
+      letter-spacing: .15em; text-transform: uppercase;
+    }
+    .featured-card {
+      position: relative; display: flex; align-items: center; justify-content: space-between; gap: 12px;
+      min-height: 90px; overflow: hidden; padding: 12px 14px;
+      border: 1px solid #a47d2c80; border-radius: 11px;
+      background: linear-gradient(112deg, #171e2d 0%, #24223a 58%, #3a2915 100%);
+    }
+    .featured-card::after {
+      position: absolute; right: 28px; bottom: -38px; width: 112px; height: 112px;
+      border-radius: 50%; background: #eab30812; filter: blur(1px); content: "";
+    }
+    .featured-copy { position: relative; z-index: 1; display: grid; gap: 4px; }
+    .featured-copy .eyebrow { color: #d5a935; font-size: 8px; font-weight: 800; letter-spacing: .16em; text-transform: uppercase; }
+    .featured-copy strong { color: #f3f4f6; font: 700 16px Georgia, "Times New Roman", serif; }
+    .featured-copy span:last-child { color: #aeb9cb; font-size: 10px; }
+    .featured-crest {
+      position: relative; z-index: 1; display: grid; place-items: center; width: 54px; height: 54px; flex: 0 0 auto;
+      border: 2px solid #d2a940; border-radius: 15px 15px 20px 20px;
+      background: linear-gradient(145deg, #634915, #171d29 75%); color: #f6d46f;
+      font: 900 24px Georgia, "Times New Roman", serif; text-shadow: 0 2px 6px #000;
+      box-shadow: 0 0 22px #eab30825;
+    }
+    .commander-card {
+      width: 100%; color: inherit; text-align: left; font: inherit; cursor: pointer;
+      transition: border-color .15s ease, transform .12s ease, filter .15s ease;
+    }
+    .commander-card:hover { transform: translateY(-1px); border-color: #937536; filter: brightness(1.08); }
+    .commander-card:focus-visible, .shop-preview:focus-visible { outline: 2px solid #facc15; outline-offset: 2px; }
+    .commander-quick-stats { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 6px; margin-top: 8px; }
+    .commander-quick-stats div { min-width: 0; padding: 7px; border: 1px solid #28334a; border-radius: 8px; background: #0b111d; }
+    .commander-quick-stats span, .commander-quick-stats strong { display: block; overflow: hidden; text-overflow: ellipsis; }
+    .commander-quick-stats span { color: #8290a5; font-size: 8px; letter-spacing: .09em; text-transform: uppercase; }
+    .commander-quick-stats strong { margin-top: 4px; color: #e8edf5; font-size: 9px; line-height: 1.3; white-space: nowrap; }
+    .dashboard-actions { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 7px; }
+    .dashboard-action {
+      position: relative; display: flex; align-items: center; min-width: 0; min-height: 45px; gap: 8px;
+      overflow: hidden; padding: 8px 10px; border: 1px solid #344057; border-radius: 10px;
+      background: linear-gradient(145deg, #1b2434, #141b28); color: #e9edf4;
+      text-align: left; font-size: 11px; font-weight: 700; cursor: pointer;
+      transition: border-color .15s ease, transform .12s ease, filter .15s ease;
+    }
+    .dashboard-action::before {
+      display: grid; place-items: center; width: 25px; height: 25px; flex: 0 0 auto;
+      border: 1px solid #48566d; border-radius: 8px; background: #0d1320; color: #f1cb5b; font-size: 13px;
+    }
+    #dashboardCampDraw::before { content: "✦"; }
+    #dashboardAchievements::before { content: "★"; }
+    #dashboardCampaigns::before { content: "⚑"; }
+    #dashboardHistory::before { content: "◷"; }
+    .dashboard-action:hover { transform: translateY(-1px); border-color: #68758b; filter: brightness(1.12); }
+    .dashboard-action:focus-visible, .dashboard-footer button:focus-visible { outline: 2px solid #facc15; outline-offset: 2px; }
+    .dashboard-action.play, .dashboard-action.wide { grid-column: 1 / -1; }
+    .dashboard-action.play {
+      justify-content: space-between; min-height: 76px; padding: 11px 15px;
+      border-color: #f87171a6; background: linear-gradient(135deg, #ef4444, #b91c1c 62%, #7f1d1d);
+      color: #fff; box-shadow: 0 0 23px #ef44442b, inset 0 1px #ffffff44;
+    }
+    .dashboard-action.play::before { display: none; }
+    .dashboard-action.play strong { display: block; font: 900 21px Georgia, "Times New Roman", serif; letter-spacing: .09em; }
+    .dashboard-action.play small { display: block; margin-top: 3px; color: #fee2e2; font-size: 9px; font-weight: 600; letter-spacing: .12em; text-transform: uppercase; }
+    .dashboard-action.play .battle-icon {
+      display: grid; place-items: center; width: 43px; height: 43px; border: 1px solid #fecaca80;
+      border-radius: 50%; background: #450a0a66; color: #fff1f2; font-size: 21px;
+    }
+    .dashboard-action.half { min-height: 48px; }
+    .shop-preview {
+      display: grid; gap: 9px; width: 100%; padding: 12px;
+      border: 1px solid #7f6233; border-radius: 14px;
+      background: linear-gradient(125deg, #1b202c, #211d1b 72%, #322719);
+      color: #eef1f7; font: inherit; text-align: left; cursor: pointer;
+      box-shadow: 0 8px 24px #0003; transition: border-color .15s ease, transform .12s ease, filter .15s ease;
+    }
+    .shop-preview:hover { transform: translateY(-1px); border-color: #d0a84b; filter: brightness(1.08); }
+    .shop-preview-head { display: flex; justify-content: space-between; align-items: center; gap: 8px; }
+    .shop-preview-head h2 { margin: 3px 0 0; color: #f3d36e; font: 700 12px Georgia, "Times New Roman", serif; letter-spacing: .1em; text-transform: uppercase; }
+    .shop-preview-head .eyebrow { color: #c09b47; font-size: 8px; font-weight: 800; letter-spacing: .14em; text-transform: uppercase; }
+    .shop-preview-open { color: #c9b477; font-size: 8px; font-weight: 700; letter-spacing: .1em; white-space: nowrap; }
+    .shop-preview-item { display: flex; align-items: center; justify-content: space-between; gap: 9px; padding: 9px; border: 1px solid #58462c; border-radius: 9px; background: #0d1119a8; }
+    .shop-preview-item strong { display: block; color: #f3f4f6; font: 700 13px Georgia, "Times New Roman", serif; }
+    .shop-preview-item small { display: block; margin-top: 3px; color: #aeb9cb; font-size: 9px; }
+    .shop-preview-price { flex: 0 0 auto; color: #f4d46f; font-size: 10px; font-weight: 800; }
+    .dashboard-footer {
+      position: fixed; left: 50%; bottom: 0; z-index: 20; display: grid;
+      grid-template-columns: repeat(5, minmax(0, 1fr)); align-items: center;
+      gap: 3px; width: min(430px, 100%); margin: 0; padding: 8px 9px max(8px, env(safe-area-inset-bottom));
+      transform: translateX(-50%); border: 1px solid #263047; border-bottom: 0;
+      border-radius: 16px 16px 0 0; background: #101624f5; backdrop-filter: blur(14px);
+      box-shadow: 0 -8px 25px #0005;
+    }
+    .dashboard-footer[hidden] { display: none; }
+    .dashboard-footer button {
+      display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 2px;
+      min-width: 0; min-height: 42px; padding: 3px; border: 0; border-radius: 9px;
+      background: transparent; color: #8995a8; font: 600 8px "Segoe UI", Arial, sans-serif;
+      cursor: pointer;
+    }
+    .dashboard-footer button span:first-child { font-size: 16px; line-height: 1.1; }
+    .dashboard-footer button:hover { background: #ffffff0c; color: #f3d46f; }
+    .dashboard-footer button[aria-current="page"] { color: #f3d46f; }
+    .dashboard-footer button.nav-battle {
+      margin-top: -14px; color: #fff; font-weight: 800;
+    }
+    .dashboard-footer button.nav-battle span:first-child {
+      display: grid; place-items: center; width: 44px; height: 44px; border: 2px solid #fca5a5;
+      border-radius: 50%; background: linear-gradient(145deg, #ef4444, #991b1b);
+      box-shadow: 0 0 19px #ef444455; font-size: 19px;
+    }
+    .dashboard-ad { margin: 9px 0 0; color: #aeb9cb; font-size: 10px; }
+    .dashboard-ad[hidden] { display: none; }
+    .dashboard-preview-note { margin: 9px 0 0; color: #f0c75e; font-size: 9px; line-height: 1.4; }
+    .dashboard-preview-note[hidden] { display: none; }
+    .feature-header {
+      position: relative; z-index: 1; display: flex; align-items: center; gap: 10px; flex: 0 0 auto;
+      margin: 0; padding: 12px; border-bottom: 1px solid #263047; background: #101624eb;
+    }
+    .feature-header h1 { margin: 0; color: #f6d46f; font: 700 17px Georgia, "Times New Roman", serif; }
+    .feature-header .action { flex: 0 0 auto; }
+    .feature-message { position: relative; z-index: 1; min-height: 0; margin: 0; padding: 7px 12px 0; color: #f0d47b; font-size: 11px; }
+    .feature-content {
+      position: relative; z-index: 1; display: grid; align-content: start; gap: 10px;
+      flex: 1 1 auto; min-height: 0; overflow-y: auto; padding: 10px 12px 78px;
+    }
+    .feature-section { padding: 13px; border: 1px solid #2a354a; border-radius: 12px; background: linear-gradient(145deg, #141b2a, #101521); }
+    .feature-section h2 { margin: 0 0 10px; color: #e7c55e; font: 700 11px Georgia, "Times New Roman", serif; letter-spacing: .12em; text-transform: uppercase; }
+    .feature-list { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 210px), 1fr)); gap: 8px; }
+    .feature-item { min-width: 0; padding: 11px; border: 1px solid #303c53; border-radius: 10px; background: #1a2231; }
+    .feature-item h3 { margin: 0 0 6px; font-size: 13px; }
+    .feature-item p { margin: 5px 0; color: #aeb9cb; font-size: 11px; line-height: 1.45; }
+    .feature-item .action { margin-top: 8px; }
+    .feature-item .action:disabled { opacity: .55; cursor: not-allowed; }
+    .feature-item select { min-height: 36px; margin-top: 8px; padding: 4px 7px; border: 1px solid #46536a; border-radius: 7px; background: #101624; color: #f3f4ef; }
+    .feature-progress { height: 8px; overflow: hidden; border-radius: 8px; background: #0a0e17; }
+    .feature-progress span { display: block; height: 100%; background: linear-gradient(90deg, #eab308, #facc15); }
+    .feature-status { color: #f0d47b !important; font-weight: 700; }
     @media (max-width: 700px) {
       .shell { padding: 12px 8px 24px; }
       .board { padding: 9px; border-radius: 12px; }
       .track { gap: 3px; }
+      .round-slots { gap: 3px; }
+      .round-group { gap: 1px; }
       .track-cell { height: 68px; border-radius: 6px; }
       .track-cell .card { width: calc(100% - 4px); height: calc(100% - 4px); }
       .track-cell .card .face { font-size: 16px; }
-      .battle-layout { grid-template-columns: minmax(120px, 1fr) minmax(0, 1fr); gap: 5px; }
+      .bounty-column { gap: 3px; }
+      .bounty-value { font-size: 7px; }
+      .round-brace { height: 10px; }
+      .round-weight { font-size: 9px; }
+      .dashboard-footer { border-radius: 0; }
+      .match-info { grid-template-columns: minmax(0, 1fr) minmax(118px, 1.4fr) minmax(0, 1fr); gap: 5px; margin: 12px 0; }
+      .hero-portrait { width: clamp(46px, 14vw, 68px); border-width: 2px; }
+      .match-hero h2 { font-size: 10px; }
+      .hero-score { font-size: 11px; }
+      .match-rules { font-size: 9px; }
       .battle { grid-template-columns: minmax(0, 1fr) 18px minmax(0, 1fr); min-height: 108px; padding: 8px 3px; gap: 2px; }
       .battle-player { gap: 4px; }
       .battle-player-name { font-size: 8px; }
@@ -184,29 +421,109 @@
       .card-row .card { width: clamp(40px, 13vw, 52px); height: clamp(54px, 17vw, 70px); }
       .pile-row .card, .committing .hand-row .card { width: clamp(62px, 9vw, 93px); height: clamp(84px, 12vw, 119px); }
 
-      .scoreline { gap: 10px; }
+    }
+    @media (max-width: 480px) {
+      .dashboard-shell { width: 100%; border: 0; border-radius: 0; box-shadow: none; }
     }
   </style>
 </head>
 <body>
-  <main class="shell">
+  <main id="dashboardScreen" class="dashboard-shell">
+    <header class="dashboard-header">
+      <div class="dashboard-profile">
+        <div id="dashboardAvatar" class="dashboard-avatar" aria-hidden="true">P</div>
+        <div class="dashboard-identity">
+          <h1 class="dashboard-brand">Prisoners of War</h1>
+          <p id="dashboardCommander" class="dashboard-commander">Player · Loading profile</p>
+        </div>
+      </div>
+      <div class="dashboard-resources" aria-label="Player resources">
+        <div class="dashboard-resource"><span class="dashboard-resource-icon" aria-hidden="true">◈</span><div class="dashboard-resource-copy"><span>Marks</span><strong id="dashboardMarks">—</strong></div></div>
+        <div class="dashboard-resource"><span class="dashboard-resource-icon" aria-hidden="true">✦</span><div class="dashboard-resource-copy"><span>Crowns</span><strong id="dashboardCrowns">—</strong></div></div>
+        <div class="dashboard-resource"><span class="dashboard-resource-icon" aria-hidden="true">⚡</span><div class="dashboard-resource-copy"><span>Energy</span><strong id="dashboardEnergy">—</strong></div></div>
+      </div>
+    </header>
+    <div class="dashboard-grid">
+      <button id="dashboardCommanderCard" class="dashboard-panel commander-card" type="button" aria-label="Open commander profile and stats">
+        <h2>Commander Profile</h2>
+        <div class="featured-card">
+          <div class="featured-copy">
+            <span class="eyebrow">Active Commander · tap for full record</span>
+            <strong id="dashboardFeaturedHero">The Recruit</strong>
+            <span id="dashboardCommanderLabel" class="dashboard-commander">Commander · Loading profile</span>
+          </div>
+          <div id="dashboardHeroCrest" class="featured-crest" aria-hidden="true">R</div>
+        </div>
+        <div class="commander-quick-stats">
+          <div><span>Login Streak</span><strong id="dashboardStreak">—</strong></div>
+          <div><span>Camp Draw</span><strong id="dashboardProgress">—</strong></div>
+          <div><span>Skill Points</span><strong id="dashboardSkillPoints">—</strong></div>
+        </div>
+        <p id="dashboardAd" class="dashboard-ad" hidden></p>
+        <p id="dashboardPreviewNote" class="dashboard-preview-note" hidden>Preview values are for layout testing only; your profile is unchanged.</p>
+      </button>
+      <section class="dashboard-panel">
+        <h2>Quick Actions</h2>
+        <div class="dashboard-actions">
+          <button id="dashboardPlay" class="dashboard-action play" type="button">
+            <span><strong>Battle</strong><small>Choose your match mode</small></span>
+            <span class="battle-icon" aria-hidden="true">⚔</span>
+          </button>
+          <button id="dashboardCampDraw" class="dashboard-action half" type="button">Camp Draw</button>
+          <button id="dashboardAchievements" class="dashboard-action half" type="button">Achievements</button>
+          <button id="dashboardCampaigns" class="dashboard-action half" type="button">Campaigns</button>
+          <button id="dashboardHistory" class="dashboard-action half" type="button">Match History</button>
+        </div>
+      </section>
+      <button id="dashboardShop" class="shop-preview" type="button" aria-label="Open shop and see today's featured item">
+        <span class="shop-preview-head">
+          <span><span class="eyebrow">Today's Shop Feature</span><h2>Armory Shop</h2></span>
+          <span class="shop-preview-open">OPEN SHOP →</span>
+        </span>
+        <span class="shop-preview-item">
+          <span><strong id="dashboardShopItem">Loading today's feature…</strong><small id="dashboardShopDetail">Checking the current catalog</small></span>
+          <span id="dashboardShopPrice" class="shop-preview-price"></span>
+        </span>
+      </button>
+    </div>
+  </main>
+  <main id="featureScreen" class="dashboard-shell hidden">
+    <header class="feature-header">
+      <button id="featureBack" class="action secondary" type="button">Dashboard</button>
+      <h1 id="featureTitle">Progression</h1>
+    </header>
+    <p id="featureMessage" class="feature-message" aria-live="polite"></p>
+    <div id="featureContent" class="feature-content"></div>
+  </main>
+  <nav id="dashboardFooter" class="dashboard-footer" aria-label="Quick navigation">
+    <button id="dashboardNavHome" type="button" data-nav="home"><span aria-hidden="true">⌂</span><span>Home</span></button>
+    <button id="dashboardNavShop" type="button" data-nav="shop"><span aria-hidden="true">▣</span><span>Shop</span></button>
+    <button id="dashboardNavBattle" class="nav-battle" type="button" data-nav="battle"><span aria-hidden="true">⚔</span><span>Battle</span></button>
+    <button id="dashboardNavHeroes" type="button" data-nav="heroes"><span aria-hidden="true">♜</span><span>Heroes</span></button>
+    <button id="dashboardNavSkills" type="button" data-nav="skills"><span aria-hidden="true">⌘</span><span>Skills</span></button>
+  </nav>
+  <main id="gameShell" class="shell hidden">
     <header class="topline">
       <h1 class="brand">Prisoners <span>of War</span></h1>
       <div id="roundLabel" class="round-label">Card battle</div>
     </header>
     <section class="board" aria-label="Game board">
       <div id="track" class="track" aria-label="Bounty and captured prisoners"></div>
-      <div id="scoreLine" class="scoreline"></div>
+      <section id="matchInfo" class="match-info" aria-label="Heroes and combat rules" hidden>
+        <div id="whiteHeroPanel" class="match-side"></div>
+        <div class="match-center">
+          <section id="suitCycle" class="suit-cycle" role="group" aria-label="Suit relationships and color selectors"></section>
+          <div id="matchRules" class="match-rules"></div>
+        </div>
+        <div id="blackHeroPanel" class="match-side"></div>
+      </section>
+      <section class="battle" aria-label="Current battle">
+        <div id="battleLeft" class="battle-player"></div>
+        <div class="battle-vs">VS</div>
+        <div id="battleRight" class="battle-player"></div>
+      </section>
       <div id="statusHost">
         <p id="status" class="status" aria-live="polite">Choose a game mode to begin.</p>
-      </div>
-      <div class="battle-layout">
-        <section id="suitCycle" class="suit-cycle" role="group" aria-label="Suit relationships and color selectors"></section>
-        <section class="battle" aria-label="Current battle">
-          <div id="battleLeft" class="battle-player"></div>
-          <div class="battle-vs">VS</div>
-          <div id="battleRight" class="battle-player"></div>
-        </section>
       </div>
       <section id="players" class="players" aria-label="Current player cards"></section>
       <div id="actions" class="actions"></div>
@@ -222,12 +539,20 @@
       Brown: "var(--card-brown)", Silver: "var(--card-silver)"
     };
     const suitColors = loadSuitColors();
+    const dashboardPreview = new URLSearchParams(window.location.search).get("preview") === "dashboard";
     const selected = new Set();
     let openSuitMenu = null;
     let state = null;
     let activeMode = "";
     let showNewGameConfirmation = false;
     let actionInProgress = false;
+    let showDashboard = true;
+    let showFeature = false;
+    let currentFeature = "";
+    let featureData = null;
+    let featureError = "";
+    let featureActionInProgress = false;
+    let showModeSelection = false;
 
     function loadSuitColors() {
       const defaults = ["Red", "Yellow", "Blue"];
@@ -250,7 +575,10 @@
     }
 
     async function api(path, body) {
-      const response = await fetch(path, body ? {
+      const requestPath = dashboardPreview
+        ? `${path}${path.includes("?") ? "&" : "?"}preview=dashboard`
+        : path;
+      const response = await fetch(requestPath, body ? {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(body)
@@ -381,15 +709,75 @@
         track.innerHTML = "";
         return;
       }
-      const bounty = `<div class="track-cell bounty">
-        ${cardMarkup(state.bounty)}
+      const bounty = `<div class="bounty-column">
+        <div class="track-cell bounty">${cardMarkup(state.bounty)}</div>
+        <span class="bounty-value">Bounty: ${formatModifier(state.modifiers.bounty)}</span>
       </div>`;
-      const slots = state.jailSlots.map((cell, index) => {
-        const border = cell.capturedBy === "White" ? "white-capture" : cell.capturedBy === "Black" ? "black-capture" : "";
-        const content = cell.card ? cardMarkup(cell.card) : `<span class="cell-empty">${cell.clash ? "CLASH" : String(index + 1).padStart(2, "0")}</span>`;
-        return `<div class="track-cell ${border}">${content}</div>`;
+      const rounds = [0, 1, 2].map(roundIndex => {
+        const slots = state.jailSlots.slice(roundIndex * 3, roundIndex * 3 + 3)
+          .map((cell, index) => {
+            const slotIndex = roundIndex * 3 + index;
+            const border = cell.capturedBy === "White" ? "white-capture"
+              : cell.capturedBy === "Black" ? "black-capture" : "";
+            const content = cell.card
+              ? cardMarkup(cell.card)
+              : `<span class="cell-empty">${cell.clash ? "CLASH" : String(slotIndex + 1).padStart(2, "0")}</span>`;
+            return `<div class="track-cell ${border}">${content}</div>`;
+          }).join("");
+          return `<div class="round-group">
+            <div class="round-slots">${slots}</div>
+            <div class="round-brace" aria-hidden="true"><span class="brace-tip"></span></div>
+            <span class="round-weight">x${state.modifiers.reckoning[roundIndex]}</span>
+          </div>`;
       }).join("");
-      track.innerHTML = bounty + slots;
+      track.innerHTML = bounty + rounds;
+    }
+
+    function formatModifier(value) {
+      return value > 0 ? `+${value}` : String(value);
+    }
+
+    function heroPanelMarkup(player, heroName, heroID) {
+      const color = player.color.toLowerCase();
+      const title = heroName || "Commander";
+      const initials = title.replace(/^The\s+/i, "").split(/\s+/)
+        .map(word => word.charAt(0)).join("").slice(0, 2).toUpperCase();
+      return `<article class="match-hero ${color}">
+        <div class="hero-portrait ${color}" role="img" aria-label="${esc(title)} portrait for ${esc(player.color)}">
+          <svg viewBox="0 0 100 100" aria-hidden="true" focusable="false">
+            <path d="M50 14c-13 0-22 10-22 24 0 10 5 18 12 22-17 7-27 20-27 34v3h74v-3c0-14-10-27-27-34 7-4 12-12 12-22 0-14-9-24-22-24z"></path>
+          </svg>
+          <span class="hero-portrait-mark">${esc(initials || heroID.slice(0, 2).toUpperCase())}</span>
+        </div>
+        <h2>${esc(title)}</h2>
+        <p class="hero-score ${color}">${esc(player.you ? "You" : player.color)} = ${player.score}</p>
+      </article>`;
+    }
+
+    function renderMatchInfo() {
+      const info = document.getElementById("matchInfo");
+      if (!state || !state.started) {
+        info.hidden = true;
+        return;
+      }
+      info.hidden = false;
+      const mods = state.modifiers;
+      const white = state.players.find(player => player.color === "White");
+      const black = state.players.find(player => player.color === "Black");
+      const heroAt = player => {
+        const index = state.players.indexOf(player);
+        return index === 0
+          ? [state.playerHero, state.playerHeroId]
+          : [state.opponentHero, state.opponentHeroId];
+      };
+      const [whiteHero, whiteHeroID] = heroAt(white);
+      const [blackHero, blackHeroID] = heroAt(black);
+      document.getElementById("whiteHeroPanel").innerHTML = heroPanelMarkup(white, whiteHero, whiteHeroID || "");
+      document.getElementById("blackHeroPanel").innerHTML = heroPanelMarkup(black, blackHero, blackHeroID || "");
+      const favored = `x2${mods.favored > 0 ? `+${mods.favored}` : mods.favored < 0 ? mods.favored : ""}`;
+      document.getElementById("matchRules").innerHTML = `
+        <p><strong>Favored Rule:</strong> ${favored}</p>
+        <p><strong>Face Values:</strong> ${1 + mods.shift}–${9 + mods.shift}</p>`;
     }
 
     function renderPlayers() {
@@ -467,6 +855,7 @@
       const actions = document.getElementById("actions");
       actions.innerHTML = "";
       if (!state || !state.started) return;
+      actions.append(makeButton("Dashboard", openDashboard, "secondary"));
       if (state.phase === "commit" && (state.mode === "hvh" || state.actor === 0)) {
         if (selected.size === 3) {
           actions.append(makeButton("Lock in pile", () => act("commit", { cards: [...selected] })));
@@ -492,21 +881,38 @@
 
     function renderModal() {
       const modal = document.getElementById("modal");
-      if (!state || !state.started) {
+      if (showDashboard || showFeature) {
+        modal.classList.add("hidden");
+        modal.innerHTML = "";
+        return;
+      }
+      if (showModeSelection || !state || !state.started) {
+        const options = (state && state.heroes || []).map(hero =>
+          `<option value="${esc(hero.id)}"${hero.id === state.defaultHeroId ? " selected" : ""}${hero.unlocked ? "" : " disabled"}>${esc(hero.name)}${hero.unlocked ? "" : " (locked)"}</option>`
+        ).join("");
         modal.classList.remove("hidden");
         modal.innerHTML = `<section class="modal">
           <h2>Choose your match</h2>
           <p>Three rounds. Choose your cards, win prisoners, and claim the bounty.</p>
+          ${state.opponentHint ? `<p>Your opponent last played: ${esc(state.opponentHint)}</p>` : ""}
+          <label class="hero-select">Player 1 hero
+            <select id="playerHero">${options}</select>
+          </label>
+          <label class="hero-select">Player 2 hero (Human vs Human)
+            <select id="opponentHero">${options}</select>
+          </label>
           <div class="mode-list">
             <button class="action" data-mode="hvh">Human vs Human</button>
             <button class="action secondary" data-mode="easy">Human vs AI · Easy</button>
             <button class="action secondary" data-mode="normal">Human vs AI · Normal</button>
             <button class="action secondary" data-mode="hard">Human vs AI · Hard</button>
+            <button class="action secondary" id="backToDashboard">Back to dashboard</button>
           </div>
         </section>`;
         modal.querySelectorAll("[data-mode]").forEach(button => {
           button.addEventListener("click", () => startNewGame(button.dataset.mode));
         });
+        modal.querySelector("#backToDashboard").addEventListener("click", openDashboard);
         return;
       }
       if (state.phase === "handoff") {
@@ -566,21 +972,487 @@
       return button;
     }
 
+    function formatNumber(value) {
+      return Number(value || 0).toLocaleString();
+    }
+
+    function renderDashboard() {
+      const dashboard = state && state.dashboard;
+      if (!dashboard) return;
+      const drawsAvailable = dashboard.drawsAvailable;
+      const skillPoints = dashboard.skillPoints;
+      document.getElementById("dashboardCommander").textContent =
+        `Player [${dashboard.commander}]`;
+      document.getElementById("dashboardCommanderLabel").textContent =
+        `Commander [${dashboard.commander}]`;
+      const heroInitial = String(dashboard.title || "?").replace(/^The\s+/i, "").trim().charAt(0) || "?";
+      document.getElementById("dashboardFeaturedHero").textContent = dashboard.title;
+      document.getElementById("dashboardHeroCrest").textContent = heroInitial.toUpperCase();
+      document.getElementById("dashboardAvatar").textContent = heroInitial.toUpperCase();
+      document.getElementById("dashboardMarks").textContent = formatNumber(dashboard.marks);
+      document.getElementById("dashboardCrowns").textContent = formatNumber(dashboard.crowns);
+      const energy = `${dashboard.energy}/${dashboard.maxEnergy}`;
+      const next = dashboard.energyNextSeconds > 0
+        ? ` · next in ${Math.floor(dashboard.energyNextSeconds / 60)}:${String(dashboard.energyNextSeconds % 60).padStart(2, "0")}`
+        : "";
+      document.getElementById("dashboardEnergy").textContent = energy + next;
+      document.getElementById("dashboardStreak").textContent =
+        `Day ${dashboard.loginStreakCurrent} of 30 · Best: ${dashboard.loginStreakBest}`;
+      document.getElementById("dashboardProgress").textContent =
+        `${dashboard.winsSinceCampDraw} / ${dashboard.winsPerCampDraw} wins · ${drawsAvailable} draws`;
+      document.getElementById("dashboardSkillPoints").textContent = String(skillPoints);
+      const featuredItem = dashboard.dailyFeaturedItem;
+      document.getElementById("dashboardShopItem").textContent =
+        featuredItem ? featuredItem.name : "No featured item available";
+      document.getElementById("dashboardShopDetail").textContent = featuredItem
+        ? `${featuredItem.rarity} chroma · ${featuredItem.owned ? "Already owned" : "Preview only · regular listed price"}`
+        : "The shop catalog has no available items.";
+      document.getElementById("dashboardShopPrice").textContent = featuredItem
+        ? `${formatNumber(featuredItem.cost)} ${featuredItem.currency === "marks" ? "Marks" : "Crowns"}`
+        : "";
+      const campDraw = document.getElementById("dashboardCampDraw");
+      campDraw.textContent = drawsAvailable > 0
+        ? `Camp Draw (${drawsAvailable})`
+        : `Camp Draw · ${dashboard.pendingBoxes} pending boxes`;
+      document.getElementById("dashboardAchievements").textContent =
+        dashboard.unseenAchievements > 0
+          ? `Achievements (${dashboard.unseenAchievements} new)`
+          : "Achievements";
+      const ad = document.getElementById("dashboardAd");
+      const canWatchAd = dashboard.energy < dashboard.maxEnergy && dashboard.adsLeft > 0;
+      ad.hidden = !canWatchAd;
+      ad.textContent = canWatchAd
+        ? `Watch Ad (+3 energy, ${dashboard.adsLeft} left today) · available in the terminal UI`
+        : "";
+      document.getElementById("dashboardPreviewNote").hidden = !dashboardPreview;
+    }
+
+    async function openFeature(feature) {
+      const endpoints = {
+        "camp-draw": "/api/camp-draw",
+        achievements: "/api/achievements",
+        shop: "/api/shop",
+        heroes: "/api/heroes",
+        skills: "/api/skills",
+        profile: "/api/profile",
+        campaigns: "/api/campaigns",
+        history: "/api/history"
+      };
+      currentFeature = feature;
+      showDashboard = false;
+      showFeature = true;
+      showModeSelection = false;
+      featureData = null;
+      featureError = "";
+      render();
+      try {
+        featureData = await api(endpoints[feature]);
+        if (featureData.dashboard) state.dashboard = featureData.dashboard;
+        render();
+      } catch (error) {
+        featureError = connectionError(error);
+        render();
+      }
+    }
+
+    function featureActionButton(label, action, attributes = "", disabled = false) {
+      return `<button class="action${disabled ? " secondary" : ""}" type="button"
+        data-feature-action="${action}" ${attributes}${disabled ? " disabled" : ""}>${esc(label)}</button>`;
+    }
+
+    function renderFeatureScreen() {
+      const titles = {
+        "camp-draw": "Camp Draw",
+        achievements: "Achievements",
+        shop: "Shop",
+        heroes: "Choose Hero",
+        skills: "Skill Tree",
+        profile: "Commander Record",
+        campaigns: "Campaigns",
+        history: "Match History"
+      };
+      document.getElementById("featureTitle").textContent = titles[currentFeature] || "Progression";
+      const message = document.getElementById("featureMessage");
+      message.textContent = featureError || (featureData && featureData.message) || "";
+      const content = document.getElementById("featureContent");
+      if (!featureData) {
+        content.innerHTML = featureError
+          ? ""
+          : '<section class="feature-section">Loading…</section>';
+        return;
+      }
+      switch (currentFeature) {
+        case "camp-draw":
+          content.innerHTML = renderCampDrawFeature(featureData);
+          break;
+        case "achievements":
+          content.innerHTML = renderAchievementsFeature(featureData);
+          break;
+        case "shop":
+          content.innerHTML = renderShopFeature(featureData);
+          break;
+        case "heroes":
+          content.innerHTML = renderHeroesFeature(featureData);
+          break;
+        case "skills":
+          content.innerHTML = renderSkillsFeature(featureData);
+          break;
+        case "profile":
+          content.innerHTML = renderCommanderFeature(featureData);
+          break;
+        case "campaigns":
+          content.innerHTML = renderCampaignsFeature(featureData);
+          break;
+        case "history":
+          content.innerHTML = renderHistoryFeature(featureData);
+          break;
+        default:
+          content.innerHTML = "";
+      }
+    }
+
+    function renderCampDrawFeature(page) {
+      const pending = Object.entries(page.pendingBoxes || {}).filter(([, count]) => count > 0);
+      const startButton = featureActionButton(
+        page.result ? "Start another Camp Draw" : "Start Camp Draw",
+        "start-draw", "", page.drawsAvailable < 1
+      );
+      let html = `<section class="feature-section">
+        <h2>Available Draws</h2>
+        <p>You have ${page.drawsAvailable} Camp Draw${page.drawsAvailable === 1 ? "" : "s"} available.</p>
+        ${!page.started ? startButton : ""}
+        ${page.started && page.prompt ? `<h3>Exchange ${page.prompt.exchangeIndex + 1} of 3</h3>
+          <p>${page.prompt.isDefending ? "Defend against" : "Attack"}${
+            page.prompt.cpuCard ? ` ${esc(campCardLabel(page.prompt.cpuCard))}` : ""
+          }.</p>
+          <div class="feature-list">${page.prompt.playerPool.map((card, index) => `
+            <article class="feature-item"><h3>${esc(campCardLabel(card))}</h3>
+              ${featureActionButton("Play this card", "play-camp-card", `data-index="${index}"`)}
+            </article>`).join("")}
+          </div>` : ""}
+      </section>`;
+      if (page.exchanges && page.exchanges.length) {
+        html += `<section class="feature-section"><h2>Resolved Battles</h2><div class="feature-list">${
+          page.exchanges.map((exchange, index) => {
+            const outcome = exchange.outcome === 2 ? "Win" : exchange.outcome === 1 ? "Clash" : "Loss";
+            return `<article class="feature-item"><h3>Battle ${index + 1}: ${outcome}</h3>
+              <p>You: ${esc(campCardLabel(exchange.player_card))} · Opponent: ${esc(campCardLabel(exchange.cpu_card))}</p>
+            </article>`;
+          }).join("")
+        }</div></section>`;
+      }
+      if (pending.length) {
+        html += `<section class="feature-section"><h2>Pending Boxes</h2><div class="feature-list">${
+          pending.map(([boxType, count]) => `<article class="feature-item">
+            <h3>${esc(boxType)} Box × ${count}</h3>
+            ${featureActionButton(`Open ${boxType} Box`, "open-box", `data-box-type="${esc(boxType)}"`)}
+          </article>`).join("")
+        }</div></section>`;
+      }
+      if (page.result) {
+        const exchanges = page.result.exchanges || [];
+        const reward = page.result.reward || {};
+        const prize = reward.chroma_id
+          ? `${reward.chroma_rarity || ""} ${reward.chroma_id} chroma`
+          : reward.marks ? `${reward.marks} Marks`
+            : reward.crowns ? `${reward.crowns} Crowns` : "No listed reward";
+        html += `<section class="feature-section">
+          <h2>Draw Result · ${page.result.player_wins} wins</h2>
+          <p>Reward: ${esc(page.result.box_type)} box · ${esc(prize)}</p>
+          <div class="feature-list">${exchanges.map((exchange, index) => {
+            const outcome = exchange.outcome === 2 ? "Win" : exchange.outcome === 1 ? "Clash" : "Loss";
+            return `<article class="feature-item"><h3>Battle ${index + 1}: ${outcome}</h3>
+              <p>Your card: ${esc(campCardLabel(exchange.player_card))} · Opponent: ${esc(campCardLabel(exchange.cpu_card))}</p></article>`;
+          }).join("")}</div>
+        </section>`;
+      }
+      if (page.boxResult) {
+        const reward = page.boxResult;
+        const prize = reward.chroma_id
+          ? `${reward.chroma_rarity || ""} ${reward.chroma_id} chroma`
+          : reward.marks ? `${reward.marks} Marks`
+            : reward.crowns ? `${reward.crowns} Crowns` : "No listed reward";
+        html += `<section class="feature-section"><h2>Box Opened</h2>
+          <p>${esc(reward.box_type)} box reward: ${esc(prize)}</p></section>`;
+      }
+      return html;
+    }
+
+    function campCardLabel(card) {
+      const names = ["Scissors", "Paper", "Rock"];
+      return `${names[card.suit] || "Suit"} ${card.face}`;
+    }
+
+    function renderAchievementsFeature(page) {
+      const items = page.items || [];
+      const sets = page.sets || [];
+      return `<section class="feature-section"><h2>Achievement Gallery</h2>
+        <div class="feature-list">${items.map(item => {
+          const percent = item.goal > 0 ? Math.min(100, item.progress * 100 / item.goal) : (item.unlocked ? 100 : 0);
+          const tiers = (item.tiers || []).map(tier =>
+            `<p>${esc(tier.name)} · ${tier.goal} · ${tier.marks} Marks / ${tier.crowns} Crowns</p>`
+          ).join("");
+          return `<article class="feature-item">
+            <h3>${esc(item.name)}${item.new ? ' <span class="feature-status">NEW</span>' : ""}</h3>
+            <p>${esc(item.category)} · ${item.unlocked ? "Unlocked" : "In progress"}</p>
+            <p>${esc(item.details)}</p>
+            <p>${item.progress}${item.goal > 0 ? ` / ${item.goal}` : ""}</p>
+            <div class="feature-progress"><span style="width:${percent}%"></span></div>${tiers}
+          </article>`;
+        }).join("")}</div>
+      </section>
+      <section class="feature-section"><h2>Achievement Sets</h2>
+        <div class="feature-list">${sets.map(set => `<article class="feature-item">
+          <h3>${esc(set.name)}</h3><p>${set.progress} / ${set.total} achievements · ${set.complete ? "Complete" : "In progress"}</p>
+        </article>`).join("")}</div>
+      </section>`;
+    }
+
+    function renderShopFeature(page) {
+      const chromas = (page.chromas || []).map(item => {
+        const chroma = item.chroma;
+        const currency = chroma.currency === "marks" ? "Marks" : "Crowns";
+        const canAfford = chroma.currency === "marks"
+          ? page.dashboard.marks >= chroma.cost
+          : page.dashboard.crowns >= chroma.cost;
+        const eventOnly = chroma.currency === "event";
+        return `<article class="feature-item">
+          <h3>${esc(chroma.name)}${item.owned ? " · Owned" : ""}</h3>
+          <p>${esc(chroma.rarity)} · ${esc(chroma.color)}</p>
+          <p>${eventOnly ? "Event offer" : `${chroma.cost} ${currency}`}</p>
+          ${!item.owned && !eventOnly
+            ? featureActionButton(`Buy for ${chroma.cost} ${currency}`, "buy-chroma", `data-id="${esc(chroma.id)}"`, !canAfford)
+            : ""}
+        </article>`;
+      }).join("");
+      const bundles = (page.bundles || []).map(item => `<article class="feature-item">
+        <h3>${esc(item.bundle.name)}${item.owned ? " · Owned" : ""}</h3>
+        <p>${esc(item.bundle.chroma_ids.join(", "))}</p>
+        <p>${item.bundle.cost_crowns} Crowns</p>
+        ${!item.owned ? featureActionButton(`Buy bundle · ${item.bundle.cost_crowns} Crowns`, "buy-bundle",
+          `data-id="${esc(item.bundle.id)}"`, page.dashboard.crowns < item.bundle.cost_crowns) : ""}
+      </article>`).join("");
+      const heroesForSale = (page.heroes || []).filter(item => item.hero.id !== "recruit").map(item => `<article class="feature-item">
+        <h3>${esc(item.hero.name)}${item.owned ? " · Owned" : ""}</h3>
+        <p>${item.plays} plays · ${item.wins} wins</p>
+        ${!item.owned ? featureActionButton(`Buy for ${page.directHeroCost} Crowns`, "buy-hero",
+          `data-id="${esc(item.hero.id)}"`, !item.canBuy) : ""}
+      </article>`).join("");
+      const freeBox = page.heroBoxesAvailable > 0
+        ? featureActionButton(`Open free Hero Box (${page.heroBoxesAvailable})`, "open-hero-box", 'data-box-type="free"')
+        : "";
+      const paidBox = featureActionButton(`Open Hero Box · ${page.heroBoxCost} Marks`, "open-hero-box",
+        'data-box-type="marks"', page.dashboard.marks < page.heroBoxCost);
+      const chromaPick = page.chromaPickTokens > 0
+        ? `<article class="feature-item"><h3>Pick Any Chroma · ${page.chromaPickTokens} token(s)</h3>
+          <select id="chromaPickChoice">${(page.chromas || []).filter(item => !item.owned).map(item =>
+            `<option value="${esc(item.chroma.id)}">${esc(item.chroma.name)}</option>`).join("")}</select>
+          ${featureActionButton("Redeem token", "redeem-pick")}</article>`
+        : "";
+      return `<section class="feature-section"><h2>Chroma Catalog</h2><div class="feature-list">${chromas}</div></section>
+        <section class="feature-section"><h2>Bundles</h2><div class="feature-list">${bundles}</div></section>
+        <section class="feature-section"><h2>Hero Boxes</h2><p>Available Hero Boxes: ${page.heroBoxesAvailable}</p>
+          ${freeBox} ${paidBox}</section>
+        ${chromaPick ? `<section class="feature-section"><h2>Chroma Tokens</h2><div class="feature-list">${chromaPick}</div></section>` : ""}
+        <section class="feature-section"><h2>Heroes</h2><p>Direct purchase: ${page.directHeroCost} Crowns</p>
+          <div class="feature-list">${heroesForSale}</div></section>`;
+    }
+
+    function renderHeroesFeature(page) {
+      return `<section class="feature-section"><h2>Commander Hero</h2>
+        <div class="feature-list">${(page.heroes || []).map(hero => `<article class="feature-item">
+          <h3>${esc(hero.name)}${hero.id === page.defaultId ? " · Default" : ""}</h3>
+          <p>${hero.unlocked ? "Unlocked" : "Locked"}</p>
+          ${hero.unlocked && hero.id !== page.defaultId
+            ? featureActionButton("Set as default", "select-hero", `data-id="${esc(hero.id)}"`)
+            : ""}
+        </article>`).join("")}</div>
+      </section>`;
+    }
+
+    function renderSkillsFeature(page) {
+      return `<section class="feature-section"><h2>Skill Tree · ${page.dashboard.skillPoints} Skill Point(s) · ${formatNumber(page.dashboard.crowns)} Crowns</h2>
+        <div class="feature-list">${(page.nodes || []).map(item => `<article class="feature-item">
+          <h3>${esc(item.node.name)}${item.unlocked ? " · Unlocked" : ""}</h3>
+          <p>${esc(item.node.description)}</p>
+          ${item.node.prerequisite ? `<p>Requires: ${esc(item.node.prerequisite)}</p>` : ""}
+          <p>Cost: ${item.node.cost_crowns} Crowns or 1 Skill Point</p>
+          ${!item.unlocked ? `<div>
+            ${item.canUnlockSkillPoint ? featureActionButton("Unlock with Skill Point", "unlock-skill",
+              `data-id="${esc(item.node.id)}" data-payment="skill-point"`) : ""}
+            ${item.canUnlockCrowns ? featureActionButton(`Unlock for ${item.node.cost_crowns} Crowns`, "unlock-skill",
+              `data-id="${esc(item.node.id)}" data-payment="crowns"`) : ""}
+            ${!item.canUnlockSkillPoint && !item.canUnlockCrowns
+              ? `<p>${esc(item.skillPointReason || item.crownsReason)}</p>` : ""}
+          </div>` : ""}
+        </article>`).join("")}</div>
+      </section>`;
+    }
+
+    function renderCommanderFeature(page) {
+      const winRate = page.totalGames > 0
+        ? `${Math.round(page.totalWins * 100 / page.totalGames)}%`
+        : "—";
+      const created = page.createdAt
+        ? new Date(page.createdAt).toLocaleDateString()
+        : "Unknown";
+      const rows = [
+        ["Matches", page.totalGames],
+        ["Wins", page.totalWins],
+        ["Losses", page.totalLosses],
+        ["Draws", page.totalDraws],
+        ["Win Rate", winRate],
+        ["Current Streak", page.currentStreak],
+        ["Best Streak", page.bestStreak],
+        ["Clashes", page.totalClashes],
+        ["Match Ties", page.matchTies],
+        ["Seat X Wins", page.winsAsSeatX],
+        ["Seat Y Wins", page.winsAsSeatY],
+        ["Commander Since", created]
+      ];
+      return `<section class="feature-section"><h2>Player Record</h2>
+        <p>Commander ID: ${esc(page.playerId || "Unavailable")}</p>
+        <div class="feature-list">${rows.map(([label, value]) => `<article class="feature-item">
+          <h3>${esc(label)}</h3><p>${esc(typeof value === "number" ? formatNumber(value) : value)}</p>
+        </article>`).join("")}</div>
+      </section>`;
+    }
+
+    function renderCampaignsFeature(page) {
+      const campaigns = (page.campaigns || []).map(campaign => {
+        const percent = campaign.totalMissions > 0
+          ? Math.round(campaign.missionsCompleted * 100 / campaign.totalMissions)
+          : 0;
+        const status = campaign.completed ? "Complete"
+          : !campaign.unlocked ? "Locked"
+            : campaign.started ? "In progress" : "Available";
+        const missions = (campaign.missions || []).map(mission => `<article class="feature-item">
+          <h3>${mission.completed ? "✓ " : ""}${esc(mission.index)}. ${esc(mission.name)}</h3>
+          <p>${esc(mission.description)}</p>
+          <p>${mission.completed ? "Completed" : "Not completed"} · Reward: ${formatNumber(mission.rewardMarks)} Marks</p>
+        </article>`).join("");
+        return `<article class="feature-item">
+          <h3>${esc(campaign.name)} · ${esc(status)}</h3>
+          <p>${esc(campaign.description)}</p>
+          ${campaign.requires ? `<p>Requires campaign: ${esc(campaign.requires)}</p>` : ""}
+          <p>${formatNumber(campaign.missionsCompleted)} / ${formatNumber(campaign.totalMissions)} missions</p>
+          <div class="feature-progress"><span style="width:${percent}%"></span></div>
+          <div class="feature-list">${missions}</div>
+        </article>`;
+      }).join("");
+      return `<section class="feature-section"><h2>Campaign Progress</h2>
+        ${campaigns ? `<div class="feature-list">${campaigns}</div>` : "<p>No campaigns are available.</p>"}
+      </section>`;
+    }
+
+    function renderHistoryFeature(page) {
+      const matches = (page.matches || []).map(item => {
+        const record = item.record;
+        const result = record.player_score === record.opp_score
+          ? "Draw" : record.won ? "Victory" : "Defeat";
+        const date = record.at ? new Date(record.at).toLocaleString() : "Date unavailable";
+        return `<article class="feature-item">
+          <h3>${esc(result)} · ${esc(item.modeName)}</h3>
+          <p>${esc(date)} · Score ${esc(record.player_score)}–${esc(record.opp_score)}</p>
+          <p>${esc(record.player_prisoners)} prisoners · ${esc(record.clashes)} clashes · ${formatNumber(record.marks_earned)} Marks earned</p>
+          <p>Bounty suit: ${esc(record.bounty_suit || "Unknown")}</p>
+        </article>`;
+      }).join("");
+      return `<section class="feature-section"><h2>Match Record</h2>
+        <div class="feature-list">
+          <article class="feature-item"><h3>Matches</h3><p>${formatNumber(page.totalGames)}</p></article>
+          <article class="feature-item"><h3>Wins / Losses / Draws</h3>
+            <p>${formatNumber(page.totalWins)} / ${formatNumber(page.totalLosses)} / ${formatNumber(page.totalDraws)}</p></article>
+        </div>
+      </section>
+      <section class="feature-section"><h2>Recent Matches</h2>
+        ${matches ? `<div class="feature-list">${matches}</div>` : "<p>No matches have been recorded yet.</p>"}
+      </section>`;
+    }
+
+    async function handleFeatureClick(event) {
+      const button = event.target.closest("[data-feature-action]");
+      if (!button || button.disabled || featureActionInProgress) return;
+      const action = button.dataset.featureAction;
+      let path;
+      let body;
+      switch (action) {
+        case "start-draw":
+          path = "/api/camp-draw";
+          body = { action: "start-draw" };
+          break;
+        case "play-camp-card":
+          path = "/api/camp-draw";
+          body = { action: "play-card", index: Number(button.dataset.index) };
+          break;
+        case "open-box":
+          path = "/api/camp-draw";
+          body = { action: "open-box", boxType: button.dataset.boxType };
+          break;
+        case "buy-chroma":
+        case "buy-bundle":
+        case "buy-hero":
+          if (!window.confirm(`Confirm ${button.textContent.trim()}?`)) return;
+          path = "/api/shop";
+          body = { action, id: button.dataset.id };
+          break;
+        case "open-hero-box":
+          if (!window.confirm(`Confirm ${button.textContent.trim()}?`)) return;
+          path = "/api/shop";
+          body = { action, boxType: button.dataset.boxType };
+          break;
+        case "redeem-pick":
+          path = "/api/shop";
+          body = { action, id: document.getElementById("chromaPickChoice").value };
+          break;
+        case "select-hero":
+          path = "/api/heroes";
+          body = { action: "select", id: button.dataset.id };
+          break;
+        case "unlock-skill":
+          path = "/api/skills";
+          body = { action: "unlock", id: button.dataset.id, payment: button.dataset.payment };
+          break;
+        default:
+          return;
+      }
+      featureError = "";
+      featureActionInProgress = true;
+      button.disabled = true;
+      try {
+        featureData = await api(path, body);
+        if (featureData.dashboard) state.dashboard = featureData.dashboard;
+        if (currentFeature === "heroes" && featureData.defaultId) {
+          state.defaultHeroId = featureData.defaultId;
+        }
+        render();
+      } catch (error) {
+        featureError = connectionError(error);
+        render();
+      } finally {
+        featureActionInProgress = false;
+      }
+    }
+
     function render() {
+      document.getElementById("dashboardScreen").classList.toggle("hidden", !showDashboard);
+      document.getElementById("featureScreen").classList.toggle("hidden", !showFeature);
+      document.getElementById("gameShell").classList.toggle("hidden", showDashboard || showFeature);
+      const footer = document.getElementById("dashboardFooter");
+      footer.hidden = !showDashboard && !showFeature;
+      const activeNav = showDashboard ? "home" : showFeature ? currentFeature : "";
+      for (const button of footer.querySelectorAll("[data-nav]")) {
+        if (button.dataset.nav === activeNav) button.setAttribute("aria-current", "page");
+        else button.removeAttribute("aria-current");
+      }
+      renderDashboard();
+      if (showFeature) renderFeatureScreen();
       document.getElementById("roundLabel").textContent = state && state.started
         ? `Round ${state.round} · Battle ${Math.min(state.exchange, 3)} of 3`
         : "Card battle";
-      const scoreLine = document.getElementById("scoreLine");
-      if (state && state.started) {
-        const white = state.players.find(player => player.color === "White");
-        const black = state.players.find(player => player.color === "Black");
-        scoreLine.innerHTML = `<span><strong>${white.you ? "You" : "White"} = ${white.score}</strong></span>
-          <span><strong class="black-score">${black.you ? "You" : "Black"} = ${black.score}</strong></span>`;
-      } else {
-        scoreLine.innerHTML = "";
-      }
       setStatus(state && state.started ? state.message : "Choose a game mode to begin.");
       renderTrack();
+      renderMatchInfo();
       renderBattle();
       renderSuitCycle();
       renderPlayers();
@@ -590,8 +1462,16 @@
 
     async function startNewGame(mode) {
       try {
+        showDashboard = false;
+        showModeSelection = false;
         selected.clear();
-        const body = mode ? { mode } : { mode: activeMode || (state && state.mode) || "hvh" };
+        const playerHero = document.getElementById("playerHero");
+        const opponentHero = document.getElementById("opponentHero");
+        const body = {
+          mode: mode || activeMode || (state && state.mode) || "hvh",
+          playerHeroId: playerHero ? playerHero.value : (state && (state.playerHeroId || state.defaultHeroId)) || "warden",
+          opponentHeroId: opponentHero ? opponentHero.value : (state && state.opponentHeroId) || ""
+        };
         state = await api("/api/new", body);
         activeMode = state.mode;
         selected.clear();
@@ -633,16 +1513,53 @@
       }
     }
 
+    async function openDashboard() {
+      showDashboard = true;
+      showFeature = false;
+      currentFeature = "";
+      featureData = null;
+      showModeSelection = false;
+      render();
+      try {
+        state = await api("/api/state");
+        render();
+      } catch (error) {
+        setStatus(connectionError(error), true);
+      }
+    }
+
     async function initialize() {
       try {
         state = await api("/api/state");
-        activeMode = state.mode || "";
+        activeMode = "";
+        showDashboard = true;
         render();
-        if (activeMode) startNewGame(activeMode);
       } catch (error) {
         setStatus(error.message, true);
       }
     }
+
+    document.getElementById("dashboardPlay").addEventListener("click", () => {
+      showDashboard = false;
+      showFeature = false;
+      showModeSelection = true;
+      render();
+    });
+
+    document.getElementById("dashboardCommanderCard").addEventListener("click", () => openFeature("profile"));
+    document.getElementById("dashboardCampDraw").addEventListener("click", () => openFeature("camp-draw"));
+    document.getElementById("dashboardAchievements").addEventListener("click", () => openFeature("achievements"));
+    document.getElementById("dashboardShop").addEventListener("click", () => openFeature("shop"));
+    document.getElementById("dashboardCampaigns").addEventListener("click", () => openFeature("campaigns"));
+    document.getElementById("dashboardHistory").addEventListener("click", () => openFeature("history"));
+    document.getElementById("dashboardNavHome").addEventListener("click", openDashboard);
+    document.getElementById("dashboardNavShop").addEventListener("click", () => openFeature("shop"));
+    document.getElementById("dashboardNavBattle").addEventListener("click", () =>
+      document.getElementById("dashboardPlay").click());
+    document.getElementById("dashboardNavHeroes").addEventListener("click", () => openFeature("heroes"));
+    document.getElementById("dashboardNavSkills").addEventListener("click", () => openFeature("skills"));
+    document.getElementById("featureBack").addEventListener("click", openDashboard);
+    document.getElementById("featureContent").addEventListener("click", handleFeatureClick);
 
     initialize();
   </script>

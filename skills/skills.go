@@ -10,6 +10,19 @@ import (
 type Effect string
 
 const (
+	Conductor1Cost   int64 = 500
+	Conductor2Cost   int64 = 1200
+	HeroBrokerCost   int64 = 300
+	CuratorCost      int64 = 400
+	LuckyDupeCost    int64 = 400
+	PremiumDupeCost  int64 = 800
+	CampaignFreeCost int64 = 300
+	DailyEnergyCost  int64 = 500
+	HeroHistoryCost  int64 = 400
+	HeroPreviewCost  int64 = 600
+)
+
+const (
 	EffectMarksBasePercent  Effect = "marks_base_percent"
 	EffectModeMultiplier    Effect = "mode_multiplier"
 	EffectFirstWinBonus     Effect = "first_win_bonus"
@@ -19,6 +32,15 @@ const (
 	EffectMaxEnergy         Effect = "max_energy"
 	EffectEnergyRechargePct Effect = "energy_recharge_percent"
 	EffectDailyFreeRefill   Effect = "daily_free_refill"
+	EffectConductor         Effect = "conductor"
+	EffectHeroBroker        Effect = "hero_broker"
+	EffectCampaignMarks     Effect = "campaign_marks_percent"
+	EffectLuckyDuplicate    Effect = "lucky_duplicate"
+	EffectPremiumDuplicate  Effect = "premium_duplicate"
+	EffectCampaignFree      Effect = "campaign_free"
+	EffectDailyEnergy       Effect = "daily_energy"
+	EffectHeroHistory       Effect = "hero_history"
+	EffectHeroPreview       Effect = "hero_preview"
 )
 
 type Node struct {
@@ -41,6 +63,14 @@ type Bonuses struct {
 	EnergyRechargePercent int
 	DailyFreeRefill       bool
 	Curator               bool
+	ConductorLevel        int
+	HeroBroker            bool
+	CampaignMarksPercent  int
+	DuplicateBonusPercent int
+	CampaignFree          bool
+	DailyEnergy           bool
+	HeroHistory           bool
+	HeroPreview           bool
 }
 
 var tree = []Node{
@@ -49,10 +79,20 @@ var tree = []Node{
 	{ID: "first-blood", Name: "First Blood", Description: "+50% Marks for the first win each day.", CostCrowns: 20, Effect: EffectFirstWinBonus, Magnitude: 50},
 	{ID: "camp-lore", Name: "Fortunes Favor", Description: "Camp Draws arrive after two fewer wins.", CostCrowns: 25, Effect: EffectCampDrawThreshold, Magnitude: 2},
 	{ID: "fortune", Name: "Lucky Find", Description: "Shift 5 percentage points from the highest currency roll to rare chromas.", CostCrowns: 30, Effect: EffectRareRewardPercent, Magnitude: 5, Prerequisite: "camp-lore"},
-	{ID: "curator", Name: "Curator", Description: "Reroll owned chromas once; a second duplicate becomes Marks.", CostCrowns: 40, Effect: EffectCurator, Magnitude: 1, Prerequisite: "fortune"},
+	{ID: "chroma-curator", Name: "Chroma Curator", Description: "Reroll owned chromas once; a second duplicate becomes Marks.", CostCrowns: 40, Effect: EffectCurator, Magnitude: 1, Prerequisite: "fortune"},
 	{ID: "expanded-rations", Name: "Expanded Rations", Description: "+2 maximum energy.", CostCrowns: 20, Effect: EffectMaxEnergy, Magnitude: 2},
 	{ID: "quick-recovery", Name: "Quick Recovery", Description: "Energy recharges 10% faster.", CostCrowns: 25, Effect: EffectEnergyRechargePct, Magnitude: 10, Prerequisite: "expanded-rations"},
 	{ID: "second-wind", Name: "Second Wind", Description: "One daily free energy refill.", CostCrowns: 30, Effect: EffectDailyFreeRefill, Magnitude: 1, Prerequisite: "quick-recovery"},
+	{ID: "conductor_1", Name: "The Conductor", Description: "Tune one modifier by +1 or -1 at hero selection.", CostCrowns: Conductor1Cost, Effect: EffectConductor, Magnitude: 1},
+	{ID: "conductor_2", Name: "Master Conductor", Description: "Tune two different modifiers by +1 or -1 at hero selection.", CostCrowns: Conductor2Cost, Prerequisite: "conductor_1", Effect: EffectConductor, Magnitude: 2},
+	{ID: "hero_broker", Name: "Hero Broker", Description: "Hero Boxes cost 10% fewer Marks.", CostCrowns: HeroBrokerCost, Effect: EffectHeroBroker, Magnitude: 1},
+	{ID: "curator", Name: "Curator", Description: "Campaign missions give 50% more Marks.", CostCrowns: CuratorCost, Effect: EffectCampaignMarks, Magnitude: 50},
+	{ID: "lucky_dupe", Name: "Lucky Duplicate", Description: "Duplicate hero Crowns increase by 25%.", CostCrowns: LuckyDupeCost, Effect: EffectLuckyDuplicate, Magnitude: 25},
+	{ID: "premium_dupe", Name: "Premium Duplicate", Description: "Duplicate hero Crowns increase by 50%.", CostCrowns: PremiumDupeCost, Prerequisite: "lucky_dupe", Effect: EffectPremiumDuplicate, Magnitude: 50},
+	{ID: "campaign_free", Name: "Campaign Freebie", Description: "The first mission in each campaign costs no energy.", CostCrowns: CampaignFreeCost, Effect: EffectCampaignFree, Magnitude: 1},
+	{ID: "daily_energy", Name: "Daily Rations", Description: "Gain 2 energy on your first login each day.", CostCrowns: DailyEnergyCost, Effect: EffectDailyEnergy, Magnitude: 2},
+	{ID: "hero_history", Name: "Hero History", Description: "See your opponent's last two hero picks.", CostCrowns: HeroHistoryCost, Effect: EffectHeroHistory, Magnitude: 2},
+	{ID: "hero_preview", Name: "Hero Preview", Description: "Preview combined modifiers before locking in your hero.", CostCrowns: HeroPreviewCost, Prerequisite: "hero_history", Effect: EffectHeroPreview, Magnitude: 1},
 }
 
 func AllNodes() []Node {
@@ -96,6 +136,30 @@ func AggregateBonuses(p *profile.Profile) Bonuses {
 			bonuses.DailyFreeRefill = true
 		case EffectCurator:
 			bonuses.Curator = true
+		case EffectConductor:
+			if node.Magnitude > bonuses.ConductorLevel {
+				bonuses.ConductorLevel = node.Magnitude
+			}
+		case EffectHeroBroker:
+			bonuses.HeroBroker = true
+		case EffectCampaignMarks:
+			bonuses.CampaignMarksPercent += node.Magnitude
+		case EffectLuckyDuplicate:
+			if node.Magnitude > bonuses.DuplicateBonusPercent {
+				bonuses.DuplicateBonusPercent = node.Magnitude
+			}
+		case EffectPremiumDuplicate:
+			if node.Magnitude > bonuses.DuplicateBonusPercent {
+				bonuses.DuplicateBonusPercent = node.Magnitude
+			}
+		case EffectCampaignFree:
+			bonuses.CampaignFree = true
+		case EffectDailyEnergy:
+			bonuses.DailyEnergy = true
+		case EffectHeroHistory:
+			bonuses.HeroHistory = true
+		case EffectHeroPreview:
+			bonuses.HeroPreview = true
 		}
 	}
 	return bonuses
