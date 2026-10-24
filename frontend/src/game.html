@@ -11,8 +11,8 @@
       background: #07090e;
       color: #f3f4ef;
       font-synthesis: none;
-      --felt: #777f7b;
-      --felt-dark: #606864;
+      --felt: #1a2333;
+      --felt-dark: #121927;
       --gold: #f0c75e;
       --paper: #f4f2e9;
       --card-red: #c5373d;
@@ -56,11 +56,11 @@
     }
     .track { display: grid; grid-template-columns: repeat(10, minmax(0, 1fr)); align-items: start; gap: 5px; }
     .bounty-column { display: grid; grid-column: span 1; grid-template-columns: minmax(0, 1fr); gap: 5px; min-width: 0; }
-    .track-cell { min-width: 0; height: clamp(96px, 11vw, 130px); display: flex; align-items: center; justify-content: center; position: relative; border: 2px solid #d2d7d2; border-radius: 9px; background: #626a66; }
-    .track-cell.bounty { border: 3px solid var(--bounty-border-color, var(--gold)); background: #6b664f; }
+    .track-cell { min-width: 0; height: clamp(96px, 11vw, 130px); display: flex; align-items: center; justify-content: center; position: relative; border: 2px solid #3d4b63; border-radius: 9px; background: #182133; }
+    .track-cell.bounty { border: 3px solid var(--bounty-border-color, var(--gold)); background: #2b2614; }
     .bounty-value { color: #ffe18a; font-size: clamp(8px, 1vw, 12px); font-weight: 800; line-height: 1.2; text-align: center; white-space: nowrap; }
     .track-cell.white-capture { border-color: #fff; }
-    .track-cell.black-capture { border-color: #151817; }
+    .track-cell.black-capture { border-color: #000; box-shadow: 0 0 0 2px #8d99ad; }
     .track-cell .card { width: min(64px, calc(100% - 10px)); height: calc(100% - 10px); min-height: 0; }
     .track-cell .card .face { font-size: clamp(18px, 3vw, 32px); }
     .jailed-card { display: flex; flex-direction: column; align-items: center; justify-content: center; width: 100%; height: 100%; }
@@ -136,7 +136,13 @@
     .hero-select select { min-height: 38px; padding: 5px 8px; border: 1px solid #aeb7b1; border-radius: 6px; background: #424a47; color: #f2f4f0; font: inherit; }
     .status { min-height: 34px; margin: 2px 0 14px; text-align: center; color: #f4f5f1; font-size: 15px; }
     .player-instructions .status { margin: 3px 0 12px; }
-    .battle { width: 100%; display: grid; grid-template-columns: minmax(0, 1fr) minmax(40px, 64px) minmax(0, 1fr); align-items: center; gap: 8px; min-height: 160px; padding: 14px clamp(8px, 3vw, 32px); border: 1px solid #c2c8c4; border-radius: 13px; background: #68716c; }
+    .battle { width: 100%; display: grid; grid-template-columns: minmax(0, 1fr) minmax(40px, 64px) minmax(0, 1fr); align-items: center; gap: 8px; min-height: 160px; padding: 14px clamp(8px, 3vw, 32px); border: 1px solid #33415a; border-radius: 13px; background: radial-gradient(ellipse at center, #1e2a3f 0%, #121a28 70%); }
+    .battle-result { display: inline-block; margin-top: 2px; padding: 2px 8px; border-radius: 999px; font-size: 11px; font-weight: 800; letter-spacing: .06em; text-transform: uppercase; }
+    .battle-result.win { background: #f0c75e; color: #1d1a0e; }
+    .battle-result.lose { background: #2a3347; color: #aeb8c9; }
+    .battle-result.clash { background: #3b2f5c; color: #e5dcff; }
+    .battle-card-lost { opacity: .55; filter: grayscale(.4); }
+    .battle-vs.clash { color: #c4b5fd; }
     .battle-player { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 6px; min-width: 0; }
     .battle-player-name { max-width: 100%; color: #e4e8e4; font-size: 12px; text-align: center; text-transform: uppercase; letter-spacing: .08em; }
     .battle-vs { position: relative; color: #d5dbd6; text-align: center; font-weight: 800; letter-spacing: .12em; }
@@ -157,7 +163,7 @@
     @keyframes battle-ring { from { opacity: .9; transform: translate(-50%, -50%) scale(.1); } to { opacity: 0; transform: translate(-50%, -50%) scale(2.8); } }
     .battle .card { width: clamp(62px, 9vw, 93px); height: clamp(84px, 12vw, 119px); }
     .battle .card.skin-card .face { top: -23px; font-size: clamp(20px, 3vw, 30px); }
-    .battle-empty { width: clamp(62px, 9vw, 93px); height: clamp(84px, 12vw, 119px); border: 2px dashed #bdc5bf; border-radius: 8px; }
+    .battle-empty { width: clamp(62px, 9vw, 93px); height: clamp(84px, 12vw, 119px); border: 2px dashed #4a5873; border-radius: 8px; }
     .players { display: grid; grid-template-columns: minmax(0, 1fr); margin-top: 16px; }
     .player-panel { min-width: 0; padding: 13px clamp(10px, 2vw, 18px) 16px; border: 1px solid #2a354a; border-radius: 12px; background: linear-gradient(145deg, #141b2aef, #101521ee); }
     .player-panel.white { border-top: 4px solid #fff; }
@@ -197,6 +203,11 @@
     .shell .action:hover, .modal .action:hover { border-color: #68758b; background: linear-gradient(145deg, #222d40, #182132); }
     .shell .action:disabled, .modal .action:disabled { border-color: #29354d; background: #0a0e17; color: #758197; opacity: .7; }
     .shell .action.secondary, .modal .action.secondary { border-color: #48566d; background: #0d1320; color: #c8d0de; }
+    .shell .action.primary, .modal .action.primary { border-color: #f4d881; background: linear-gradient(145deg, #f6d06a, #e0ad3a); color: #1d1a0e; font-weight: 800; }
+    .shell .action.primary:hover, .modal .action.primary:hover { border-color: #ffe7a3; background: linear-gradient(145deg, #ffdb7d, #eab948); }
+    .shell .action.primary:disabled { border-color: #4a4430; background: #1f1c12; color: #8b8466; }
+    .actions .action-divider { flex-basis: 100%; height: 0; }
+    .actions .action.manage { min-height: 36px; font-size: 13px; color: #9fabbf; }
     .shell .action:focus-visible, .modal .action:focus-visible { outline: 2px solid #facc15; outline-offset: 2px; }
     .suit-cycle { position: relative; z-index: 2; width: 100%; aspect-ratio: 4 / 3; margin: 0 auto; }
     .suit-arrows { position: absolute; inset: 0; width: 100%; height: 100%; overflow: visible; }
@@ -503,7 +514,8 @@
   </style>
 </head>
 <body>
-  <main id="dashboardScreen" class="dashboard-shell">
+  <section id="gameLoading" class="account-page" role="status"><p id="initializationMessage">Loading commander and saved match…</p><button id="retryInitialization" type="button" hidden>Retry loading game</button></section>
+  <main id="dashboardScreen" class="dashboard-shell hidden">
     <header class="dashboard-header">
       <div class="dashboard-profile">
         <div id="dashboardAvatar" class="dashboard-avatar" aria-hidden="true">P</div>
@@ -515,15 +527,17 @@
       <div class="dashboard-resources" aria-label="Player resources">
         <div class="dashboard-resource"><span class="dashboard-resource-icon" aria-hidden="true">◈</span><div class="dashboard-resource-copy"><span>Marks</span><strong id="dashboardMarks">—</strong></div></div>
         <div class="dashboard-resource"><span class="dashboard-resource-icon" aria-hidden="true">✦</span><div class="dashboard-resource-copy"><span>Crowns</span><strong id="dashboardCrowns">—</strong></div></div>
-        <div class="dashboard-resource"><span class="dashboard-resource-icon" aria-hidden="true">⚡</span><div class="dashboard-resource-copy"><span>Energy</span><strong id="dashboardEnergy">—</strong></div></div>
+        <div class="dashboard-resource"><span class="dashboard-resource-icon" aria-hidden="true">⚡</span><div class="dashboard-resource-copy"><span>Energy</span><strong id="dashboardEnergy">—</strong><small id="dashboardEnergyNext" hidden></small></div></div>
       </div>
     </header>
+    <p id="routeNotice" class="route-notice" role="status" hidden></p>
+    <p id="previewBar" class="route-notice preview-bar" hidden>Preview mode: a temporary copy of your profile; nothing here is saved to it. <button id="resetPreview" type="button" class="preview-reset">Reset preview</button></p>
     <div class="dashboard-grid">
       <button id="dashboardCommanderCard" class="dashboard-panel commander-card" type="button" aria-label="Open commander profile and stats">
         <h2>Commander Profile</h2>
         <div class="featured-card">
           <div class="featured-copy">
-            <span class="eyebrow">Active Commander · tap for full record</span>
+            <span class="eyebrow">Active hero · view commander record</span>
             <strong id="dashboardFeaturedHero">The Recruit</strong>
             <span id="dashboardCommanderLabel" class="dashboard-commander">Commander · Loading profile</span>
           </div>
@@ -537,13 +551,20 @@
         <p id="dashboardAd" class="dashboard-ad" hidden></p>
         <p id="dashboardPreviewNote" class="dashboard-preview-note" hidden>Preview values are for layout testing only; your profile is unchanged.</p>
       </button>
-      <section class="dashboard-panel">
+      <section id="dashboardOnboarding" class="dashboard-panel">
+        <h2>Start here</h2>
+        <p>Learn the rules in Basic Training or try an Easy match. Win Marks, unlock heroes and grow your commander.</p>
+        <button id="dashboardTraining" class="action" type="button">Open Basic Training</button>
+        <button id="dashboardRules" class="action secondary" type="button">Cards &amp; rules</button>
+      </section>
+      <section id="dashboardQuickActions" class="dashboard-panel">
         <h2>Quick Actions</h2>
         <div class="dashboard-actions">
-          <button id="dashboardPlay" class="dashboard-action play" type="button">
+           <button id="dashboardPlay" class="dashboard-action play" type="button">
             <span><strong>Battle</strong><small>Choose your match mode</small></span>
             <span class="battle-icon" aria-hidden="true">⚔</span>
-          </button>
+           </button>
+           <button id="dashboardChooseMode" class="dashboard-action wide" type="button">Choose another match mode</button>
           <button id="dashboardCampDraw" class="dashboard-action half" type="button">Camp Draw</button>
           <button id="dashboardAchievements" class="dashboard-action half" type="button">Achievements</button>
           <button id="dashboardCampaigns" class="dashboard-action half" type="button">Campaigns</button>
@@ -564,14 +585,15 @@
   </main>
   <main id="featureScreen" class="dashboard-shell hidden">
     <header class="feature-header">
-      <button id="featureBack" class="action secondary" type="button">Dashboard</button>
+      <button id="featureBack" class="action secondary" type="button">Home</button>
       <h1 id="featureTitle">Progression</h1>
     </header>
     <p id="featureMessage" class="feature-message" aria-live="polite"></p>
+    <div id="featureBalances" class="feature-balances" aria-label="Available resources"></div>
     <nav id="featureTabs" class="feature-tabs hidden" role="tablist"></nav>
     <div id="featureContent" class="feature-content"></div>
   </main>
-  <nav id="dashboardFooter" class="dashboard-footer" aria-label="Quick navigation">
+  <nav id="dashboardFooter" class="dashboard-footer" aria-label="Quick navigation" hidden>
     <button id="dashboardNavHome" type="button" data-nav="home"><span aria-hidden="true">⌂</span><span>Home</span></button>
     <button id="dashboardNavShop" type="button" data-nav="shop"><span aria-hidden="true">▣</span><span>Shop</span></button>
     <button id="dashboardNavBattle" class="nav-battle" type="button" data-nav="battle"><span aria-hidden="true">⚔</span><span>Battle</span></button>
@@ -582,8 +604,10 @@
     <header class="topline">
       <h1 class="brand">Prisoners <span>of War</span></h1>
       <div id="roundLabel" class="round-label">Card battle</div>
+      <p id="topScore" class="top-score" hidden></p>
     </header>
-    <section class="board" aria-label="Game board">
+      <section class="board" aria-label="Game board">
+        <details class="battle-help"><summary>Battle log, rules &amp; scores</summary><div id="battleExplanation"></div><a href="#/cards">Inspect cards and suit rules</a></details>
       <div id="track" class="track" aria-label="Bounty and captured prisoners"></div>
       <section id="matchInfo" class="match-info" aria-label="Heroes and combat rules" hidden>
         <div id="whiteHeroPanel" class="match-side"></div>
@@ -625,6 +649,16 @@
     const suitColors = loadSuitColors();
     const dashboardPreview = new URLSearchParams(window.location.search).get("preview") === "dashboard";
     const selected = new Set();
+    const lifecycle = new AbortController();
+    let navigationVersion = 0;
+    let initialized = false;
+    let modalKey = '';
+    let modalReturnFocus = null;
+    let achievementFilter = 'all';
+    let achievementCategory = 'all';
+    let autoContinue = localStorage.getItem('pow-auto-continue') === 'true';
+    let pendingConfirmation = null;
+    let setupMode = 'easy';
     let openSuitMenu = null;
     let state = null;
     let activeMode = "";
@@ -635,6 +669,7 @@
     let currentFeature = "";
     let currentShopTab = "skins";
     let currentSkillBranch = "battle-rewards";
+    let featureFocusTarget = "";
     let featureData = null;
     let featureError = "";
     let featureActionInProgress = false;
@@ -675,19 +710,25 @@
         ? `${path}${path.includes("?") ? "&" : "?"}preview=dashboard`
         : path;
       const response = await fetch(`${import.meta.env.BASE_URL}${requestPath.replace(/^\//, "")}`, body ? {
+        signal: lifecycle.signal,
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(body)
-      } : {});
+      } : { signal: lifecycle.signal });
       const payload = await response.json();
       if (response.status === 401) window.dispatchEvent(new Event("pow-session-expired"));
       if (!response.ok) throw new Error(payload.error || "Request failed");
+      if (payload && payload.dashboard && !dashboardPreview) {
+        window.dispatchEvent(new CustomEvent("pow-commander", { detail: { displayName: payload.dashboard.displayName || "" } }));
+      }
       return payload;
     }
 
     function cardMarkup(item, options = {}) {
       const card = item.card || item;
-      const color = suitColors[card.suit];
+      const equipped = equippedChroma(card.suit);
+      const appearance = options.appearance || (equipped ? chromaAppearance(equipped) : null);
+      const color = appearance?.color || suitColors[card.suit];
       const skin = skinFolders[color] || skinFolders[defaultSuitColors[card.suit]];
       const tier = card.face <= 3 ? "small" : card.face <= 6 ? "med" : "large";
       const pose = ["idle", "attack", "win", "lose"].includes(options.pose) ? options.pose : "idle";
@@ -699,10 +740,11 @@
       const faceMarkup = options.hideFace ? "" : `<span class="face">${esc(face)}</span>`;
       const mirrored = options.mirror ? " mirrored" : "";
       const faceColor = options.faceColor || colorVars[color] || "var(--paper)";
-      const ariaLabel = options.hideFace ? `${color} card` : `${color} ${face}`;
+      const ariaLabel = `${suits[card.suit]} ${card.face}, ${color}${options.face !== undefined ? `, effective value ${face}` : ''}`;
       return `<${tag} class="card skin-card${chosen ? " chosen" : ""}${mirrored}" style="--card-suit-color:${faceColor}" ${attrs} aria-label="${esc(ariaLabel)}">
-        <img class="card-art" src="${import.meta.env.BASE_URL}skins/${skin}/${tier}_${pose}.png?v=3" alt="" aria-hidden="true">
+        <img class="card-art" style="${appearance?.filter ? `filter:${appearance.filter}` : ''}" src="${import.meta.env.BASE_URL}skins/${skin}/${tier}_${pose}.png?thumb=160" alt="" aria-hidden="true">
         ${faceMarkup}
+        <span class="card-suit" aria-hidden="true">${['✂', '▤', '◆'][card.suit]} ${suits[card.suit]}</span>
       </${tag}>`;
     }
 
@@ -723,6 +765,7 @@
     }
 
     function scheduleBattleContinuation(key) {
+      if (!autoContinue || showDashboard || showFeature) return;
       battleAnimationTimer = window.setTimeout(() => {
         if (!battleAnimation || battleAnimation.key !== key || battleAnimation.stage !== "settled" ||
             !state || state.phase !== "result") return;
@@ -731,6 +774,7 @@
     }
 
     function syncBattleAnimation() {
+      if (showDashboard || showFeature) { window.clearTimeout(battleAnimationTimer); battleAnimation = null; return; }
       if (!state || state.phase !== "result") {
         window.clearTimeout(battleAnimationTimer);
         battleAnimation = null;
@@ -752,6 +796,10 @@
 
     function renderSuitCycle() {
       const container = document.getElementById("suitCycle");
+      for (let suit = 0; suit < suits.length; suit++) {
+        const equipped = equippedChroma(suit);
+        if (equipped) suitColors[suit] = chromaAppearance(equipped).color;
+      }
       const locations = [
         { suit: 0, location: "scissors" },
         { suit: 1, location: "paper" },
@@ -779,10 +827,11 @@
           return `<div class="suit-node-wrap ${location}${openSuitMenu === suit ? " menu-open" : ""}">
             <button type="button" class="suit-node" data-suit-trigger="${suit}"
               style="--suit-node-color:${colorVars[suitColors[suit]]}"
-              aria-label="${suitColors[suit]} suit color, open color menu" aria-haspopup="menu"
+              aria-label="${suits[suit]}, ${suitColors[suit]} color, open color menu" aria-haspopup="menu"
               aria-expanded="${openSuitMenu === suit}">
               <img src="${import.meta.env.BASE_URL}skins/${skinFolders[suitColors[suit]]}/large_attack.png?v=3" alt="" aria-hidden="true">
             </button>
+            <span class="suit-name">${suits[suit]}</span>
             ${menu}
           </div>`;
         }).join("")}<button type="button" class="rotate-colors" data-rotate-colors
@@ -791,18 +840,10 @@
             <path d="M7.11 8.53A5.99 5.99 0 0 1 12 6c3.31 0 6 2.69 6 6s-2.69 6-6 6a5.99 5.99 0 0 1-5.65-4H4.26A8 8 0 0 0 12 20c4.42 0 8-3.58 8-8s-3.58-8-8-8c-2.21 0-4.21.9-5.66 2.34L4 4v6h6L7.11 8.53z"></path>
           </svg>
         </button>`;
-      container.onclick = event => {
+      container.onclick = async event => {
         event.stopPropagation();
         if (event.target.closest("[data-rotate-colors]")) {
-          const scissorsColor = suitColors[0];
-          const paperColor = suitColors[1];
-          const rockColor = suitColors[2];
-          suitColors[0] = rockColor;
-          suitColors[1] = scissorsColor;
-          suitColors[2] = paperColor;
-          openSuitMenu = null;
-          localStorage.setItem("pow-suit-colors", JSON.stringify(suitColors));
-          render();
+          await saveSuitAppearance({action:'rotate-colors'});
           return;
         }
         const option = event.target.closest("[data-suit-option]");
@@ -811,10 +852,7 @@
           const color = option.dataset.color;
           if (!Number.isInteger(suit) || suit < 0 || suit >= suits.length ||
               !colors.includes(color) || suitColors.includes(color)) return;
-          suitColors[suit] = color;
-          openSuitMenu = null;
-          localStorage.setItem("pow-suit-colors", JSON.stringify(suitColors));
-          render();
+          await saveSuitAppearance({action:'set-suit-color',suit:['B','F','S'][suit],id:color});
           return;
         }
         const trigger = event.target.closest("[data-suit-trigger]");
@@ -851,6 +889,7 @@
 
     function setStatus(message, isError = false) {
       const status = document.getElementById("status");
+      if (!status || lifecycle.signal.aborted) return;
       status.textContent = message || "";
       status.style.color = isError ? "#ffd0ce" : "";
     }
@@ -865,7 +904,7 @@
         <div class="track-cell bounty" style="--bounty-border-color:${colorVars[suitColors[state.bounty.suit]]}">
           ${cardMarkup(state.bounty, { pose: "win", hideFace: true })}
         </div>
-        <span class="bounty-value">Bounty: ${formatModifier(state.modifiers.bounty)}</span>
+        <span class="bounty-value">${suits[state.bounty.suit]} ${formatModifier(state.modifiers.bounty)}</span>
       </div>`;
       const rounds = [0, 1, 2].map(roundIndex => {
         const slots = state.jailSlots.slice(roundIndex * 3, roundIndex * 3 + 3)
@@ -905,7 +944,7 @@
         .map(word => word.charAt(0)).join("").slice(0, 2).toUpperCase();
       const priorScore = battleAnimation && battleAnimation.key === battleAnimationKey() &&
         battleAnimation.stage !== "settled" && battleAnimation.previousScores[player.color];
-      const scoreText = priorScore || `${player.you ? "You" : player.color} = ${player.score}`;
+      const scoreText = priorScore || `${playerLabel(player)} = ${player.score}`;
       return `<article class="match-hero ${color}">
         <div class="hero-portrait ${color}" role="img" aria-label="${esc(title)} portrait for ${esc(player.color)}">
           <svg viewBox="0 0 100 100" aria-hidden="true" focusable="false">
@@ -970,12 +1009,12 @@
       const poolContent = poolCards || backs(player.hiddenPool) || '<span class="empty-row">No cards in pile</span>';
       container.innerHTML = `<article class="player-panel ${colorClass}${committing ? " committing" : ""}">
         <div class="player-heading">
-          <h2>${esc(player.color)} · ${esc(playerTitle)}</h2>
-          <span>Seat ${esc(player.seat)} · ${player.score} pts</span>
+          <h2>${esc(playerTitle)} · ${esc(player.color)}</h2>
+          <span>Seat ${esc(player.seat)} · ${player.score} ${player.score === 1 ? 'pt' : 'pts'}</span>
         </div>
         <div class="player-instructions"></div>
         <div class="player-card-rows">
-          <section class="card-group">
+           <section class="card-group${committing ? ' empty-pile' : ''}">
             <div class="row-label">Round Pile</div>
             <div class="card-row pile-row">${poolContent}</div>
           </section>
@@ -994,7 +1033,8 @@
           if (state.phase === "commit" && player.canSelectHand) {
             if (selected.has(index)) selected.delete(index);
             else if (selected.size < 3) selected.add(index);
-            render();
+             render();
+             container.querySelector(`[data-index="${index}"]`)?.focus({ preventScroll: true });
           } else if (state.phase === "attack" && player.canSelectPool) {
             act("attack", { index });
           } else if (state.phase === "defend" && player.canSelectPool) {
@@ -1025,36 +1065,61 @@
         attackOptions.pose = resolved.winner === 0 ? "win" : "lose";
         defendOptions.pose = resolved.winner === 1 ? "win" : "lose";
       }
-      const attack = state && state.battleAttack && !settled
+      const attack = state && state.battleAttack
         ? cardMarkup(state.battleAttack, attackOptions) : '<div class="battle-empty"></div>';
-      const defend = state && state.battleDefend && !settled
+      const defend = state && state.battleDefend
         ? cardMarkup(state.battleDefend, defendOptions) : '<div class="battle-empty"></div>';
-      const attackerName = attacker ? attacker.color : "Attacker";
-      const defenderName = defender ? defender.color : "Defender";
+      const attackerName = attacker ? playerLabel(attacker) : "Attacker";
+      const defenderName = defender ? playerLabel(defender) : "Defender";
+      const showResult = resolved && state.battleDefend && (settled || !animation || animation.stage === "outcome");
+      const badge = side => {
+        if (!showResult) return '';
+        if (resolved.winner === -1) return '<span class="battle-result clash">Clash</span>';
+        return resolved.winner === side ? '<span class="battle-result win">Captures</span>' : '<span class="battle-result lose">Captured</span>';
+      };
+      const lost = side => showResult && resolved.winner !== -1 && resolved.winner !== side ? ' battle-card-lost' : '';
       document.getElementById("battleLeft").innerHTML =
-        `<span class="battle-player-name">${esc(attackerName)} attacks</span>${attack}`;
+        `<span class="battle-player-name">${esc(attackerName)} ${attackerName === 'You' ? 'attack' : 'attacks'}</span><div class="battle-card-wrap${lost(0)}">${attack}</div>${badge(0)}`;
       document.getElementById("battleRight").innerHTML =
-        `<span class="battle-player-name">${esc(defenderName)} defends</span>${defend}`;
+        `<span class="battle-player-name">${esc(defenderName)} ${defenderName === 'You' ? 'defend' : 'defends'}</span><div class="battle-card-wrap${lost(1)}">${defend}</div>${badge(1)}`;
       const versus = document.getElementById("battleVs");
       versus.classList.toggle("exploding", Boolean(animation && animation.stage === "impact"));
-      versus.textContent = "VS";
+      versus.classList.toggle("clash", Boolean(showResult && resolved.winner === -1));
+      versus.textContent = showResult && resolved.winner === -1 ? "=" : "VS";
     }
 
     function renderActions() {
+      if (lifecycle.signal.aborted) return;
       const actions = document.getElementById("actions");
       actions.innerHTML = "";
       if (!state || !state.started || state.phase === "gameover") return;
-      actions.append(makeButton("Dashboard", openDashboard, "secondary"));
+      actions.append(makeButton("Home", openDashboard, "secondary"));
       if (state.phase === "commit" && (state.mode === "hvh" || state.actor === 0)) {
-        if (selected.size === 3) {
-          actions.append(makeButton("Lock in pile", () => act("commit", { cards: [...selected] })));
-        }
+        const commit = makeButton(`Lock in pile · ${selected.size}/3 selected`, () => act("commit", { cards: [...selected] }), "primary");
+        commit.disabled = selected.size !== 3 || actionInProgress;
+        actions.append(commit);
       } else if (state.phase === "seat" && (state.mode === "hvh" || state.actor === 0)) {
-        actions.append(makeButton("Take seat X", () => act("seat", { seat: "X" })));
-        actions.append(makeButton("Take seat Y", () => act("seat", { seat: "Y" })));
+        actions.append(makeButton("Take seat X", () => act("seat", { seat: "X" }), "primary"));
+        actions.append(makeButton("Take seat Y", () => act("seat", { seat: "Y" }), "primary"));
+      } else if (state.phase === "result") {
+        actions.append(makeButton("Continue", () => act("continue"), "primary"));
+        const pacing = makeButton(autoContinue ? 'Auto-advance: on' : 'Auto-advance: off', () => {
+          autoContinue = !autoContinue;
+          localStorage.setItem('pow-auto-continue', String(autoContinue));
+          window.clearTimeout(battleAnimationTimer);
+          if (autoContinue) scheduleBattleContinuation(battleAnimationKey());
+          render();
+        }, 'secondary');
+        pacing.setAttribute('aria-pressed', String(autoContinue));
+        actions.append(pacing);
       }
       if (state.phase !== "gameover" && state.phase !== "handoff" && activeMode) {
-        actions.append(makeButton("New game", requestNewGameConfirmation, "secondary"));
+        const divider = document.createElement("span");
+        divider.className = "action-divider";
+        divider.setAttribute("aria-hidden", "true");
+        actions.append(divider);
+        actions.append(makeButton("Choose match mode", chooseMatchMode, "secondary manage"));
+        actions.append(makeButton("Restart this mode", requestNewGameConfirmation, "secondary manage"));
       }
     }
 
@@ -1065,38 +1130,61 @@
 
     function renderModal() {
       const modal = document.getElementById("modal");
+      if (pendingConfirmation) {
+        modal.classList.remove('hidden');
+        modal.innerHTML = `<section class="modal"><h2>${esc(pendingConfirmation.title)}</h2><p>${esc(pendingConfirmation.description)}</p><div class="confirmation-actions"><button class="action secondary" id="declineConfirmation">Cancel</button><button class="action primary" id="acceptConfirmation">Confirm</button></div></section>`;
+        modal.querySelector('#declineConfirmation').onclick = () => settleConfirmation(false);
+        modal.querySelector('#acceptConfirmation').onclick = () => settleConfirmation(true);
+        return;
+      }
       if (showDashboard || showFeature) {
         modal.classList.add("hidden");
         modal.innerHTML = "";
         return;
       }
       if (showModeSelection || !state || !state.started) {
-        const options = (state && state.heroes || []).map(hero =>
-          `<option value="${esc(hero.id)}"${hero.id === state.defaultHeroId ? " selected" : ""}${hero.unlocked ? "" : " disabled"}>${esc(hero.name)}${hero.unlocked ? "" : " (locked)"}</option>`
-        ).join("");
+        const heroOption = hero =>
+          `<option value="${esc(hero.id)}"${hero.id === state.defaultHeroId ? " selected" : ""}${hero.unlocked ? "" : " disabled"}>${esc(hero.name)}</option>`;
+        const setupHeroes = (state && state.heroes) || [];
+        const lockedHeroes = setupHeroes.filter(hero => !hero.unlocked);
+        const options = setupHeroes.filter(hero => hero.unlocked).map(heroOption).join("")
+          + (lockedHeroes.length ? `<optgroup label="Locked · unlock in Campaigns or Shop">${lockedHeroes.map(heroOption).join("")}</optgroup>` : "");
         modal.classList.remove("hidden");
         modal.innerHTML = `<section class="modal">
           <h2>Choose your match</h2>
-          <p>Three rounds. Choose your cards, win prisoners, and claim the bounty.</p>
-          ${state.opponentHint ? `<p>Your opponent last played: ${esc(state.opponentHint)}</p>` : ""}
-          <label class="hero-select">Player 1 hero
+          <p>Three rounds. Scissors beats Paper, Paper beats Rock, Rock beats Scissors. Capture prisoners to score.</p>
+          ${state?.started && state.phase !== 'gameover' ? '<p>Your current match stays saved until you start a replacement. Starting a mode archives the unfinished match.</p>' : ''}
+          ${state?.opponentHint ? `<p>Your opponent last played: ${esc(state.opponentHint)}</p>` : ""}
+          <label class="hero-select">Match mode<select id="matchMode">${[['easy','Human vs AI · Easy'],['normal','Human vs AI · Normal'],['hard','Human vs AI · Hard'],['hvh','Human vs Human']].map(([id,label]) => `<option value="${id}"${setupMode === id ? ' selected' : ''}>${label}</option>`).join('')}</select></label>
+          <p id="modeDescription">${esc(modeDescription(setupMode))}</p>
+          <label class="hero-select">Your hero
             <select id="playerHero">${options}</select>
           </label>
-          <label class="hero-select">Player 2 hero (Human vs Human)
+          <div id="heroSetupDetails">${heroDetails((state?.heroes || []).find(hero => hero.id === state?.defaultHeroId))}</div>
+          <label id="opponentHeroLabel" class="hero-select"${setupMode === 'hvh' ? '' : ' hidden'}>Player 2 hero (Human vs Human)
             <select id="opponentHero">${options}</select>
           </label>
           <div class="mode-list">
-            <button class="action" data-mode="hvh">Human vs Human</button>
-            <button class="action secondary" data-mode="easy">Human vs AI · Easy</button>
-            <button class="action secondary" data-mode="normal">Human vs AI · Normal</button>
-            <button class="action secondary" data-mode="hard">Human vs AI · Hard</button>
-            <button class="action secondary" id="backToDashboard">Back to dashboard</button>
+            <button class="action primary" id="startMatchButton" data-mode="${setupMode}">Start ${modeName(setupMode)} match</button>
+            <button class="action secondary" id="backToDashboard">Cancel</button>
+            <a href="#/cards">Learn the rules and inspect cards</a>
           </div>
         </section>`;
         modal.querySelectorAll("[data-mode]").forEach(button => {
           button.addEventListener("click", () => startNewGame(button.dataset.mode));
         });
-        modal.querySelector("#backToDashboard").addEventListener("click", openDashboard);
+        modal.querySelector("#backToDashboard").addEventListener("click", () => navigateGame(state?.started ? 'battle' : 'home'));
+        modal.querySelector('#playerHero').addEventListener('change', event => {
+          modal.querySelector('#heroSetupDetails').innerHTML = heroDetails((state?.heroes || []).find(hero => hero.id === event.target.value));
+        });
+        modal.querySelector('#matchMode').addEventListener('change', event => {
+          setupMode = event.target.value;
+          modal.querySelector('#opponentHeroLabel').hidden = setupMode !== 'hvh';
+          modal.querySelector('#modeDescription').textContent = modeDescription(setupMode);
+          const start = modal.querySelector('#startMatchButton');
+          start.dataset.mode = setupMode;
+          start.textContent = `Start ${modeName(setupMode)} match`;
+        });
         return;
       }
       if (state.phase === "handoff") {
@@ -1104,17 +1192,17 @@
         modal.innerHTML = `<section class="modal">
           <h2>Pass the screen</h2>
           <p>${esc(state.message)} Your cards stay hidden until you continue.</p>
-          <button class="action" id="readyButton">I’m ready</button>
+          <button class="action primary" id="readyButton">I’m ready</button>
         </section>`;
         modal.querySelector("#readyButton").addEventListener("click", () => act("ready"));
       } else if (showNewGameConfirmation) {
         modal.classList.remove("hidden");
         modal.innerHTML = `<section class="modal" role="dialog" aria-modal="true" aria-labelledby="newGameTitle">
           <h2 id="newGameTitle">Start a new game?</h2>
-          <p>Your current game will be lost.</p>
+          <p>The unfinished match will be archived. This starts a new ${esc(modeName(activeMode))} match.</p>
           <div class="confirmation-actions">
             <button type="button" class="action secondary" id="cancelNewGameButton">Cancel</button>
-            <button type="button" class="action" id="confirmNewGameButton">Start new game</button>
+            <button type="button" class="action primary" id="confirmNewGameButton">Start new game</button>
           </div>
         </section>`;
         modal.querySelector("#cancelNewGameButton").addEventListener("click", () => {
@@ -1141,26 +1229,36 @@
               const skillMultiplier = payout.skillBonusPercent > 0
                 ? ` ×${(1 + payout.skillBonusPercent / 100).toFixed(2).replace(/0+$/, "").replace(/\.$/, "")} (Quartermaster +${payout.skillBonusPercent}%)`
                 : "";
-              const label = payout.playerWon ? "You Earned:" : "You Earn:";
               return `<section class="payout-breakdown" aria-label="Match Marks earnings">
-                <p class="payout-total">${label} (50 + ${formatNumber(payout.playerScore)})${winBonus}${skillMultiplier} = ${formatNumber(payout.totalMarks)} Marks</p>
+                <p class="payout-total">+${formatNumber(payout.totalMarks)} Marks</p>
+                <p class="payout-formula">50 base + ${formatNumber(payout.playerScore)} score${winBonus}${skillMultiplier}</p>
               </section>`;
             })()
           : '<p class="payout-error">Match earnings are unavailable.</p>';
         const tiebreakDetails = state.tiebreak && state.tiebreak.toLowerCase() !== "higher total score"
           ? `<p>${esc(state.tiebreak)}.</p>` : "";
-        modal.innerHTML = `<section class="modal">
+        modal.innerHTML = `<section class="modal result-modal ${state.mode !== "hvh" && state.winner === 0 ? "won" : state.mode !== "hvh" ? "lost" : ""}">
           <h2>${esc(heading)}</h2>
-          <p>Final score: <strong>${white.score} – ${black.score}</strong> (White–Black)</p>
+          <p>Final score: <strong>${state.players[0].score} – ${state.players[1].score}</strong> (${state.mode === 'hvh' ? 'Player 1–Player 2' : 'You–Opponent'})</p>
           ${tiebreakDetails}
-          ${payoutDetails}
+          ${state.campaign ? `<p>${esc(state.campaign.result || '')}</p><a href="#/campaigns">Return to Campaigns</a>` : payoutDetails}
+          ${state.dashboard ? `<dl class="result-summary">
+            <div><dt>Balance</dt><dd>${formatNumber(state.dashboard.marks)} Marks · ${formatNumber(state.dashboard.crowns)} Crowns</dd></div>
+            <div><dt>Camp Draw</dt><dd>${state.dashboard.winsSinceCampDraw} / ${state.dashboard.winsPerCampDraw} wins</dd></div>
+            <div><dt>Achievements</dt><dd>${state.dashboard.unseenAchievements > 0 ? `<a href="#/achievements">${state.dashboard.unseenAchievements} new ${state.dashboard.unseenAchievements === 1 ? "update" : "updates"}</a>` : "No new updates"}</dd></div>
+          </dl>` : ''}
           <div class="confirmation-actions">
             <button type="button" class="action secondary" id="homeButton">Home</button>
-            <button type="button" class="action" id="rematchButton">Rematch</button>
+            <button type="button" class="action primary" id="rematchButton" data-initial-focus>Rematch</button>
+            <button type="button" class="action secondary" id="chooseModeButton">Choose mode</button>
           </div>
+          <a href="#/saved-games${state.gameId ? `/${state.gameId}` : ''}">Review saved match</a>
+          <details class="score-details"><summary>Achievement changes since match start</summary>${state.achievementUpdates?.length ? `<ul>${state.achievementUpdates.map(update => `<li>${esc(update)}</li>`).join('')}</ul>` : '<p>No new achievement tiers were awarded during this match.</p>'}</details>
+          ${scoreBreakdownMarkup()}
         </section>`;
         modal.querySelector("#homeButton").addEventListener("click", openDashboard);
         modal.querySelector("#rematchButton").addEventListener("click", () => startNewGame());
+        modal.querySelector('#chooseModeButton').addEventListener('click', chooseMatchMode);
       } else {
         modal.classList.add("hidden");
         modal.innerHTML = "";
@@ -1186,9 +1284,9 @@
       const drawsAvailable = dashboard.drawsAvailable;
       const skillPoints = dashboard.skillPoints;
       document.getElementById("dashboardCommander").textContent =
-        `Player [${dashboard.commander}]`;
+        dashboard.displayName || 'Your commander';
       document.getElementById("dashboardCommanderLabel").textContent =
-        `Commander [${dashboard.commander}]`;
+        dashboard.displayName || 'Choose a display name';
       const heroInitial = String(dashboard.title || "?").replace(/^The\s+/i, "").trim().charAt(0) || "?";
       document.getElementById("dashboardFeaturedHero").textContent = dashboard.title;
       document.getElementById("dashboardHeroCrest").textContent = heroInitial.toUpperCase();
@@ -1199,7 +1297,10 @@
       const next = dashboard.energyNextSeconds > 0
         ? ` · next in ${Math.floor(dashboard.energyNextSeconds / 60)}:${String(dashboard.energyNextSeconds % 60).padStart(2, "0")}`
         : "";
-      document.getElementById("dashboardEnergy").textContent = energy + next;
+      document.getElementById("dashboardEnergy").textContent = energy;
+      const energyNext = document.getElementById('dashboardEnergyNext');
+      energyNext.hidden = !next;
+      energyNext.textContent = next.replace(/^ · /,'');
       document.getElementById("dashboardStreak").textContent =
         `Day ${dashboard.loginStreakCurrent} of 30 · Best: ${dashboard.loginStreakBest}`;
       document.getElementById("dashboardProgress").textContent =
@@ -1214,10 +1315,23 @@
       document.getElementById("dashboardShopPrice").textContent = featuredItem
         ? `${formatNumber(featuredItem.cost)} ${featuredItem.currency === "marks" ? "Marks" : "Crowns"}`
         : "";
+      const preview = document.getElementById('dashboardShop').querySelector('.chroma-preview-frame');
+      if (!featuredItem) preview?.remove();
+      else if (preview?.dataset.previewId !== featuredItem.id) {
+        preview?.remove();
+        document.getElementById('dashboardShop').insertAdjacentHTML('beforeend', chromaPreview(featuredItem));
+      }
+      const veteran = (dashboard.gamesPlayed || 0) > 0;
+      const onboarding = document.getElementById("dashboardOnboarding");
+      onboarding.querySelector("h2").textContent = veteran ? "Next step" : "Start here";
+      onboarding.querySelector("p").textContent = veteran
+        ? "Keep working through Basic Training for first-completion Marks, or raise the AI difficulty when you are ready."
+        : "Learn the rules in Basic Training or try an Easy match. Win Marks, unlock heroes and grow your commander.";
+      document.getElementById("dashboardTraining").textContent = veteran ? "Continue campaigns" : "Open Basic Training";
       const campDraw = document.getElementById("dashboardCampDraw");
       campDraw.textContent = drawsAvailable > 0
         ? `Camp Draw (${drawsAvailable})`
-        : `Camp Draw · ${dashboard.pendingBoxes} pending boxes`;
+        : dashboard.pendingBoxes > 0 ? `Camp Draw · ${dashboard.pendingBoxes} ${dashboard.pendingBoxes === 1 ? 'box' : 'boxes'}` : 'Camp Draw';
       document.getElementById("dashboardAchievements").textContent =
         dashboard.unseenAchievements > 0
           ? `Achievements (${dashboard.unseenAchievements} new)`
@@ -1229,6 +1343,11 @@
         ? `Watch Ad (+3 energy, ${dashboard.adsLeft} left today) · available in the terminal UI`
         : "";
       document.getElementById("dashboardPreviewNote").hidden = !dashboardPreview;
+      document.getElementById("previewBar").hidden = !dashboardPreview;
+      const active = state.started && state.phase !== 'gameover';
+      document.getElementById('dashboardPlay').querySelector('strong').textContent = active ? 'Resume battle' : 'Battle';
+      document.getElementById('dashboardPlay').querySelector('small').textContent = active ? `${modeName(state.mode)} · Round ${state.round}` : 'Choose your match mode';
+      document.getElementById('dashboardChooseMode').hidden = !active;
     }
 
     async function openFeature(feature) {
@@ -1242,6 +1361,7 @@
         campaigns: "/api/campaigns",
         history: "/api/history"
       };
+      const version = ++navigationVersion;
       currentFeature = feature;
       if (feature === "shop") currentShopTab = "skins";
       if (feature === "skills") currentSkillBranch = skillTreeBranches[0].id;
@@ -1252,10 +1372,21 @@
       featureError = "";
       render();
       try {
-        featureData = await api(endpoints[feature]);
+        const data = await api(endpoints[feature]);
+        if (version !== navigationVersion || lifecycle.signal.aborted) return;
+        if (feature === "history") {
+          // Campaign missions are recorded as AI matches; name them from saved games.
+          try {
+            const games = await api("/api/games");
+            data.campaignNames = Object.fromEntries((games.games || []).filter(game => game.campaignName).map(game => [game.id, game.campaignName]));
+          } catch { data.campaignNames = {}; }
+          if (version !== navigationVersion || lifecycle.signal.aborted) return;
+        }
+        featureData = data;
         if (featureData.dashboard) state.dashboard = featureData.dashboard;
         render();
       } catch (error) {
+        if (version !== navigationVersion || lifecycle.signal.aborted) return;
         featureError = connectionError(error);
         render();
       }
@@ -1268,7 +1399,7 @@
 
     function renderFeatureTabs(tabs, selected, dataAttribute) {
       return tabs.map(tab =>
-        `<button class="feature-tab" type="button" role="tab" aria-selected="${tab.id === selected}"
+        `<button id="feature-tab-${esc(tab.id)}" class="feature-tab" type="button" role="tab" aria-selected="${tab.id === selected}" tabindex="${tab.id === selected ? 0 : -1}" aria-controls="featureContent"
           data-${dataAttribute}="${esc(tab.id)}">${esc(tab.label)}</button>`
       ).join("");
     }
@@ -1285,6 +1416,8 @@
         history: "Match History"
       };
       document.getElementById("featureTitle").textContent = titles[currentFeature] || "Progression";
+      const resources = featureData?.dashboard || state?.dashboard;
+      document.getElementById('featureBalances').textContent = resources ? `${formatNumber(resources.marks)} Marks · ${formatNumber(resources.crowns)} Crowns · ${resources.energy}/${resources.maxEnergy} Energy · ${resources.skillPoints} Skill ${resources.skillPoints === 1 ? 'Point' : 'Points'}` : '';
       const message = document.getElementById("featureMessage");
       message.textContent = featureError || (featureData && featureData.message) || "";
       const tabs = document.getElementById("featureTabs");
@@ -1306,9 +1439,19 @@
         tabs.innerHTML = "";
       }
       const content = document.getElementById("featureContent");
+      const selectedTab = currentFeature === 'shop' ? currentShopTab : currentFeature === 'skills' ? currentSkillBranch : '';
+      if (selectedTab) {
+        content.setAttribute('role', 'tabpanel');
+        content.setAttribute('aria-labelledby', `feature-tab-${selectedTab}`);
+        content.tabIndex = 0;
+      } else {
+        content.removeAttribute('role');
+        content.removeAttribute('aria-labelledby');
+        content.removeAttribute('tabindex');
+      }
       if (!featureData) {
         content.innerHTML = featureError
-          ? ""
+          ? featureActionButton('Retry loading', 'retry-feature')
           : '<section class="feature-section">Loading…</section>';
         return;
       }
@@ -1344,70 +1487,81 @@
 
     function renderCampDrawFeature(page) {
       const pending = Object.entries(page.pendingBoxes || {}).filter(([, count]) => count > 0);
-      const startButton = featureActionButton(
-        page.result ? "Start another Camp Draw" : "Start Camp Draw",
-        "start-draw", "", page.drawsAvailable < 1
-      );
+      const boxName = type => ({ wooden: "Wooden", silver: "Silver", gold: "Gold", diamond: "Diamond" })[type] || String(type || "");
+      const outcomeName = outcome => outcome === 2 ? "Win" : outcome === 1 ? "Clash" : "Loss";
+      const winsToNext = Math.max(0, (page.dashboard?.winsPerCampDraw || 10) - (page.dashboard?.winsSinceCampDraw || 0));
+      const prizeText = (reward, chroma) => reward.chroma_id
+        ? `${chroma?.name || reward.chroma_id} chroma${reward.chroma_rarity ? ` · ${reward.chroma_rarity}` : ""}`
+        : reward.marks ? `${formatNumber(reward.marks)} Marks`
+          : reward.crowns ? `${formatNumber(reward.crowns)} Crowns` : "No listed reward";
+      const rewardPanel = (title, reward, chroma) => `<div class="camp-reward">
+          ${chroma ? `<div class="camp-reward-art">${chromaPreview(chroma)}</div>` : `<div class="camp-reward-icon" aria-hidden="true">${reward.crowns ? "✦" : "◈"}</div>`}
+          <div><p class="camp-reward-eyebrow">${esc(title)}</p>
+            <p class="camp-reward-prize">${esc(prizeText(reward, chroma))}</p>
+            <p>${reward.chroma_id ? 'Added to your collection. <a href="#/shop/skins">Apply it to a suit in the Shop</a>.' : "Added to your balance."}</p>
+            ${reward.fallback_reason ? `<p class="camp-note">${esc(reward.fallback_reason)}</p>` : ""}
+          </div></div>`;
       let html = `<section class="feature-section">
         <h2>Available Draws</h2>
-        <p>You have ${page.drawsAvailable} Camp Draw${page.drawsAvailable === 1 ? "" : "s"} available.</p>
-        ${!page.started ? startButton : ""}
-        ${page.started && page.prompt ? `<h3>Exchange ${page.prompt.exchangeIndex + 1} of 3</h3>
-          <p>${page.prompt.isDefending ? "Defend against" : "Attack"}${
-            page.prompt.cpuCard ? ` ${esc(campCardLabel(page.prompt.cpuCard))}` : ""
-          }.</p>
-          <div class="feature-list">${page.prompt.playerPool.map((card, index) => `
-            <article class="feature-item"><h3>${esc(campCardLabel(card))}</h3>
-              ${featureActionButton("Play this card", "play-camp-card", `data-index="${index}"`)}
-            </article>`).join("")}
-          </div>` : ""}
-      </section>`;
+        <p>You have ${page.drawsAvailable} Camp Draw${page.drawsAvailable === 1 ? "" : "s"} available · ${winsToNext} more ${winsToNext === 1 ? "win" : "wins"} until the next one.</p>
+        <p>Play three exchanges against the camp. Each win upgrades the reward box: <span class="camp-tiers"><span>0 · Wooden</span><span>1 · Silver</span><span>2 · Gold</span><span>3 · Diamond</span></span></p>
+        ${!page.started ? (page.drawsAvailable > 0
+          ? featureActionButton(page.result ? "Start another Camp Draw" : "Start Camp Draw", "start-draw")
+          : '<p class="camp-note">No draws left. <a href="#/match/new">Play a match</a> to earn progress toward the next one.</p>') : ""}`;
+      if (page.started && page.prompt) {
+        const attack = page.prompt.cpuCard;
+        const only = page.prompt.playerPool.length === 1;
+        const preview = card => {
+          if (!page.prompt.isDefending || !attack) return "";
+          const mine = card.face * (beats(card.suit, attack.suit) ? 2 : 1);
+          const theirs = attack.face * (beats(attack.suit, card.suit) ? 2 : 1);
+          const result = mine > theirs ? ["win", "You capture"] : mine < theirs ? ["lose", "They capture"] : ["clash", "Clash"];
+          return `<span class="camp-preview ${result[0]}">${mine} vs ${theirs} · ${result[1]}</span>`;
+        };
+        html += `<div class="camp-exchange">
+          <h3>Exchange ${page.prompt.exchangeIndex + 1} of 3 · ${page.prompt.isDefending ? "Defend" : "Attack"}</h3>
+          <p>${page.prompt.isDefending
+            ? "The camp attacks with the card below. Choose your response; a suit advantage doubles the face value."
+            : "You attack. The camp answers after you choose, so pick the card you want to commit."}${only ? " Your last card is played as-is." : ""}</p>
+          ${attack ? `<div class="camp-attack"><span class="camp-label">Camp attacks</span>${cardMarkup(attack)}</div>` : ""}
+          <div class="camp-options" role="group" aria-label="Your cards">${page.prompt.playerPool.map((card, index) => `
+            <button type="button" class="camp-option" data-feature-action="play-camp-card" data-index="${index}" aria-label="Play ${esc(campCardLabel(card))}">
+              ${cardMarkup(card)}<span class="camp-option-label">${only ? "Play last card" : "Play"} ${esc(campCardLabel(card))}</span>${preview(card)}
+            </button>`).join("")}</div>
+        </div>`;
+      }
+      html += `</section>`;
       if (page.exchanges && page.exchanges.length) {
         html += `<section class="feature-section"><h2>Resolved Battles</h2><div class="feature-list">${
-          page.exchanges.map((exchange, index) => {
-            const outcome = exchange.outcome === 2 ? "Win" : exchange.outcome === 1 ? "Clash" : "Loss";
-            return `<article class="feature-item"><h3>Battle ${index + 1}: ${outcome}</h3>
-              <p>You: ${esc(campCardLabel(exchange.player_card))} · Opponent: ${esc(campCardLabel(exchange.cpu_card))}</p>
-            </article>`;
-          }).join("")
+          page.exchanges.map((exchange, index) => `<article class="feature-item camp-battle ${outcomeName(exchange.outcome).toLowerCase()}"><h3>Battle ${index + 1}: ${outcomeName(exchange.outcome)}</h3>
+              <p>You: ${esc(campCardLabel(exchange.player_card))} · Camp: ${esc(campCardLabel(exchange.cpu_card))}</p>
+            </article>`).join("")
         }</div></section>`;
       }
       if (pending.length) {
         html += `<section class="feature-section"><h2>Pending Boxes</h2><div class="feature-list">${
           pending.map(([boxType, count]) => `<article class="feature-item">
-            <h3>${esc(boxType)} Box × ${count}</h3>
-            ${featureActionButton(`Open ${boxType} Box`, "open-box", `data-box-type="${esc(boxType)}"`)}
+            <h3>${esc(boxName(boxType))} Box × ${count}</h3>
+            ${featureActionButton(`Open ${boxName(boxType)} Box`, "open-box", `data-box-type="${esc(boxType)}"`)}
           </article>`).join("")
         }</div></section>`;
       }
       if (page.result) {
-        const exchanges = page.result.exchanges || [];
-        const reward = page.result.reward || {};
-        const prize = reward.chroma_id
-          ? `${reward.chroma_rarity || ""} ${reward.chroma_id} chroma`
-          : reward.marks ? `${reward.marks} Marks`
-            : reward.crowns ? `${reward.crowns} Crowns` : "No listed reward";
-        html += `<section class="feature-section">
-          <h2>Draw Result · ${page.result.player_wins} wins</h2>
-          <p>Reward: ${esc(page.result.box_type)} box · ${esc(prize)}</p>
-          <div class="feature-list">${exchanges.map((exchange, index) => {
-            const outcome = exchange.outcome === 2 ? "Win" : exchange.outcome === 1 ? "Clash" : "Loss";
-            return `<article class="feature-item"><h3>Battle ${index + 1}: ${outcome}</h3>
-              <p>Your card: ${esc(campCardLabel(exchange.player_card))} · Opponent: ${esc(campCardLabel(exchange.cpu_card))}</p></article>`;
-          }).join("")}</div>
+        const wins = page.result.player_wins;
+        html += `<section class="feature-section camp-result">
+          <h2>Draw Result · ${wins} ${wins === 1 ? "win" : "wins"} · ${esc(boxName(page.result.box_type))} Box</h2>
+          ${rewardPanel(`${boxName(page.result.box_type)} Box reward`, page.result.reward || {}, page.rewardChroma)}
+          <div class="feature-list">${(page.result.exchanges || []).map((exchange, index) => `<article class="feature-item camp-battle ${outcomeName(exchange.outcome).toLowerCase()}"><h3>Battle ${index + 1}: ${outcomeName(exchange.outcome)}</h3>
+              <p>You: ${esc(campCardLabel(exchange.player_card))} · Camp: ${esc(campCardLabel(exchange.cpu_card))}</p></article>`).join("")}</div>
         </section>`;
       }
       if (page.boxResult) {
-        const reward = page.boxResult;
-        const prize = reward.chroma_id
-          ? `${reward.chroma_rarity || ""} ${reward.chroma_id} chroma`
-          : reward.marks ? `${reward.marks} Marks`
-            : reward.crowns ? `${reward.crowns} Crowns` : "No listed reward";
-        html += `<section class="feature-section"><h2>Box Opened</h2>
-          <p>${esc(reward.box_type)} box reward: ${esc(prize)}</p></section>`;
+        html += `<section class="feature-section"><h2>Box Opened</h2>${rewardPanel(`${boxName(page.boxResult.box_type)} Box reward`, page.boxResult, page.boxChroma)}</section>`;
       }
       return html;
     }
+
+    function beats(suit, other) { return (suit + 1) % 3 === other; }
 
     function campCardLabel(card) {
       const names = ["Scissors", "Paper", "Rock"];
@@ -1415,20 +1569,27 @@
     }
 
     function renderAchievementsFeature(page) {
-      const items = page.items || [];
+      const all = page.items || [];
+      const categories = [...new Set(all.map(item => item.category))];
+      const items = all.filter(item => (achievementCategory === 'all' || item.category === achievementCategory) && (achievementFilter === 'all' || achievementFilter === 'new' && item.new || achievementFilter === 'earned' && item.unlocked || achievementFilter === 'progress' && !item.unlocked));
       const sets = page.sets || [];
       return `<section class="feature-section"><h2>Achievement Gallery</h2>
+        <p>${all.filter(item => item.unlocked).length} fully earned · ${all.filter(item => item.new).length} newly completed or progressed. Rewards are credited automatically; no claim action is required.</p>
+        <div class="filters"><label>Progress<select id="achievementFilter">${[['all','All achievements'],['new','New progress'],['earned','Earned'],['progress','In progress']].map(([id,label]) => `<option value="${id}"${achievementFilter === id ? ' selected' : ''}>${label}</option>`).join('')}</select></label>
+          <label>Category<select id="achievementCategory"><option value="all">All categories</option>${categories.map(category => `<option${achievementCategory === category ? ' selected' : ''}>${esc(category)}</option>`).join('')}</select></label></div>
+        ${!items.length ? '<p>No achievements match these filters.</p>' : ''}
         <div class="feature-list">${items.map(item => {
-          const percent = item.goal > 0 ? Math.min(100, item.progress * 100 / item.goal) : (item.unlocked ? 100 : 0);
+          const percent = item.unlocked ? 100 : item.goal > 0 ? Math.min(100, item.progress * 100 / item.goal) : 0;
           const tiers = (item.tiers || []).map(tier =>
-            `<p>${esc(tier.name)} · ${tier.goal} · ${tier.marks} Marks / ${tier.crowns} Crowns</p>`
+            `<p>Tier ${esc(tier.name)} · Target: ${tier.goal} · Reward: ${esc(tier.rewards || 'Collection milestone')}</p>`
           ).join("");
-          return `<article class="feature-item">
+          return `<article class="feature-item achievement-card${item.unlocked ? " achievement-earned" : ""}">
             <h3>${esc(item.name)}${item.new ? ' <span class="feature-status">NEW</span>' : ""}</h3>
-            <p>${esc(item.category)} · ${item.unlocked ? "Unlocked" : "In progress"}</p>
+            <p>${esc(item.category)} · ${item.unlocked ? '<span class="achievement-chip">Earned</span>' : "In progress"}</p>
             <p>${esc(item.details)}</p>
-            <p>${item.progress}${item.goal > 0 ? ` / ${item.goal}` : ""}</p>
-            <div class="feature-progress"><span style="width:${percent}%"></span></div>${tiers}
+            ${item.rewards ? `<p>Reward: ${esc(item.rewards)}</p>` : ''}
+            <p>${item.progressUnit ? `${Math.min(item.progress,item.goal)} / ${item.goal} ${esc(item.progressUnit)}` : item.goal === 1 && !(item.tiers || []).length ? (item.unlocked ? 'Objective completed' : 'Objective not yet completed — see the requirement above') : `Progress toward next tier: ${item.progress}${item.goal > 0 ? ` / ${item.goal}` : ' · exact modifier targets listed below'}`}</p>
+            <div class="feature-progress" role="progressbar" aria-label="${esc(item.name)} progress" aria-valuemin="0" aria-valuemax="100" aria-valuenow="${Math.round(percent)}"><span style="width:${percent}%"></span></div>${tiers ? `<details><summary>Tier requirements and rewards</summary>${tiers}</details>` : ''}
           </article>`;
         }).join("")}</div>
       </section>
@@ -1453,19 +1614,26 @@
           ? page.dashboard.marks >= chroma.cost
           : page.dashboard.crowns >= chroma.cost;
         const eventOnly = chroma.currency === "event";
-        return `<article class="feature-item">
-          <h3>${esc(chroma.name)}${item.owned ? " · Owned" : ""}</h3>
-          <p>${esc(chroma.rarity)} · ${esc(chroma.color)}</p>
-          <p>${eventOnly ? "Event offer" : `${chroma.cost} ${currency}`}</p>
+        return `<article class="feature-item shop-product${item.owned ? " is-owned" : ""}">
+           <h3>${esc(chroma.name)}${item.owned ? ' <span class="owned-chip">Owned</span>' : ""}</h3>
+           ${chromaPreview(chroma)}
+          <p><span class="rarity-chip rarity-${esc(String(chroma.rarity || "").toLowerCase())}">${esc(chroma.rarity)}</span> ${esc(chroma.color)}</p>
+           ${item.owned ? '<p class="product-owned">In your collection</p>' : `<p class="product-price">${eventOnly ? "Seasonal reward · not currently offered for direct purchase" : `${chroma.cost} ${currency}`}</p>`}
+           <div class="product-actions">
+           ${!item.owned && !eventOnly ? affordability(chroma.cost, chroma.currency === 'marks' ? page.dashboard.marks : page.dashboard.crowns, currency) : ''}
           ${!item.owned && !eventOnly
             ? featureActionButton(`Buy for ${chroma.cost} ${currency}`, "buy-chroma", `data-id="${esc(chroma.id)}"`, !canAfford)
-            : ""}
+             : ""}
+           ${item.owned ? `<details><summary>Assign to a suit</summary><p>Changes card artwork, not suit rules.</p><label>Apply to suit<select data-chroma-suit="${esc(chroma.id)}">${suits.map((suit, i) => `<option value="${['B','F','S'][i]}">${suit}</option>`).join('')}</select></label>${featureActionButton('Apply chroma', 'assign-chroma', `data-id="${esc(chroma.id)}"`)}</details>` : ''}
+           </div>
         </article>`;
       }).join("");
-      const bundles = (page.bundles || []).map(item => `<article class="feature-item">
-        <h3>${esc(item.bundle.name)}${item.owned ? " · Owned" : ""}</h3>
-        <p>${esc(item.bundle.chroma_ids.join(", "))}</p>
-        <p>${item.bundle.cost_crowns} Crowns</p>
+      const bundles = (page.bundles || []).map(item => `<article class="feature-item${item.owned ? " is-owned" : ""}">
+        <h3>${esc(item.bundle.name)}${item.owned ? ' <span class="owned-chip">Owned</span>' : ""}</h3>
+         <p>${esc(item.bundle.chroma_ids.map(id => page.chromas.find(item => item.chroma.id === id)?.chroma.name || id).join(", "))}</p>
+         ${item.bundle.chroma_ids.map(id => chromaPreview(page.chromas.find(item => item.chroma.id === id)?.chroma)).join('')}
+         ${item.owned ? '<p class="product-owned">In your collection</p>' : `<p class="product-price">${item.bundle.cost_crowns} Crowns</p>`}
+         ${!item.owned ? affordability(item.bundle.cost_crowns, page.dashboard.crowns, 'Crowns') : ''}
         ${!item.owned ? featureActionButton(`Buy bundle · ${item.bundle.cost_crowns} Crowns`, "buy-bundle",
           `data-id="${esc(item.bundle.id)}"`, page.dashboard.crowns < item.bundle.cost_crowns) : ""}
       </article>`).join("");
@@ -1475,15 +1643,17 @@
             `<option value="${esc(item.chroma.id)}">${esc(item.chroma.name)}</option>`).join("")}</select>
           ${featureActionButton("Redeem token", "redeem-pick")}</article>`
         : "";
-      return `<section class="feature-section"><h2>Chroma Catalog</h2><div class="feature-list">${chromas}</div></section>
+      return `<section class="feature-section"><h2>Chroma Catalog</h2><p>Preview each appearance before buying. Earn Marks and Crowns through matches, campaigns and achievements.</p><div class="feature-list">${chromas}</div></section>
         <section class="feature-section"><h2>Bundles</h2><div class="feature-list">${bundles}</div></section>
         ${chromaPick ? `<section class="feature-section"><h2>Chroma Tokens</h2><div class="feature-list">${chromaPick}</div></section>` : ""}`;
     }
 
     function renderShopHeroes(page) {
-      const heroesForSale = (page.heroes || []).filter(item => item.hero.id !== "recruit").map(item => `<article class="feature-item">
-        <h3>${esc(item.hero.name)}${item.owned ? " · Owned" : ""}</h3>
-        <p>${item.plays} plays · ${item.wins} wins</p>
+      const heroesForSale = (page.heroes || []).filter(item => item.hero.id !== "recruit").map(item => `<article class="feature-item${item.owned ? " is-owned" : ""}">
+         <h3>${esc(item.hero.name)}${item.owned ? ' <span class="owned-chip">Owned</span>' : ""}</h3>
+         ${heroDetails(item.hero)}
+         <p>${item.plays} plays · ${item.wins} wins</p>
+         ${!item.owned ? affordability(page.directHeroCost, page.dashboard.crowns, 'Crowns') : '<a href="#/heroes">Choose your default hero</a>'}
         ${!item.owned ? featureActionButton(`Buy for ${page.directHeroCost} Crowns`, "buy-hero",
           `data-id="${esc(item.hero.id)}"`, !item.canBuy) : ""}
       </article>`).join("");
@@ -1503,7 +1673,10 @@
         return `<article class="feature-item">
           <h3>${esc(offer.name)}</h3>
           <p>${formatNumber(offer.available)} available</p>
+          <p>${esc(boxDescription(offer.type))}</p>
+          <details><summary>Reward amounts and first-roll chances</summary><p>These chances include your current loot-table skill adjustments. Duplicate conversion and any owned-chroma reroll are applied after this roll.</p><ul>${(page.rewardTables?.[offer.type] || []).map(prize => `<li>${esc(prize.label)} · ${prize.chance.toFixed(2)}%</li>`).join('')}</ul></details>
           <p>${formatNumber(offer.cost)} ${currency}</p>
+          ${affordability(offer.cost, balance, currency)}
           ${featureActionButton(`Buy for ${formatNumber(offer.cost)} ${currency}`, "buy-box",
             `data-box-type="${esc(offer.type)}"`, balance < offer.cost)}
           ${openButton}
@@ -1516,35 +1689,62 @@
     }
 
     function renderHeroesFeature(page) {
+      const heroes = [...(page.heroes || [])].sort((a, b) => Number(b.unlocked) - Number(a.unlocked));
+      const owned = heroes.filter(hero => hero.unlocked).length;
+      const initials = name => String(name || "").replace(/^The\s+/i, "").split(/\s+/).map(word => word.charAt(0)).join("").slice(0, 2).toUpperCase();
+      const modifiers = hero => {
+        const chips = [["Bounty", hero.bounty], ["Shift", hero.shift], ["Favored", hero.favored]]
+          .filter(([, value]) => value).map(([label, value]) => `<span class="hero-mod">${label} ${formatModifier(value)}</span>`);
+        if (hero.flip) chips.push('<span class="hero-mod special">Flips the opponent’s Bounty</span>');
+        return chips.length ? chips.join("") : '<span class="hero-mod none">No modifiers · plays the base rules</span>';
+      };
       return `<section class="feature-section"><h2>Commander Hero</h2>
-        <div class="feature-list">${(page.heroes || []).map(hero => `<article class="feature-item">
-          <h3>${esc(hero.name)}${hero.id === page.defaultId ? " · Default" : ""}</h3>
-          <p>${hero.unlocked ? "Unlocked" : "Locked"}</p>
-          ${hero.unlocked && hero.id !== page.defaultId
-            ? featureActionButton("Set as default", "select-hero", `data-id="${esc(hero.id)}"`)
-            : ""}
-        </article>`).join("")}</div>
+        <p>${owned} of ${heroes.length} heroes owned. Your default hero is used for AI matches; campaigns may require a specific one.</p>
+        <div class="feature-list hero-list">${heroes.map(hero => {
+          const isDefault = hero.id === page.defaultId;
+          const chip = isDefault ? '<span class="hero-chip default">Default</span>' : hero.unlocked ? '<span class="hero-chip owned">Owned</span>' : '<span class="hero-chip locked">Locked</span>';
+          const route = hero.unlock === 'campaign:basic'
+            ? '<p class="hero-unlock">Earned by completing Basic Training. <a href="#/campaigns">Open Basic Training</a></p>'
+            : '<p class="hero-unlock">From Hero Boxes or direct purchase. <a href="#/shop/heroes">View in Shop</a></p>';
+          return `<article class="feature-item hero-card${hero.unlocked ? "" : " hero-locked"}${isDefault ? " hero-default" : ""}">
+            <div class="hero-card-head">
+              <span class="hero-crest" aria-hidden="true">${esc(initials(hero.name))}</span>
+              <div class="hero-card-title"><h3>${esc(hero.name)}</h3>${chip}</div>
+            </div>
+            <p class="hero-flavor">${esc(hero.flavor || "")}</p>
+            <div class="hero-mods" aria-label="Modifiers">${modifiers(hero)}</div>
+            ${!hero.unlocked ? route : ""}
+            ${hero.unlocked && !isDefault ? featureActionButton("Set as default", "select-hero", `data-id="${esc(hero.id)}"`) : ""}
+          </article>`;
+        }).join("")}</div>
       </section>`;
     }
 
     function renderSkillsFeature(page) {
       const branch = skillTreeBranches.find(item => item.id === currentSkillBranch) || skillTreeBranches[0];
       const nodes = (page.nodes || []).filter(item => branch.nodeIDs.includes(item.node.id));
-      return `<section class="feature-section"><h2>Skill Tree · ${page.dashboard.skillPoints} Skill Point(s) · ${formatNumber(page.dashboard.crowns)} Crowns · ${esc(branch.label)}</h2>
-        <div class="feature-list">${nodes.map(item => `<article class="feature-item">
-          <h3>${esc(item.node.name)}${item.unlocked ? " · Unlocked" : ""}</h3>
+      const byID = Object.fromEntries((page.nodes || []).map(item => [item.node.id, item.node.name]));
+      const unlocked = nodes.filter(item => item.unlocked).length;
+      return `<section class="feature-section skill-section"><h2>${esc(branch.label)} upgrades</h2>
+        <p class="skill-summary">${unlocked} of ${nodes.length} unlocked · ${nodes.filter(item => !item.unlocked && (item.canUnlockSkillPoint || item.canUnlockCrowns)).length} ready to unlock</p>
+        <details class="skill-help"><summary>How to earn and spend Skill Points</summary><p>Earn Skill Points through progression rewards. Each upgrade costs either one Skill Point or the listed Crowns, never both. Unlock its prerequisites first.</p></details>
+        <div class="feature-list">${nodes.map(item => {
+          const prerequisite = (page.nodes || []).find(other => other.node.id === item.node.prerequisite);
+          const blocked = prerequisite && !prerequisite.unlocked;
+          const status = item.unlocked ? 'Unlocked' : blocked ? 'Prerequisite needed' : item.canUnlockSkillPoint || item.canUnlockCrowns ? 'Ready to unlock' : 'Save up to unlock';
+          return `<article id="skill-node-${esc(item.node.id)}" tabindex="-1" class="feature-item skill-card${item.unlocked ? ' skill-unlocked' : ''}">
+          <div class="skill-card-heading"><h3>${esc(item.node.name)}</h3><span class="skill-status">${status}</span></div>
           <p>${esc(item.node.description)}</p>
-          ${item.node.prerequisite ? `<p>Requires: ${esc(item.node.prerequisite)}</p>` : ""}
-          <p>Cost: ${item.node.cost_crowns} Crowns or 1 Skill Point</p>
-          ${!item.unlocked ? `<div>
-            ${item.canUnlockSkillPoint ? featureActionButton("Unlock with Skill Point", "unlock-skill",
-              `data-id="${esc(item.node.id)}" data-payment="skill-point"`) : ""}
-            ${item.canUnlockCrowns ? featureActionButton(`Unlock for ${item.node.cost_crowns} Crowns`, "unlock-skill",
-              `data-id="${esc(item.node.id)}" data-payment="crowns"`) : ""}
-            ${!item.canUnlockSkillPoint && !item.canUnlockCrowns
-              ? `<p>${esc(item.skillPointReason || item.crownsReason)}</p>` : ""}
-          </div>` : ""}
-        </article>`).join("")}</div>
+          ${item.node.effect === 'mode_multiplier' ? '<p class="skill-scope">Applies only to Ranked matches, which are played in the terminal app. It has no effect on browser matches.</p>' : ''}
+          ${item.node.prerequisite ? `<p class="skill-dependency">Requires: <button type="button" class="skill-link" data-prerequisite="${esc(item.node.prerequisite)}">${esc(byID[item.node.prerequisite] || item.node.prerequisite)}</button>${prerequisite?.unlocked ? ' · Unlocked' : ''}</p>` : '<p class="skill-dependency">Starting skill · no prerequisite</p>'}
+          ${!item.unlocked ? `<p class="skill-cost">1 Skill Point <span>or</span> ${formatNumber(item.node.cost_crowns)} Crowns</p>
+            ${blocked ? '<p>Unlock the linked prerequisite to continue.</p>' : `<div class="skill-payments">
+              ${featureActionButton("Unlock with 1 Skill Point", "unlock-skill", `data-id="${esc(item.node.id)}" data-payment="skill-point"`, !item.canUnlockSkillPoint)}
+              ${featureActionButton(`Unlock for ${item.node.cost_crowns} Crowns`, "unlock-skill", `data-id="${esc(item.node.id)}" data-payment="crowns"`, !item.canUnlockCrowns)}
+              <small>${!item.canUnlockSkillPoint ? esc(friendlyRequirement(item.skillPointReason, byID)) : 'Ready to use'}</small>
+              <small>${!item.canUnlockCrowns ? esc(friendlyRequirement(item.crownsReason, byID)) : 'Ready to use'}</small>
+            </div>`}` : '<p class="skill-owned">Active on your commander</p>'}
+        </article>`; }).join("")}</div>
       </section>`;
     }
 
@@ -1570,7 +1770,10 @@
         ["Commander Since", created]
       ];
       return `<section class="feature-section"><h2>Player Record</h2>
-        <p>Commander ID: ${esc(page.playerId || "Unavailable")}</p>
+         <label>Display name<input id="commanderName" maxlength="40" value="${esc(page.dashboard?.displayName || '')}" placeholder="Choose your commander name"></label>${featureActionButton('Save display name', 'save-name')}
+         <p>Clashes are tied exchanges. Match ties are equal final scores before any tiebreaker. Seat wins record your position in the attack order.</p>
+         ${!page.totalGames ? '<p>No matches yet. <a href="#/match/new">Play your first battle</a> or <a href="#/campaigns">try Basic Training</a>.</p>' : ''}
+         <details><summary>Commander identifier</summary><p>${esc(page.playerId || "Unavailable")}</p></details>
         <div class="feature-list">${rows.map(([label, value]) => `<article class="feature-item">
           <h3>${esc(label)}</h3><p>${esc(typeof value === "number" ? formatNumber(value) : value)}</p>
         </article>`).join("")}</div>
@@ -1585,18 +1788,24 @@
         const status = campaign.completed ? "Complete"
           : !campaign.unlocked ? "Locked"
             : campaign.started ? "In progress" : "Available";
-        const missions = (campaign.missions || []).map(mission => `<article class="feature-item">
-          <h3>${mission.completed ? "✓ " : ""}${esc(mission.index)}. ${esc(mission.name)}</h3>
+        const missions = (campaign.missions || []).map(mission => {
+          const state = mission.completed ? ["done", "Completed"] : mission.canPlay ? ["next", "Next"] : ["locked", "Locked"];
+          return `<details class="feature-item mission mission-${state[0]}"${mission.canPlay && !mission.completed ? ' open' : ''}>
+          <summary><span class="mission-title">${esc(mission.index)}. ${esc(mission.name)}</span><span class="mission-chip ${state[0]}">${state[1]}</span></summary>
           <p>${esc(mission.description)}</p>
-          <p>${mission.completed ? "Completed" : "Not completed"} · Reward: ${formatNumber(mission.rewardMarks)} Marks</p>
-        </article>`).join("");
-        return `<article class="feature-item">
+          <p>${mission.completed ? "Completed · free practice replay, no repeat rewards" : `Reward on first completion: ${formatNumber(mission.rewardMarks)} Marks · Energy cost: ${mission.energyCost}`}</p>
+          ${(mission.heroes || []).length ? `<label class="mission-hero">Mission hero<select data-mission-hero="${esc(campaign.id)}-${mission.index}">${mission.heroes.map(hero => `<option value="${esc(hero.id)}">${esc(hero.name)}</option>`).join('')}</select></label>` : ''}
+          ${featureActionButton(mission.completed ? 'Practice mission' : `Start ${mission.name}`, 'start-mission', `data-campaign="${esc(campaign.id)}" data-index="${mission.index}"`, !mission.canPlay || !mission.completed && page.dashboard.energy < mission.energyCost)}
+          ${!mission.canPlay ? '<p>Complete the previous mission and unlock this campaign to play.</p>' : ''}
+        </details>`;
+        }).join("");
+        return `<article class="feature-item campaign-card">
           <h3>${esc(campaign.name)} · ${esc(status)}</h3>
           <p>${esc(campaign.description)}</p>
-          ${campaign.requires ? `<p>Requires campaign: ${esc(campaign.requires)}</p>` : ""}
+           ${campaign.requires ? `<p>Requires: complete ${esc(page.campaigns.find(item => item.id === campaign.requires)?.name || campaign.requires)}</p>` : ""}
           <p>${formatNumber(campaign.missionsCompleted)} / ${formatNumber(campaign.totalMissions)} missions</p>
           <div class="feature-progress"><span style="width:${percent}%"></span></div>
-          <div class="feature-list">${missions}</div>
+           <details${campaign.unlocked && !campaign.completed ? ' open' : ''}><summary>${campaign.completed ? 'Review missions and practice' : campaign.unlocked ? 'Missions — play the next available challenge' : 'Preview locked missions'}</summary><div class="feature-list">${missions}</div></details>
         </article>`;
       }).join("");
       return `<section class="feature-section"><h2>Campaign Progress</h2>
@@ -1610,11 +1819,15 @@
         const result = record.player_score === record.opp_score
           ? "Draw" : record.won ? "Victory" : "Defeat";
         const date = record.at ? new Date(record.at).toLocaleString() : "Date unavailable";
-        return `<article class="feature-item">
-          <h3>${esc(result)} · ${esc(item.modeName)}</h3>
-          <p>${esc(date)} · Score ${esc(record.player_score)}–${esc(record.opp_score)}</p>
-          <p>${esc(record.player_prisoners)} prisoners · ${esc(record.clashes)} clashes · ${formatNumber(record.marks_earned)} Marks earned</p>
-          <p>Bounty suit: ${esc(record.bounty_suit || "Unknown")}</p>
+        const campaign = record.game_id && page.campaignNames?.[record.game_id];
+        const plural = (count, one, many) => `${count} ${Number(count) === 1 ? one : many}`;
+        return `<article class="feature-item match-card ${result.toLowerCase()}">
+          <div class="match-card-head"><h3>${esc(result)}</h3><span class="match-score">${esc(record.player_score)}–${esc(record.opp_score)}</span></div>
+          <p class="match-mode">${campaign ? `Campaign · ${esc(campaign)}` : esc(item.modeName)}</p>
+          <p class="match-date">${esc(date)}</p>
+          <p>${plural(record.player_prisoners, "prisoner", "prisoners")} · ${plural(record.clashes, "clash", "clashes")} · ${formatNumber(record.marks_earned)} Marks earned</p>
+           <p>Bounty suit: ${esc({B:'Scissors',F:'Paper',S:'Rock'}[record.bounty_suit] || record.bounty_suit || "Unknown")}</p>
+           <details><summary>Match details</summary><p>Your seat: ${esc(record.player_seat || 'Unknown')} · Opponent prisoners: ${record.opp_prisoners || 0}</p><a href="#/saved-games${record.game_id ? `/${esc(record.game_id)}` : ''}">Review saved match timeline</a>${!record.game_id ? '<p>This older record has no saved-match link. Choose its date from Saved games.</p>' : ''}</details>
         </article>`;
       }).join("");
       return `<section class="feature-section"><h2>Match Record</h2>
@@ -1625,26 +1838,30 @@
         </div>
       </section>
       <section class="feature-section"><h2>Recent Matches</h2>
-        ${matches ? `<div class="feature-list">${matches}</div>` : "<p>No matches have been recorded yet.</p>"}
+         ${matches ? `<div class="feature-list">${matches}</div>` : '<p>No matches yet. <a href="#/match/new">Play your first match</a>.</p>'}
       </section>`;
     }
 
     async function handleFeatureClick(event) {
+      const dependency = event.target.closest('[data-prerequisite]');
+      if (dependency) { const branch = skillTreeBranches.find(branch => branch.nodeIDs.includes(dependency.dataset.prerequisite)); if (branch) navigateGame(`skills/${branch.id}/${dependency.dataset.prerequisite}`); return; }
       const shopTab = event.target.closest("[data-shop-tab]");
       if (shopTab) {
-        currentShopTab = shopTab.dataset.shopTab;
-        render();
+        featureFocusTarget = shopTab.id;
+        navigateGame(`shop/${shopTab.dataset.shopTab}`);
         return;
       }
       const skillTab = event.target.closest("[data-skill-branch]");
       if (skillTab) {
-        currentSkillBranch = skillTab.dataset.skillBranch;
-        render();
+        featureFocusTarget = skillTab.id;
+        navigateGame(`skills/${skillTab.dataset.skillBranch}`);
         return;
       }
       const button = event.target.closest("[data-feature-action]");
       if (!button || button.disabled || featureActionInProgress) return;
       const action = button.dataset.featureAction;
+      if (action === 'retry-feature') { openFeature(currentFeature); return; }
+      if (action === 'start-mission') { await startMission(button.dataset.campaign, Number(button.dataset.index)); return; }
       let path;
       let body;
       switch (action) {
@@ -1664,12 +1881,12 @@
         case "buy-bundle":
         case "buy-hero":
         case "buy-box":
-          if (!window.confirm(`Confirm ${button.textContent.trim()}?`)) return;
+          if (!await confirmAction(`Purchase ${button.closest('article').querySelector('h3').textContent}?`, `${button.textContent.trim()}. Current balance: ${formatNumber(state.dashboard.marks)} Marks and ${formatNumber(state.dashboard.crowns)} Crowns.`)) return;
           path = "/api/shop";
           body = { action, id: button.dataset.id, boxType: button.dataset.boxType };
           break;
         case "open-hero-box":
-          if (!window.confirm(`Confirm ${button.textContent.trim()}?`)) return;
+          if (!await confirmAction('Open Hero Box?', 'This uses one available Hero Box and adds its reward to your collection.')) return;
           path = "/api/shop";
           body = { action, boxType: button.dataset.boxType };
           break;
@@ -1681,28 +1898,43 @@
           path = "/api/heroes";
           body = { action: "select", id: button.dataset.id };
           break;
-        case "unlock-skill":
+        case 'save-name':
+          path = '/api/profile';
+          body = { name: document.getElementById('commanderName').value };
+          break;
+        case 'assign-chroma':
+          path = '/api/shop';
+          body = { action, id: button.dataset.id, suit: document.querySelector(`[data-chroma-suit="${button.dataset.id}"]`).value };
+          break;
+        case "unlock-skill": {
+          const skill = button.closest('.skill-card')?.querySelector('h3')?.textContent?.trim() || 'this skill';
+          const balance = `You have ${state.dashboard.skillPoints} Skill ${state.dashboard.skillPoints === 1 ? 'Point' : 'Points'} and ${formatNumber(state.dashboard.crowns)} Crowns.`;
+          if (!await confirmAction(`Unlock ${skill}?`, `${button.textContent.trim()}. Skill unlocks are permanent. ${balance}`)) return;
+          featureFocusTarget = `skill-node-${button.dataset.id}`;
           path = "/api/skills";
           body = { action: "unlock", id: button.dataset.id, payment: button.dataset.payment };
           break;
+        }
         default:
           return;
       }
       featureError = "";
       featureActionInProgress = true;
+      const version = navigationVersion;
       button.disabled = true;
       try {
-        featureData = await api(path, body);
+        let data = await api(path, body);
+        if (version !== navigationVersion || lifecycle.signal.aborted) return;
+        featureData = data;
         if (action === "open-box") {
           const result = featureData.boxResult || {};
           const reward = result.chroma_id
-            ? `${result.chroma_rarity || ""} ${result.chroma_id} chroma`
+            ? `${featureData.boxChroma?.name || result.chroma_id} chroma${result.chroma_rarity ? ` (${result.chroma_rarity})` : ""}`
             : result.marks ? `${formatNumber(result.marks)} Marks`
               : result.crowns ? `${formatNumber(result.crowns)} Crowns` : "No listed reward";
-          const boxName = result.box_type || button.dataset.boxType;
-          const message = `Opened ${boxName} box: ${reward}.`;
-          featureData = await api("/api/shop");
-          featureData.message = message;
+          const type = result.box_type || button.dataset.boxType || "";
+          const message = `Opened ${type.charAt(0).toUpperCase()}${type.slice(1)} Box: ${reward}.`;
+          if (currentFeature === 'shop') { featureData = await api("/api/shop"); featureData.message = message; }
         }
         if (featureData.dashboard) state.dashboard = featureData.dashboard;
         if (currentFeature === "heroes" && featureData.defaultId) {
@@ -1710,6 +1942,7 @@
         }
         render();
       } catch (error) {
+        if (version !== navigationVersion || lifecycle.signal.aborted) return;
         featureError = connectionError(error);
         render();
       } finally {
@@ -1718,6 +1951,9 @@
     }
 
     function render() {
+      if (lifecycle.signal.aborted) return;
+      document.getElementById('gameLoading').classList.toggle('hidden', initialized);
+      if (showFeature) showDashboard = false;
       syncBattleAnimation();
       document.getElementById("dashboardScreen").classList.toggle("hidden", !showDashboard);
       document.getElementById("featureScreen").classList.toggle("hidden", !showFeature);
@@ -1732,9 +1968,15 @@
       renderDashboard();
       if (showFeature) renderFeatureScreen();
       document.getElementById("roundLabel").textContent = state && state.started
-        ? `Round ${state.round} · Battle ${Math.min(state.exchange, 3)} of 3`
+        ? `Round ${state.round} · ${state.phase === 'commit' ? 'Choose your pile' : state.phase === 'seat' ? 'Choose your seat' : state.phase === 'handoff' ? 'Pass the screen' : state.phase === 'gameover' ? 'Match complete' : `Battle ${Math.min(state.exchange, 3)} of 3`}`
         : "Card battle";
-      setStatus(state && state.started ? state.message : "Choose a game mode to begin.");
+      setStatus(state && state.started ? playerMessage(state.message) : "Choose a game mode to begin.");
+      const topScore = document.getElementById("topScore");
+      if (state && state.started && state.players?.length === 2) {
+        topScore.textContent = state.players.map(player => `${playerLabel(player)} ${player.score}`).join(" · ");
+        topScore.setAttribute("aria-label", `Score: ${topScore.textContent}`);
+        topScore.hidden = false;
+      } else topScore.hidden = true;
       renderTrack();
       renderMatchInfo();
       renderBattle();
@@ -1742,11 +1984,25 @@
       renderPlayers();
       renderActions();
       renderModal();
+      document.getElementById('battleExplanation').innerHTML = battleExplanationMarkup();
+      document.getElementById('gameShell').dataset.phase = state?.phase || '';
+      syncModalAccessibility();
+      bindPreviewImages();
+      if (showFeature && featureData && featureFocusTarget) {
+        const target = document.getElementById(featureFocusTarget);
+        featureFocusTarget = '';
+        if (target) { target.focus({ preventScroll: true }); target.scrollIntoView({ block: 'nearest', behavior: 'instant' }); }
+      }
+      const title = showDashboard ? 'Home' : showFeature ? document.getElementById('featureTitle').textContent : showModeSelection ? 'Choose match mode' : 'Battle';
+      window.document.title = `${title} · Prisoners of War`;
     }
 
     async function startNewGame(mode) {
+      if (actionInProgress) return;
+      actionInProgress = true;
       try {
         showDashboard = false;
+        showFeature = false;
         showModeSelection = false;
         selected.clear();
         const playerHero = document.getElementById("playerHero");
@@ -1754,14 +2010,24 @@
         const body = {
           mode: mode || activeMode || (state && state.mode) || "hvh",
           playerHeroId: playerHero ? playerHero.value : (state && (state.playerHeroId || state.defaultHeroId)) || "warden",
-          opponentHeroId: opponentHero ? opponentHero.value : (state && state.opponentHeroId) || ""
+          opponentHeroId: opponentHero ? opponentHero.value : (state && state.opponentHeroId) || "",
+          ...(state?.campaign && !mode ? { campaignId: state.campaign.id, missionIndex: state.campaign.index } : {})
         };
-        state = await api("/api/new", body);
+        const next = await api("/api/new", body);
+        state = next;
         activeMode = state.mode;
         selected.clear();
+        navigateGame('battle');
         render();
       } catch (error) {
+        showModeSelection = true;
+        if (lifecycle.signal.aborted) return;
+        render();
         setStatus(connectionError(error), true);
+        document.getElementById('modal').querySelector('.modal')?.insertAdjacentHTML('afterbegin', `<p role="alert">${esc(connectionError(error))}</p>`);
+      } finally {
+        actionInProgress = false;
+        renderActions();
       }
     }
 
@@ -1783,7 +2049,7 @@
             selected.clear();
             render();
             if (!state.started || state.phase !== previousPhase || state.actor !== previousActor) {
-              setStatus(state.started ? `Game state updated. ${state.message}` : "The game is no longer active.");
+              setStatus(state.started ? `Game state updated. ${playerMessage(state.message)}` : "The game is no longer active.");
               return;
             }
           } catch (refreshError) {
@@ -1794,10 +2060,13 @@
         setStatus(connectionError(error), true);
       } finally {
         actionInProgress = false;
+        renderActions();
       }
     }
 
     async function openDashboard() {
+      if (window.location.hash !== '#/home') { navigateGame('home'); return; }
+      const version = ++navigationVersion;
       showDashboard = true;
       showFeature = false;
       currentFeature = "";
@@ -1805,47 +2074,318 @@
       showModeSelection = false;
       render();
       try {
-        state = await api("/api/state");
+        const data = await api("/api/state");
+        if (version !== navigationVersion || lifecycle.signal.aborted) return;
+        state = data;
         render();
       } catch (error) {
+        if (version !== navigationVersion || lifecycle.signal.aborted) return;
         setStatus(connectionError(error), true);
       }
     }
 
     async function initialize() {
+      document.getElementById('retryInitialization').hidden = true;
+      document.getElementById('initializationMessage').textContent = 'Loading commander and saved match…';
       try {
         state = await api("/api/state");
         activeMode = state.mode || "";
-        showDashboard = !state.started || state.phase === "gameover";
+        initialized = true;
+        applyGameRoute();
         render();
       } catch (error) {
-        setStatus(error.message, true);
+        if (lifecycle.signal.aborted) return;
+        document.getElementById('initializationMessage').textContent = connectionError(error);
+        document.getElementById('retryInitialization').hidden = false;
       }
     }
 
+    function modeName(mode) {
+      return { hvh: 'Local two-player', easy: 'AI · Easy', normal: 'AI · Normal', hard: 'AI · Hard' }[mode] || 'Battle';
+    }
+
+    function playerLabel(player) {
+      if (state?.mode === 'hvh') return `Player ${state.players.indexOf(player) + 1}`;
+      return player.you ? 'You' : 'Opponent';
+    }
+
+    function playerMessage(message) {
+      let text = String(message || '');
+      const players = state?.players || [];
+      text = text.replace(/^(White|Black) wins this battle and captures the opposing card\./, (original, color) => {
+        const winner = players.find(player => player.color === color);
+        if (!winner) return original;
+        const name = playerLabel(winner);
+        return name === 'You' ? 'You win this battle and capture the opposing card.' : `${name} wins this battle and captures the opposing card.`;
+      });
+      if (state?.mode === 'hvh') return text;
+      return text.replaceAll('Player 1 attacks','You attack').replaceAll('Player 1','You').replaceAll('Player 2','Opponent');
+    }
+
+    function modeDescription(mode) {
+      return { easy: 'Recommended for learning. The AI makes random legal choices.', normal: 'The AI plans commitments and chooses strong defenses.', hard: 'The AI plans against sampled possibilities for unseen cards.', hvh: 'Two people sharing this device. Pass-screen prompts keep each hand private.' }[mode] || '';
+    }
+
+    function navigateGame(route) {
+      if (window.location.hash === `#/${route}`) applyGameRoute();
+      else window.location.hash = `/${route}`;
+    }
+
+    function chooseMatchMode() { navigateGame('match/new'); }
+
+    function applyGameRoute() {
+      if (!initialized || lifecycle.signal.aborted) return;
+      const route = window.location.hash.replace(/^#\//, '') || 'home';
+      const notice = document.getElementById('routeNotice');
+      if (notice && route !== 'home') notice.hidden = true;
+      if (['saved-games', 'password', 'admin', 'cards'].includes(route)) return;
+      if (route === 'home') { openDashboard(); return; }
+      if (route === 'battle' || route === 'match/new') {
+        navigationVersion++;
+        showDashboard = false;
+        showFeature = false;
+        showNewGameConfirmation = false;
+        showModeSelection = route === 'match/new' || !state?.started;
+        render();
+        return;
+      }
+      const [feature, tab, node] = route.split('/');
+      if (feature === 'skills' && node) featureFocusTarget = `skill-node-${node}`;
+      if (['shop', 'skills', 'profile', 'heroes', 'campaigns', 'camp-draw', 'achievements', 'history'].includes(feature)) {
+        if (showFeature && currentFeature === feature && featureData) {
+          if (feature === 'shop') currentShopTab = tab || 'skins';
+          if (feature === 'skills') currentSkillBranch = tab || 'battle-rewards';
+          render();
+        } else {
+          openFeature(feature);
+          if (feature === 'shop' && ['skins', 'heroes', 'boxes'].includes(tab)) currentShopTab = tab;
+          if (feature === 'skills' && skillTreeBranches.some(branch => branch.id === tab)) currentSkillBranch = tab;
+        }
+      } else {
+        const notice = document.getElementById('routeNotice');
+        if (notice) {
+          notice.textContent = `There is no “${route}” page, so you’re on Home instead.`;
+          notice.hidden = false;
+        }
+        navigateGame('home');
+      }
+    }
+
+    function heroDetails(hero) {
+      if (!hero) return '<p>Choose a hero to inspect their abilities.</p>';
+      return `<p>${esc(hero.flavor || '')}</p><p><strong>${esc(hero.name)}:</strong> Bounty ${formatModifier(hero.bounty || 0)} · Shift ${formatModifier(hero.shift || 0)} · Favored ${formatModifier(hero.favored || 0)}${hero.flip ? ' · Flips the opponent’s Bounty contribution' : ''}</p>`;
+    }
+
+    function affordability(cost, balance, currency) {
+      return balance < cost ? `<p class="affordability">Need ${formatNumber(cost - balance)} more ${esc(currency)}.</p>` : '';
+    }
+
+    function friendlyRequirement(reason, names) {
+      let text = reason || 'Complete its prerequisite or earn more currency.';
+      for (const id of Object.keys(names).sort((a,b) => b.length-a.length)) text = text.replaceAll(id, names[id]);
+      return text.replaceAll('Skill Tree Points', 'Skill Points');
+    }
+
+    function boxDescription(type) {
+      return {
+        wooden: 'A basic reward box with currency or chroma rewards. Duplicate chromas convert to Marks.',
+        silver: 'A higher-tier reward table with currency or chroma rewards. Duplicate chromas convert to Marks.',
+        gold: 'A premium reward table with currency or chroma rewards. Duplicate chromas convert to Marks.',
+        hero: 'Unlocks a hero. Duplicate heroes convert to Crowns, with the amount depending on the duplicate tier.'
+      }[type] || 'Open to add its reward to your collection.';
+    }
+
+    function chromaAppearance(chroma) {
+      const named = String(chroma?.color || '').replace(/^./, c => c.toUpperCase());
+      if (skinFolders[named]) return {color: named, filter: ''};
+      return {
+        brown: {color:'Orange',filter:'saturate(.55) brightness(.7)'},
+        silver: {color:'Blue',filter:'grayscale(1) brightness(1.3)'},
+        'rose-gold': {color:'Red',filter:'sepia(.4) saturate(.7) brightness(1.2)'},
+        aurora: {color:'Purple',filter:'hue-rotate(30deg) saturate(1.4)'},
+        obsidian: {color:'Blue',filter:'grayscale(.8) brightness(.6)'},
+        prismatic: {color:'Purple',filter:'hue-rotate(90deg) saturate(2)'}
+      }[chroma?.color] || {color:'Blue',filter:''};
+    }
+
+    function equippedChroma(suit) { return state?.dashboard?.equippedChromas?.[['B','F','S'][suit]]; }
+
+    async function saveSuitAppearance(body) {
+      try {
+        const data = await api('/api/shop',body);
+        state.dashboard = data.dashboard;
+        openSuitMenu = null;
+        render();
+        const index = ['B','F','S'].indexOf(body.suit);
+        document.querySelector(index >= 0 ? `[data-suit-trigger="${index}"]` : '[data-rotate-colors]')?.focus({preventScroll:true});
+      } catch (error) { setStatus(connectionError(error),true); }
+    }
+
+    function chromaPreview(chroma) {
+      if (!chroma) return '';
+      const look = chromaAppearance(chroma);
+      return `<span class="chroma-preview-frame" data-preview-id="${esc(chroma.id)}"><span class="preview-placeholder" aria-hidden="true">Loading preview…</span><img class="chroma-preview" src="${import.meta.env.BASE_URL}skins/${skinFolders[look.color]}/large_idle.png?thumb=160" style="filter:${look.filter || 'none'}" alt="${esc(chroma.name)} card artwork preview" loading="lazy" width="160" height="210"></span>`;
+    }
+
+    function bindPreviewImages() {
+      for (const img of document.querySelectorAll('img.chroma-preview')) {
+        const ready = () => img.parentElement?.classList.add('preview-loaded');
+        const failed = () => { const label = img.parentElement?.querySelector('.preview-placeholder'); if (label) label.textContent = 'Preview unavailable'; };
+        img.onload = ready;
+        img.onerror = failed;
+        if (img.complete && img.naturalWidth) ready();
+      }
+    }
+
+    function confirmAction(title, description) {
+      return new Promise(resolve => { pendingConfirmation = {title, description, resolve}; renderModal(); syncModalAccessibility(); });
+    }
+
+    function settleConfirmation(accepted) {
+      const pending = pendingConfirmation;
+      pendingConfirmation = null;
+      renderModal();
+      syncModalAccessibility();
+      pending?.resolve(accepted);
+    }
+
+    async function startMission(campaignId, missionIndex) {
+      if (actionInProgress) return;
+      if (state?.started && state.phase !== 'gameover' && !await confirmAction('Start campaign mission?', 'Your unfinished match will be archived. You can still review its saved history.')) return;
+      actionInProgress = true;
+      const version = navigationVersion;
+      try {
+        const hero = document.querySelector(`[data-mission-hero="${campaignId}-${missionIndex}"]`);
+        const data = await api('/api/new', {campaignId, missionIndex, playerHeroId: hero?.value});
+        if (version !== navigationVersion || lifecycle.signal.aborted) return;
+        state = data;
+        activeMode = state.mode;
+        selected.clear();
+        navigateGame('battle');
+      } catch (error) {
+        featureError = connectionError(error);
+        render();
+      } finally { actionInProgress = false; renderActions(); }
+    }
+
+    function scoreBreakdownMarkup() {
+      if (!state?.started || !state?.scores || !state.players) return '';
+      return `<details class="score-details"><summary>Score by suit</summary>${state.players.map((player, index) => {
+        const score = state.scores[index];
+        return `<h3>${esc(player.you ? 'You' : state.mode === 'hvh' ? `Player ${index + 1}` : 'Opponent')} · ${score.Total} points</h3><ul>${suits.map((suit, s) => `<li>${suit}: ${score.BySuit[s]} points · ${score.WeightedCount[s]} weighted prisoners</li>`).join('')}</ul>`;
+      }).join('')}<p>Each suit = weighted prisoner count × highest scoring face. Round weights: ${state.modifiers.reckoning.join(' / ')}. Shift ${formatModifier(state.modifiers.shift)}; ${suits[state.bounty.suit]} bounty ${formatModifier(state.modifiers.bounty)}.</p></details>`;
+    }
+
+    function battleExplanationMarkup() {
+      const rules = '<p>Scissors beats Paper · Paper beats Rock · Rock beats Scissors. Suit advantage doubles the shifted face, then applies Favored. Equal values clash. The winner captures the opponent’s card; their own is discarded.</p>';
+      const outcome = state?.battleOutcome;
+      const exchange = outcome ? `<p><strong>Last exchange:</strong> ${esc(campCardLabel(state.battleAttack))} → ${outcome.attackerValue} effective attack; ${esc(campCardLabel(state.battleDefend))} → ${outcome.defenderValue} effective defense. ${outcome.winner === -1 ? 'Equal values: clash.' : 'Higher effective value wins.'}</p>` : '';
+      const battles = state?.battles || [];
+      const log = `<h3>Battle history · ${battles.length} resolved ${battles.length === 1 ? 'exchange' : 'exchanges'}</h3><ol class="battle-log">${battles.map(battle => {
+        const attacker = state.mode === 'hvh' ? battle.attacker : battle.attacker === 'You' ? 'You' : 'Opponent';
+        return `<li><strong>Round ${battle.round}, exchange ${battle.exchange}</strong><p>${esc(attacker)} ${attacker === 'You' ? 'attack' : 'attacks'}: ${esc(campCardLabel(battle.attack))} → ${battle.outcome.attackerValue}; defense: ${esc(campCardLabel(battle.defense))} → ${battle.outcome.defenderValue}. ${battle.outcome.winner === -1 ? 'Clash.' : battle.outcome.winner === 0 ? 'Attacker captures.' : 'Defender captures.'}</p><p>Score after exchange (${state.mode === 'hvh' ? 'Player 1–Player 2' : 'You–Opponent'}): ${battle.scores.join('–')}</p></li>`;
+      }).join('')}</ol>`;
+      return rules + exchange + scoreBreakdownMarkup() + log;
+    }
+
+    function syncModalAccessibility() {
+      const backdrop = document.getElementById('modal');
+      const dialog = backdrop.querySelector('.modal');
+      const open = !backdrop.classList.contains('hidden') && Boolean(dialog);
+      for (const id of ['dashboardScreen', 'featureScreen', 'gameShell', 'dashboardFooter']) document.getElementById(id).inert = open;
+      const account = window.document.querySelector('.account-bar');
+      if (account) account.inert = open;
+      if (!open) {
+        if (modalKey) modalReturnFocus?.focus({ preventScroll: true });
+        modalKey = '';
+        return;
+      }
+      dialog.setAttribute('role', 'dialog');
+      dialog.setAttribute('aria-modal', 'true');
+      dialog.setAttribute('aria-labelledby', 'activeModalTitle');
+      dialog.tabIndex = -1;
+      const heading = dialog.querySelector('h2');
+      heading.id = 'activeModalTitle';
+      const key = heading.textContent;
+      if (key !== modalKey || !dialog.contains(window.document.activeElement)) {
+        if (!modalKey) modalReturnFocus = window.document.activeElement;
+        modalKey = key;
+        (dialog.querySelector('[data-initial-focus]:not(:disabled)') || dialog.querySelector('button:not(:disabled), select, a[href]') || dialog).focus({ preventScroll: true });
+      }
+    }
+
+    function handleModalKeyboard(event) {
+      const dialog = document.getElementById('modal').querySelector('[role="dialog"]');
+      if (!dialog) return;
+      if (event.key === 'Escape') {
+        event.preventDefault();
+        if (pendingConfirmation) { settleConfirmation(false); return; }
+        if (state?.phase === 'handoff') return;
+        if (showNewGameConfirmation) { showNewGameConfirmation = false; render(); }
+        else navigateGame(state?.started && state.phase !== 'gameover' ? 'battle' : 'home');
+      }
+      if (event.key !== 'Tab') return;
+      const controls = [...dialog.querySelectorAll('button:not(:disabled),select,a[href],input')];
+      const first = controls[0], last = controls[controls.length - 1];
+      if (event.shiftKey && window.document.activeElement === first) { event.preventDefault(); last?.focus(); }
+      else if (!event.shiftKey && window.document.activeElement === last) { event.preventDefault(); first?.focus(); }
+    }
+
+    function disposeGame() {
+      lifecycle.abort();
+      if (pendingConfirmation) { pendingConfirmation.resolve(false); pendingConfirmation = null; }
+      window.clearTimeout(battleAnimationTimer);
+      const account = window.document.querySelector('.account-bar');
+      if (account) account.inert = false;
+    }
+
     document.getElementById("dashboardPlay").addEventListener("click", () => {
-      showDashboard = false;
-      showFeature = false;
-      showModeSelection = !state || !state.started || state.phase === "gameover";
-      render();
+      navigateGame(state?.started && state.phase !== 'gameover' ? 'battle' : 'match/new');
     });
 
-    document.getElementById("dashboardCommanderCard").addEventListener("click", () => openFeature("profile"));
-    document.getElementById("dashboardCampDraw").addEventListener("click", () => openFeature("camp-draw"));
-    document.getElementById("dashboardAchievements").addEventListener("click", () => openFeature("achievements"));
-    document.getElementById("dashboardShop").addEventListener("click", () => openFeature("shop"));
-    document.getElementById("dashboardCampaigns").addEventListener("click", () => openFeature("campaigns"));
-    document.getElementById("dashboardHistory").addEventListener("click", () => openFeature("history"));
-    document.getElementById("dashboardNavHome").addEventListener("click", openDashboard);
-    document.getElementById("dashboardNavShop").addEventListener("click", () => openFeature("shop"));
+    document.getElementById("dashboardCommanderCard").addEventListener("click", () => navigateGame("profile"));
+    document.getElementById("dashboardCampDraw").addEventListener("click", () => navigateGame("camp-draw"));
+    document.getElementById("dashboardAchievements").addEventListener("click", () => navigateGame("achievements"));
+    document.getElementById("dashboardShop").addEventListener("click", () => navigateGame("shop"));
+    document.getElementById("dashboardCampaigns").addEventListener("click", () => navigateGame("campaigns"));
+    document.getElementById("dashboardHistory").addEventListener("click", () => navigateGame("history"));
+    document.getElementById("dashboardNavHome").addEventListener("click", () => navigateGame('home'));
+    document.getElementById("dashboardNavShop").addEventListener("click", () => navigateGame("shop"));
     document.getElementById("dashboardNavBattle").addEventListener("click", () =>
       document.getElementById("dashboardPlay").click());
-    document.getElementById("dashboardNavHeroes").addEventListener("click", () => openFeature("heroes"));
-    document.getElementById("dashboardNavSkills").addEventListener("click", () => openFeature("skills"));
-    document.getElementById("featureBack").addEventListener("click", openDashboard);
+    document.getElementById("dashboardNavHeroes").addEventListener("click", () => navigateGame("heroes"));
+    document.getElementById("dashboardNavSkills").addEventListener("click", () => navigateGame("skills"));
+    document.getElementById("featureBack").addEventListener("click", () => navigateGame('home'));
     document.getElementById("featureTabs").addEventListener("click", handleFeatureClick);
+    document.getElementById('featureTabs').addEventListener('keydown', event => {
+      const tabs = [...event.currentTarget.querySelectorAll('[role="tab"]')];
+      const index = tabs.indexOf(event.target);
+      if (index < 0 || !['ArrowLeft', 'ArrowRight', 'Home', 'End'].includes(event.key)) return;
+      event.preventDefault();
+      const next = event.key === 'Home' ? 0 : event.key === 'End' ? tabs.length - 1 : (index + (event.key === 'ArrowRight' ? 1 : -1) + tabs.length) % tabs.length;
+      tabs[next].click();
+    });
     document.getElementById("featureContent").addEventListener("click", handleFeatureClick);
+    document.getElementById('featureContent').addEventListener('change', event => {
+      const id = event.target.id;
+      if (id === 'achievementFilter') achievementFilter = event.target.value;
+      else if (id === 'achievementCategory') achievementCategory = event.target.value;
+      else return;
+      renderFeatureScreen();
+      document.getElementById(id)?.focus({preventScroll:true});
+    });
 
+    document.getElementById('dashboardChooseMode').addEventListener('click', chooseMatchMode);
+    document.getElementById('retryInitialization').addEventListener('click', initialize);
+    document.getElementById('dashboardTraining').addEventListener('click', () => navigateGame('campaigns'));
+    document.getElementById('resetPreview').addEventListener('click', async event => {
+      event.stopPropagation();
+      try { await api('/api/preview/reset', {}); window.location.reload(); }
+      catch (error) { setStatus(connectionError(error), true); }
+    }, { signal: lifecycle.signal });
+    document.getElementById('dashboardRules').addEventListener('click', () => { window.location.hash = '/cards'; });
+    window.addEventListener('hashchange', applyGameRoute, { signal: lifecycle.signal });
+    document.addEventListener('keydown', handleModalKeyboard);
     initialize();
   </script>
 </body>

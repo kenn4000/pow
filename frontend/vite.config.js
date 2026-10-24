@@ -21,7 +21,7 @@ function gameModules() {
       if (id.endsWith('style.css')) return css;
       if (id.endsWith('shell')) return `export default ${JSON.stringify(shell)};`;
       if (id.endsWith('controller')) {
-        return `export function mountGame(document) {\n${script}\nreturn () => window.clearTimeout(battleAnimationTimer);\n}`;
+        return `export function mountGame(document) {\n${script}\nreturn disposeGame;\n}`;
       }
     },
     handleHotUpdate(ctx) {

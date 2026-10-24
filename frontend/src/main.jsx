@@ -8,6 +8,9 @@ import { AdminUsers, SavedGames } from './pages';
 import { PasswordSettings } from './PasswordSettings';
 import { CardCatalog } from './CardCatalog';
 import './account.css';
+import { DevelopmentAccounts } from './DevelopmentAccounts';
+import { Rules } from './Rules';
+import './ui.css';
 
 function Game() {
   const host = useRef(null);
@@ -18,6 +21,7 @@ function Game() {
     const scopedDocument = {
       getElementById: id => root.querySelector(`#${id}`),
       querySelector: selector => root.querySelector(selector),
+      querySelectorAll: selector => root.querySelectorAll(selector),
       createElement: tag => document.createElement(tag),
       addEventListener: (type, listener) => root.addEventListener(type, listener, { signal: events.signal }),
     };
@@ -35,6 +39,8 @@ function AuthForm({ onLogin }) {
   const [signup, setSignup] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
+  const [visible, setVisible] = useState(false);
+  useEffect(() => { document.title = `${signup ? 'Create account' : 'Sign in'} · Prisoners of War`; }, [signup]);
 
   async function submit(event) {
     event.preventDefault();
@@ -50,27 +56,58 @@ function AuthForm({ onLogin }) {
     finally { setBusy(false); }
   }
 
-  return <main className="account-page auth-page">
-    <h1>Prisoners of War</h1>
-    <p>Your commander, active game, and match history stay with your account.</p>
-    <h2>{signup ? 'Create an account' : 'Sign in'}</h2>
-    <form onSubmit={submit}>
-      <label>Email<input name="email" type="email" autoComplete="username" maxLength={254} required /></label>
-      <label>Password<input name="password" type="password" minLength={12} maxLength={72} autoComplete={signup ? 'new-password' : 'current-password'} required /></label>
-      <small>Use a password between 12 and 72 bytes.</small>
-      {error && <p role="alert">{error}</p>}
-      <button disabled={busy} type="submit">{busy ? 'Please wait…' : signup ? 'Sign up' : 'Sign in'}</button>
-    </form>
-    <button className="secondary" onClick={() => { setSignup(!signup); setError(''); }} disabled={busy}>
-      {signup ? 'Already registered? Sign in' : 'New player? Create an account'}
-    </button>
-  </main>;
+  return <main className="account-page auth-layout"><section className="auth-page">
+    <div className="auth-brand">
+      <span className="auth-crest" aria-hidden="true">⚔</span>
+      <div><h1>Prisoners of War</h1><p className="auth-tagline">A tactical card game of Scissors, Paper and Rock</p></div>
+    </div>
+    <ul className="auth-suits" aria-label="Suit cycle">
+      <li>✂ Scissors beats Paper</li><li>▤ Paper beats Rock</li><li>◆ Rock beats Scissors</li>
+    </ul>
+    <p>Choose your pile, capture prisoners and outscore your opponent over three rounds. Your commander, active game and match history stay with your account.</p>
+    <Rules />
+    <div className="auth-card">
+      <h2>{signup ? 'Create an account' : 'Sign in'}</h2>
+      <form onSubmit={submit}>
+        <label>Email<input name="email" type="email" autoComplete="username" maxLength={254} required /></label>
+        <label>Password<span className="password-field">
+          <input name="password" type={visible ? 'text' : 'password'} minLength={signup ? 12 : undefined} maxLength={72} autoComplete={signup ? 'new-password' : 'current-password'} required />
+          <button type="button" className="password-toggle" aria-pressed={visible} aria-label={visible ? 'Hide password' : 'Show password'} onClick={() => setVisible(!visible)}>{visible ? 'Hide' : 'Show'}</button>
+        </span></label>
+        {signup && <small>Use at least 12 characters. Maximum 72 UTF-8 bytes; accented characters and emoji can use more than one byte.</small>}
+        {error && <p role="alert">{error}</p>}
+        <button disabled={busy} type="submit">{busy ? 'Please wait…' : signup ? 'Create account' : 'Sign in'}</button>
+      </form>
+      <button className="secondary auth-switch" onClick={() => { setSignup(!signup); setError(''); }} disabled={busy}>
+        {signup ? 'Already registered? Sign in' : 'New player? Create an account'}
+      </button>
+    </div>
+  </section><DevelopmentAccounts onLogin={onLogin} busy={busy} setBusy={setBusy} /></main>;
 }
 
 function App() {
   const [user, setUser] = useState(undefined);
-  const [screen, setScreen] = useState('game');
+  const accountScreens = { 'saved-games': 'history', admin: 'admin', cards: 'cards', password: 'password' };
+  const routeScreen = () => accountScreens[window.location.hash.split('/')[1]] || 'game';
+  const [screen, setScreen] = useState(routeScreen);
   const [error, setError] = useState('');
+  const [accountOpen, setAccountOpen] = useState(false);
+  const [displayName, setDisplayName] = useState('');
+  const accountBar = useRef(null);
+
+  useEffect(() => {
+    if (!accountBar.current) return;
+    const observer = new ResizeObserver(([entry]) => {
+      document.documentElement.style.setProperty('--account-height', `${entry.target.getBoundingClientRect().height}px`);
+    });
+    observer.observe(accountBar.current);
+    return () => observer.disconnect();
+  }, [user]);
+
+  function navigate(path) {
+    window.location.hash = `/${path}`;
+    setAccountOpen(false);
+  }
 
   async function loadAccount() {
     setError('');
@@ -84,39 +121,64 @@ function App() {
 
   useEffect(() => {
     loadAccount();
-    const expire = () => { setUser(null); setScreen('game'); };
+    const expire = () => { setUser(null); setDisplayName(''); };
+    const route = () => { setScreen(routeScreen()); setAccountOpen(false); };
+    const commander = event => setDisplayName(event.detail?.displayName || '');
     window.addEventListener('pow-session-expired', expire);
-    return () => window.removeEventListener('pow-session-expired', expire);
+    window.addEventListener('hashchange', route);
+    window.addEventListener('pow-commander', commander);
+    return () => { window.removeEventListener('pow-session-expired', expire); window.removeEventListener('hashchange', route); window.removeEventListener('pow-commander', commander); };
   }, []);
+
+  // Screens that do not mount the game (Saved games, Cards & rules, Password)
+  // never receive a dashboard response, so load the commander name once per account.
+  useEffect(() => {
+    if (!user?.id) return undefined;
+    let current = true;
+    request('profile').then(data => { if (current) setDisplayName(data?.dashboard?.displayName || ''); }).catch(() => {});
+    return () => { current = false; };
+  }, [user?.id]);
+
+  useEffect(() => {
+    const titles = { history: 'Saved games', admin: 'User administration', cards: 'Card reference', password: 'Change password' };
+    if (screen !== 'game') document.title = `${titles[screen]} · Prisoners of War`;
+  }, [screen]);
 
   async function logout() {
     try {
       await request('auth/logout', { method: 'POST' });
       setUser(null);
+      setDisplayName('');
       setScreen('game');
+      navigate('home');
     } catch (error) { setError(error.message); }
   }
 
   if (user === undefined) return <main className="account-page"><p role="status">{error || 'Loading account…'}</p>{error && <button onClick={loadAccount}>Retry</button>}</main>;
   if (!user) return <AuthForm onLogin={setUser} />;
   return <>
-    <header className="account-bar">
-      <span>{user.email} <small>({user.role})</small></span>
-      <nav aria-label="Account navigation">
-        <button aria-current={screen === 'game' ? 'page' : undefined} onClick={() => setScreen('game')}>Game</button>
-        {user.role !== 'local' && <button onClick={() => setScreen('history')}>Saved games</button>}
-        {user.role === 'admin' && <button onClick={() => setScreen('admin')}>Admin</button>}
-        {user.role === 'admin' && <button onClick={() => setScreen('cards')}>Cards</button>}
-        {user.role !== 'local' && <button onClick={() => setScreen('password')}>Password</button>}
-        {user.role !== 'local' && <button onClick={logout}>Sign out</button>}
+    <header ref={accountBar} className={`account-bar${accountOpen ? ' account-open' : ''}`}>
+      <span className="account-identity">{displayName
+        ? <><strong className="account-name">{displayName}</strong><small className="account-email">{user.email}</small></>
+        : user.email}{user.role === 'admin' && <small className="role-badge">Administrator</small>}</span>
+      <button className="account-toggle" aria-expanded={accountOpen} aria-controls="account-navigation" onClick={() => setAccountOpen(!accountOpen)}>Account</button>
+      <nav id="account-navigation" aria-label="Account navigation">
+        <button aria-current={screen === 'game' ? 'page' : undefined} onClick={() => navigate('home')}>Game</button>
+        {user.role !== 'local' && <button aria-current={screen === 'history' ? 'page' : undefined} onClick={() => navigate('saved-games')}>Saved games</button>}
+        {user.role === 'admin' && <button aria-current={screen === 'admin' ? 'page' : undefined} onClick={() => navigate('admin')}>Admin</button>}
+        <button aria-current={screen === 'cards' ? 'page' : undefined} onClick={() => navigate('cards')}>Cards & rules</button>
+        {user.role !== 'local' && <span className="account-actions" role="group" aria-label="Account settings">
+          <button aria-current={screen === 'password' ? 'page' : undefined} onClick={() => navigate('password')}>Password</button>
+          <button onClick={logout}>Sign out</button>
+        </span>}
       </nav>
       {error && <p role="alert">{error}</p>}
     </header>
     {screen === 'admin' && user.role === 'admin'
-      ? <AdminUsers currentUser={user} onRoleChange={(id, role) => { if (id === user.id) { setUser({ ...user, role }); if (role !== 'admin') setScreen('game'); } }} />
-      : screen === 'cards' && user.role === 'admin' ? <CardCatalog />
+      ? <AdminUsers currentUser={user} onRoleChange={(id, role) => { if (id === user.id) { setUser({ ...user, role }); if (role !== 'admin') navigate('home'); } }} />
+      : screen === 'cards' ? <CardCatalog />
         : screen === 'password' ? <PasswordSettings />
-          : screen === 'history' ? <SavedGames /> : <Game />}
+          : screen === 'history' ? <SavedGames onResume={() => navigate('battle')} /> : <Game />}
   </>;
 }
 
