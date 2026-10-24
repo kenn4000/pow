@@ -83,8 +83,8 @@ docker build -f frontend/Dockerfile -t prisoner-of-war-frontend .
 ```sh
 ssh k3s_personal_box_root 'kubectl -n prisoner-of-war get pods,svc,ingress,pvc'
 ssh k3s_personal_box_root 'kubectl -n prisoner-of-war logs deployment/prisoner-of-war-backend'
-ssh k3s_personal_box_root 'helm -n prisoner-of-war history prisoner-of-war'
-ssh k3s_personal_box_root 'helm -n prisoner-of-war rollback prisoner-of-war'
+ssh k3s_personal_box_root 'KUBECONFIG=/etc/rancher/k3s/k3s.yaml helm -n prisoner-of-war history prisoner-of-war'
+ssh k3s_personal_box_root 'KUBECONFIG=/etc/rancher/k3s/k3s.yaml helm -n prisoner-of-war rollback prisoner-of-war'
 ```
 
 No private keys, registry tokens, or kubeconfigs belong in this repository.

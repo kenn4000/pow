@@ -88,6 +88,7 @@ deploy-production:
     - kubectl -n "$DEPLOY_NAMESPACE" rollout status "deployment/$HELM_RELEASE-backend" --timeout=120s
     - kubectl -n "$DEPLOY_NAMESPACE" rollout status "deployment/$HELM_RELEASE-frontend" --timeout=120s
     - curl --fail --retry 12 --retry-all-errors --retry-delay 10 https://games.markdownthing.com/prisoner-of-war/
+    - curl --fail --location --max-redirs 3 https://games.markdownthing.com/prisoner-of-war
     - curl --fail --retry 3 https://games.markdownthing.com/prisoner-of-war/api/state
   rules:
     - if: '$CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH'
