@@ -1322,7 +1322,7 @@ func (a *app) showShopCatalog(p *profile.Profile) error {
 	}
 	fmt.Printf("[hero-box] Open a Hero Box for %d Marks\n", heroes.HeroBoxCost(p))
 	fmt.Printf("[buy-hero] Buy any unowned hero for %d Crowns\n", heroes.DirectHeroCrownsCost)
-	fmt.Println("Hero Box pool: Early (Treasurer, Ascendant), Mid (Gambler, Diplomat, Ascetic), Late (Herald, Hater)")
+	fmt.Println("Hero Box pool: Early (Treasurer, Gorilla), Mid (Gambler, Diplomat, Bureaucrat), Late (Bodybuilder, Hater)")
 	if p.ChromaPickTokens > 0 {
 		fmt.Printf("[Redeem Pick-Any-Chroma token (%d available)]\n", p.ChromaPickTokens)
 	}

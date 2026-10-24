@@ -1,11 +1,15 @@
 package skills
 
 import (
+	"embed"
 	"errors"
 	"fmt"
 
 	"prisonersofwar/internal/profile"
 )
+
+//go:embed icons/*.png
+var IconFiles embed.FS
 
 type Effect string
 

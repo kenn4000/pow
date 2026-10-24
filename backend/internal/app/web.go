@@ -163,8 +163,10 @@ type webView struct {
 type webDashboard struct {
 	DisplayName        string                    `json:"displayName"`
 	EquippedChromas    map[string]catalog.Chroma `json:"equippedChromas"`
+	OwnedChromas       []string                  `json:"ownedChromas"`
 	Commander          string                    `json:"commander"`
 	Title              string                    `json:"title"`
+	DefaultHeroID      string                    `json:"defaultHeroId"`
 	Marks              int64                     `json:"marks"`
 	Crowns             int64                     `json:"crowns"`
 	Energy             int                       `json:"energy"`
@@ -517,6 +519,36 @@ func (s *webServer) handleSkinAsset(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("X-Content-Type-Options", "nosniff")
 	if _, err := w.Write(asset); err != nil {
 		fmt.Fprintf(os.Stderr, "write skin asset response: %v\n", err)
+	}
+}
+
+func (s *webServer) handleSkillIcon(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+	name := chi.URLParam(r, "*")
+	if name == "" {
+		name = strings.TrimPrefix(r.URL.Path, "/skills/icons/")
+	}
+	if !fs.ValidPath(name) || strings.Contains(name, "/") {
+		http.NotFound(w, r)
+		return
+	}
+	asset, err := skills.IconFiles.ReadFile("icons/" + name)
+	if errors.Is(err, fs.ErrNotExist) {
+		http.NotFound(w, r)
+		return
+	}
+	if err != nil {
+		http.Error(w, "skill icon unavailable", http.StatusInternalServerError)
+		return
+	}
+	w.Header().Set("Content-Type", "image/png")
+	w.Header().Set("Cache-Control", "public, max-age=3600")
+	w.Header().Set("X-Content-Type-Options", "nosniff")
+	if _, err := w.Write(asset); err != nil {
+		fmt.Fprintf(os.Stderr, "write skill icon response: %v\n", err)
 	}
 }
 
@@ -1926,6 +1958,12 @@ func dashboardFor(p *profile.Profile) *webDashboard {
 		commander = commander[:8]
 	}
 	equipped := map[string]catalog.Chroma{}
+	ownedChromas := make([]string, 0, len(p.OwnedChromas))
+	for _, chroma := range catalog.AllChromas() {
+		if p.OwnedChromas[chroma.ID] {
+			ownedChromas = append(ownedChromas, chroma.ID)
+		}
+	}
 	for _, suit := range []string{"B", "F", "S"} {
 		if chroma, ok := catalog.FindChroma(p.AssignedChromas[suit]); ok && p.OwnedChromas[chroma.ID] {
 			equipped[suit] = chroma
@@ -1936,8 +1974,10 @@ func dashboardFor(p *profile.Profile) *webDashboard {
 	return &webDashboard{
 		DisplayName:        p.DisplayName,
 		EquippedChromas:    equipped,
+		OwnedChromas:       ownedChromas,
 		Commander:          commander,
 		Title:              heroName(p.DefaultHeroID),
+		DefaultHeroID:      p.DefaultHeroID,
 		Marks:              p.Marks,
 		Crowns:             p.Crowns,
 		Energy:             currentEnergy,

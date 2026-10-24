@@ -35,6 +35,9 @@ func (s *webServer) applicationRoutes(r chi.Router) {
 	r.Route("/skins", func(assets chi.Router) {
 		assets.Get("/*", s.handleSkinAsset)
 	})
+	r.Route("/skills/icons", func(icons chi.Router) {
+		icons.Get("/*", s.handleSkillIcon)
+	})
 	r.Route("/api", func(api chi.Router) {
 		api.Use(sameOrigin)
 		if s.db == nil {

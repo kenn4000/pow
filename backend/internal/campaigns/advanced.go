@@ -18,9 +18,9 @@ func advancedCampaign() Campaign {
 			PlayerHeroRestriction: heroes, RewardMarks: AdvancedMissionMarks, CPUMirrorIndex: -1,
 		},
 		{
-			Index: 3, Name: "The Ascendant",
-			Flavor: "The Ascendant makes every card stronger. Every doubling is more devastating. High-stakes game.",
-			Hint:   "The Ascendant adds +2 Shift. Your cards also get +2 face. Doubling becomes much more powerful.",
+			Index: 3, Name: "The Gorilla",
+			Flavor: "The Gorilla makes every card stronger. Every doubling is more devastating. High-stakes game.",
+			Hint:   "The Gorilla adds +2 Shift. Your cards also get +2 face. Doubling becomes much more powerful.",
 			Type:   ThreeRound, AILevel: AIGreedy, AIHero: "ascendant",
 			PlayerHeroRestriction: heroes, RewardMarks: AdvancedMissionMarks, CPUMirrorIndex: -1,
 		},
@@ -34,7 +34,7 @@ func advancedCampaign() Campaign {
 		{
 			Index: 5, Name: "The Hater",
 			Flavor: "The Hater is a problem. His flip makes your hero's strengths into weaknesses. Beat him and you've learned everything.",
-			Hint:   "The Hater flips your hero's Bounty contribution. Pick Warden (small contributions, low flip impact) or Hunter (your +2 becomes -2). Anchor's negatives become positives - interesting but risky.",
+			Hint:   "The Hater flips your hero's Bounty contribution. Pick Warden (small contributions, low flip impact) or Hunter (your +2 becomes -2). The Turtle's negatives become positives - interesting but risky.",
 			Type:   ThreeRound, AILevel: AIGreedy, AIHero: "hater",
 			PlayerHeroRestriction: heroes, RewardMarks: AdvancedMissionMarks, CPUMirrorIndex: -1,
 		},

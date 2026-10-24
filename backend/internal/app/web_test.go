@@ -132,12 +132,45 @@ func TestWebSkinAssetsAreServedWithImageHeaders(t *testing.T) {
 	if !bytes.Equal(response.Body.Bytes(), original) {
 		t.Fatal("skin image response changed the source image")
 	}
+	for _, assetPath := range []string{
+		"/skins/conq_lime/small_idle.png",
+		"/skins/conq_gold/large_win.png",
+		"/skins/hero_icons/gorilla.png",
+		"/skins/hero_icons/coach.png",
+		"/skins/hero_icons/cpu_easy.png",
+	} {
+		request = httptest.NewRequest(http.MethodGet, assetPath, nil)
+		response = httptest.NewRecorder()
+		web.handleSkinAsset(response, request)
+		if response.Code != http.StatusOK || response.Body.Len() == 0 {
+			t.Errorf("asset %q status=%d body-size=%d", assetPath, response.Code, response.Body.Len())
+		}
+	}
 
 	request = httptest.NewRequest(http.MethodGet, "/skins/%2e%2e/web/index.html", nil)
 	response = httptest.NewRecorder()
 	web.handleSkinAsset(response, request)
 	if response.Code != http.StatusNotFound {
 		t.Fatalf("traversal status = %d, want %d", response.Code, http.StatusNotFound)
+	}
+}
+
+func TestWebSkillBranchIconsAreServed(t *testing.T) {
+	web := &webServer{}
+	for _, name := range []string{"BattleRewards.png", "Campaign.png", "CampDraw.png", "Energy.png", "HeroAq.png", "HeroTactics.png"} {
+		request := httptest.NewRequest(http.MethodGet, "/skills/icons/"+name, nil)
+		response := httptest.NewRecorder()
+		web.handleSkillIcon(response, request)
+		if response.Code != http.StatusOK || response.Header().Get("Content-Type") != "image/png" || response.Body.Len() == 0 {
+			t.Errorf("icon %q status=%d content-type=%q body-size=%d", name, response.Code,
+				response.Header().Get("Content-Type"), response.Body.Len())
+		}
+	}
+	request := httptest.NewRequest(http.MethodGet, "/skills/icons/../skills.go", nil)
+	response := httptest.NewRecorder()
+	web.handleSkillIcon(response, request)
+	if response.Code != http.StatusNotFound {
+		t.Errorf("traversal status = %d, want %d", response.Code, http.StatusNotFound)
 	}
 }
 
@@ -261,6 +294,7 @@ func TestWebWaitingStateIncludesLiveDashboardData(t *testing.T) {
 		t.Fatal("waiting state omitted dashboard data")
 	}
 	if dashboard.Commander != p.PlayerID[:8] || dashboard.Title != heroName(p.DefaultHeroID) ||
+		dashboard.DefaultHeroID != p.DefaultHeroID || len(dashboard.OwnedChromas) != 3 ||
 		dashboard.Marks != p.Marks || dashboard.Crowns != p.Crowns ||
 		dashboard.Energy != 7 || dashboard.MaxEnergy != p.MaxEnergy ||
 		dashboard.AdsLeft != energy.DailyAdLimit-2 ||
@@ -269,6 +303,18 @@ func TestWebWaitingStateIncludesLiveDashboardData(t *testing.T) {
 		dashboard.DrawsAvailable != 3 || dashboard.PendingBoxes != 2 || dashboard.SkillPoints != 1 ||
 		dashboard.UnseenAchievements != 1 {
 		t.Fatalf("dashboard data = %+v", dashboard)
+	}
+	for _, id := range []string{"crimson", "cobalt", "sunflower"} {
+		found := false
+		for _, ownedID := range dashboard.OwnedChromas {
+			if ownedID == id {
+				found = true
+				break
+			}
+		}
+		if !found {
+			t.Errorf("dashboard did not expose owned chroma %q", id)
+		}
 	}
 }
 
@@ -335,12 +381,12 @@ func TestWebDashboardFeatureActionsUseTemporaryPreviewProfile(t *testing.T) {
 
 	previewMarksBeforeShop := web.previewProfile.Marks
 	shopResponse := callDashboardHandler(t, web.handleShop, http.MethodPost, "/api/shop?preview=dashboard",
-		map[string]string{"action": "buy-chroma", "id": "crimson"})
+		map[string]string{"action": "buy-chroma", "id": "conq-lime"})
 	if shopResponse.Code != http.StatusOK {
 		t.Fatalf("chroma purchase status = %d: %s", shopResponse.Code, shopResponse.Body.String())
 	}
-	if p.Marks != 500 || web.previewProfile.Marks != previewMarksBeforeShop-250 ||
-		!web.previewProfile.OwnedChromas["crimson"] {
+	if p.Marks != 500 || web.previewProfile.Marks != previewMarksBeforeShop-100 ||
+		!web.previewProfile.OwnedChromas["conq-lime"] {
 		t.Fatalf("preview shop purchase affected wrong profile: saved=%d preview=%d", p.Marks, web.previewProfile.Marks)
 	}
 

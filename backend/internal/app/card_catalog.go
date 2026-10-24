@@ -56,6 +56,9 @@ func loadCardCatalog() (cardCatalog, error) {
 		if entry.IsDir() || !strings.HasSuffix(path, ".png") {
 			return nil
 		}
+		if strings.HasPrefix(path, "hero_icons/") {
+			return nil
+		}
 		art, err := inspectArtwork(path)
 		if err != nil {
 			return err

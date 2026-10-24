@@ -32,12 +32,16 @@ const (
 )
 
 var chromas = []Chroma{
-	{ID: "crimson", Name: "Crimson", Color: "red", Rarity: "common", Cost: 250, Currency: string(Marks)},
-	{ID: "cobalt", Name: "Cobalt", Color: "blue", Rarity: "common", Cost: 250, Currency: string(Marks)},
-	{ID: "sunflower", Name: "Sunflower", Color: "yellow", Rarity: "common", Cost: 250, Currency: string(Marks)},
-	{ID: "emerald", Name: "Emerald", Color: "green", Rarity: "uncommon", Cost: 15, Currency: string(Crowns)},
-	{ID: "tangerine", Name: "Tangerine", Color: "orange", Rarity: "uncommon", Cost: 15, Currency: string(Crowns)},
-	{ID: "amethyst", Name: "Amethyst", Color: "purple", Rarity: "uncommon", Cost: 20, Currency: string(Crowns)},
+	{ID: "crimson", Name: "Tribal (red)", Color: "red", Rarity: "common", Cost: 250, Currency: string(Marks)},
+	{ID: "cobalt", Name: "Tribal (blue)", Color: "blue", Rarity: "common", Cost: 250, Currency: string(Marks)},
+	{ID: "sunflower", Name: "Tribal (yellow)", Color: "yellow", Rarity: "common", Cost: 250, Currency: string(Marks)},
+	{ID: "conq-lime", Name: "Conquistador (lime green)", Color: "lime", Rarity: "common", Cost: 100, Currency: string(Marks)},
+	{ID: "conq-gold", Name: "Conquistador (gold)", Color: "gold", Rarity: "common", Cost: 100, Currency: string(Marks)},
+	{ID: "conq-pink", Name: "Conquistador (pink)", Color: "pink", Rarity: "common", Cost: 100, Currency: string(Marks)},
+	{ID: "conq-blue", Name: "Conquistador (sky blue)", Color: "sky blue", Rarity: "common", Cost: 100, Currency: string(Marks)},
+	{ID: "emerald", Name: "Tribal (green)", Color: "green", Rarity: "uncommon", Cost: 15, Currency: string(Crowns)},
+	{ID: "tangerine", Name: "Tribal (orange)", Color: "orange", Rarity: "uncommon", Cost: 15, Currency: string(Crowns)},
+	{ID: "amethyst", Name: "Tribal (purple)", Color: "purple", Rarity: "uncommon", Cost: 20, Currency: string(Crowns)},
 	{ID: "walnut", Name: "Walnut", Color: "brown", Rarity: "rare", Cost: 30, Currency: string(Crowns)},
 	{ID: "silver", Name: "Silver", Color: "silver", Rarity: "rare", Cost: 30, Currency: string(Crowns)},
 	{ID: "rose-gold", Name: "Rose Gold", Color: "rose-gold", Rarity: "rare", Cost: 35, Currency: string(Crowns)},

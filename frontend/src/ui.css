@@ -58,6 +58,10 @@ button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible
 .feature-balances { position: relative; z-index: 1; padding: 10px 14px; font-size: 14px; background: #101624; color: #f1d578; }
 .feature-content { padding-bottom: 24px; scroll-padding-block: 16px 32px; }
 .feature-tab { font-size: 13px; min-height: 44px; cursor: pointer; }
+.feature-tab.skill-branch-tab { display: grid; align-content: center; justify-items: center; gap: 4px; min-height: 70px; }
+.skill-tab-badge { display: grid; place-items: center; width: 34px; height: 34px; border: 1px solid #596578; border-radius: 9px; background: #111827; }
+.skill-tab-badge img { display: block; width: 27px; height: 27px; object-fit: contain; }
+.feature-tab[aria-selected="true"] .skill-tab-badge { border-color: #d4b85d; background: #322916; }
 .feature-message { font-size: 14px; }
 .feature-message:empty { display: none; }
 .feature-item h3 { font-size: 16px; }
@@ -166,10 +170,12 @@ button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible
   *, *::before, *::after { animation-duration: .01ms !important; transition-duration: .01ms !important; }
 }
 
-/* Iteration 9 · battle: keep skin-card face values clear of the attack/defend label */
-.battle-card-wrap { display: flex; justify-content: center; }
-.battle-card-wrap:has(.skin-card) { padding-top: 24px; }
-@media (max-width: 640px) { .battle-card-wrap:has(.skin-card) { padding-top: 18px; } }
+/* Battle face values sit toward the VS marker instead of covering the card art. */
+.battle-card-wrap { display: flex; justify-content: center; min-width: 0; }
+.battle-card-line .skin-card { width: clamp(56px, 8vw, 96px); height: clamp(72px, 10vw, 124px); }
+.battle-card-line .battle-card-wrap:has(.skin-card) { padding: 0; }
+.campaign-coach { display: flex; align-items: center; gap: 10px; margin: 8px 0 14px; color: #e5d08a; font-weight: 700; }
+.campaign-coach img { width: 52px; height: 52px; object-fit: cover; border: 2px solid #d7a629; border-radius: 8px; }
 
 /* Iteration 9 · UI-60: minimum 24px targets for inline links and dependency links without reflowing prose */
 a:not(.action) { padding-block: 4px; }
