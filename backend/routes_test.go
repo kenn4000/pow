@@ -44,6 +44,8 @@ func TestNestedChiRouteScopes(t *testing.T) {
 		{"GET", "/games/cards/skins/tribal_red/small_idle.png", "", 200},
 		{"GET", "/games/cards/api/state", "", 401},
 		{"GET", "/games/cards/api/admin/users", "", 401},
+		{"GET", "/games/cards/api/admin/cards", "", 401},
+		{"POST", "/games/cards/api/account/password", "", 401},
 		{"GET", "/games/cards/api/auth/me", "", 401},
 		{"POST", "/games/cards/api/auth/logout", "https://attacker.example", 403},
 		{"GET", "/api/state", "", 404},

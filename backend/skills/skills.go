@@ -140,29 +140,36 @@ func AggregateBonuses(p *profile.Profile) Bonuses {
 			if node.Magnitude > bonuses.ConductorLevel {
 				bonuses.ConductorLevel = node.Magnitude
 			}
-		case EffectHeroBroker:
-			bonuses.HeroBroker = true
-		case EffectCampaignMarks:
-			bonuses.CampaignMarksPercent += node.Magnitude
-		case EffectLuckyDuplicate:
-			if node.Magnitude > bonuses.DuplicateBonusPercent {
-				bonuses.DuplicateBonusPercent = node.Magnitude
-			}
-		case EffectPremiumDuplicate:
-			if node.Magnitude > bonuses.DuplicateBonusPercent {
-				bonuses.DuplicateBonusPercent = node.Magnitude
-			}
-		case EffectCampaignFree:
-			bonuses.CampaignFree = true
-		case EffectDailyEnergy:
-			bonuses.DailyEnergy = true
-		case EffectHeroHistory:
-			bonuses.HeroHistory = true
-		case EffectHeroPreview:
-			bonuses.HeroPreview = true
+		default:
+			applyAdvancedBonus(&bonuses, node)
 		}
 	}
 	return bonuses
+}
+
+func applyAdvancedBonus(bonuses *Bonuses, node Node) {
+	switch node.Effect {
+	case EffectHeroBroker:
+		bonuses.HeroBroker = true
+	case EffectCampaignMarks:
+		bonuses.CampaignMarksPercent += node.Magnitude
+	case EffectLuckyDuplicate:
+		if node.Magnitude > bonuses.DuplicateBonusPercent {
+			bonuses.DuplicateBonusPercent = node.Magnitude
+		}
+	case EffectPremiumDuplicate:
+		if node.Magnitude > bonuses.DuplicateBonusPercent {
+			bonuses.DuplicateBonusPercent = node.Magnitude
+		}
+	case EffectCampaignFree:
+		bonuses.CampaignFree = true
+	case EffectDailyEnergy:
+		bonuses.DailyEnergy = true
+	case EffectHeroHistory:
+		bonuses.HeroHistory = true
+	case EffectHeroPreview:
+		bonuses.HeroPreview = true
+	}
 }
 
 func CampDrawThreshold(p *profile.Profile, baseThreshold int) int {

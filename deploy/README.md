@@ -86,7 +86,8 @@ No account becomes an admin simply by registering first. Existing bootstrap
 accounts are not reset on restart. Remove the bootstrap Secret reference once
 an admin is established; the account remains in PostgreSQL.
 
-Merge requests and branch pipelines run Go race tests, the frontend build,
+Merge requests and branch pipelines run the enforced Go complexity linter,
+Go race tests, the frontend build,
 and Helm validation. The default branch then builds two commit-SHA-tagged
 images with Kaniko (the existing Kubernetes runner is non-privileged), pushes
 them to `$CI_REGISTRY_IMAGE/{backend,frontend}`, and deploys directly in-cluster.
@@ -101,6 +102,7 @@ host certificate when the release creates the Ingress.
 
 ```sh
 GOWORK=off go -C backend test -race ./...
+make -C backend lint
 GOWORK=off go -C backend build ./...
 npm --prefix frontend ci
 npm --prefix frontend run build

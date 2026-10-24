@@ -37,17 +37,8 @@ type MissionResult struct {
 }
 
 func RunMission(p *profile.Profile, mission Mission, rng *rand.Rand, ui MissionUI) (MissionResult, error) {
-	if p == nil {
-		return MissionResult{}, errors.New("profile is required")
-	}
-	if rng == nil {
-		return MissionResult{}, errors.New("random source is required")
-	}
-	if ui == nil {
-		return MissionResult{}, errors.New("mission UI is required")
-	}
-	if mission.Type != SingleRound && mission.Type != ThreeRound {
-		return MissionResult{}, fmt.Errorf("mission %d has invalid type %d", mission.Index, mission.Type)
+	if err := validateMissionInputs(p, mission, rng, ui); err != nil {
+		return MissionResult{}, err
 	}
 
 	ui.ShowBriefing(mission)
@@ -102,51 +93,9 @@ func RunMission(p *profile.Profile, mission Mission, rng *rand.Rand, ui MissionU
 			return MissionResult{}, err
 		}
 	} else {
-		for state.Round <= 3 {
-			if state.Round == 3 {
-				scores := [2]int{
-					game.ScorePlayer(state.P1, state.Bounty.Suit, state.Modifiers).Total,
-					game.ScorePlayer(state.P2, state.Bounty.Suit, state.Modifiers).Total,
-				}
-				chooser := 0
-				if scores[1] < scores[0] || (scores[0] == scores[1] && rng.Intn(2) == 1) {
-					chooser = 1
-				}
-				var seat game.Seat
-				if chooser == playerIndex {
-					seat, err = ui.ChooseRoundThreeSeat(scores)
-				} else {
-					seat, err = ai.ChooseSeat(state, chooser, ai.Hard, rng)
-				}
-				if err != nil {
-					return MissionResult{}, err
-				}
-				choosingPlayer, _ := state.Player(chooser)
-				otherPlayer, _ := state.Player(1 - chooser)
-				choosingPlayer.Seat, otherPlayer.Seat = seat, otherSeat(seat)
-			}
-			ui.ShowStartingHand(append([]game.Card(nil), state.P1.Hand...))
-			if err := commitMissionRound(&state, mission, ui, rng); err != nil {
-				return MissionResult{}, err
-			}
-			roundIndex := state.Round - 1
-			if err := playMissionRound(&state, mission, ui, rng, roundIndex, playerIndex, cpuIndex, &roundWins, &suitDoublingWin); err != nil {
-				return MissionResult{}, err
-			}
-			if state.Round == 2 {
-				scoreAfterRoundTwo = [2]int{
-					game.ScorePlayer(state.P1, state.Bounty.Suit, state.Modifiers).Total,
-					game.ScorePlayer(state.P2, state.Bounty.Suit, state.Modifiers).Total,
-				}
-			}
-			if state.Round == 3 {
-				break
-			}
-			swapSeats := state.Round == 1
-			if err := game.EndRound(&state, swapSeats, true); err != nil {
-				return MissionResult{}, err
-			}
-			state.Round++
+		scoreAfterRoundTwo, err = playThreeRoundMission(&state, mission, ui, rng, &roundWins, &suitDoublingWin)
+		if err != nil {
+			return MissionResult{}, err
 		}
 	}
 
@@ -180,6 +129,73 @@ func RunMission(p *profile.Profile, mission Mission, rng *rand.Rand, ui MissionU
 	}
 	ui.ShowMissionResult(result)
 	return result, nil
+}
+
+func validateMissionInputs(p *profile.Profile, mission Mission, rng *rand.Rand, ui MissionUI) error {
+	if p == nil {
+		return errors.New("profile is required")
+	}
+	if rng == nil {
+		return errors.New("random source is required")
+	}
+	if ui == nil {
+		return errors.New("mission UI is required")
+	}
+	if mission.Type != SingleRound && mission.Type != ThreeRound {
+		return fmt.Errorf("mission %d has invalid type %d", mission.Index, mission.Type)
+	}
+	return nil
+}
+
+func playThreeRoundMission(state *game.GameState, mission Mission, ui MissionUI, rng *rand.Rand, roundWins *[3][2]int, suitDoublingWin *bool) ([2]int, error) {
+	var scores [2]int
+	for state.Round <= 3 {
+		if state.Round == 3 {
+			if err := chooseMissionSeat(state, ui, rng); err != nil {
+				return scores, err
+			}
+		}
+		ui.ShowStartingHand(append([]game.Card(nil), state.P1.Hand...))
+		if err := commitMissionRound(state, mission, ui, rng); err != nil {
+			return scores, err
+		}
+		if err := playMissionRound(state, mission, ui, rng, state.Round-1, 0, 1, roundWins, suitDoublingWin); err != nil {
+			return scores, err
+		}
+		if state.Round == 2 {
+			scores = [2]int{game.ScorePlayer(state.P1, state.Bounty.Suit, state.Modifiers).Total, game.ScorePlayer(state.P2, state.Bounty.Suit, state.Modifiers).Total}
+		}
+		if state.Round == 3 {
+			break
+		}
+		if err := game.EndRound(state, state.Round == 1, true); err != nil {
+			return scores, err
+		}
+		state.Round++
+	}
+	return scores, nil
+}
+
+func chooseMissionSeat(state *game.GameState, ui MissionUI, rng *rand.Rand) error {
+	scores := [2]int{game.ScorePlayer(state.P1, state.Bounty.Suit, state.Modifiers).Total, game.ScorePlayer(state.P2, state.Bounty.Suit, state.Modifiers).Total}
+	chooser := 0
+	if scores[1] < scores[0] || (scores[0] == scores[1] && rng.Intn(2) == 1) {
+		chooser = 1
+	}
+	var seat game.Seat
+	var err error
+	if chooser == 0 {
+		seat, err = ui.ChooseRoundThreeSeat(scores)
+	} else {
+		seat, err = ai.ChooseSeat(*state, chooser, ai.Hard, rng)
+	}
+	if err != nil {
+		return err
+	}
+	choosingPlayer, _ := state.Player(chooser)
+	otherPlayer, _ := state.Player(1 - chooser)
+	choosingPlayer.Seat, otherPlayer.Seat = seat, otherSeat(seat)
+	return nil
 }
 
 func choosePlayerHero(p *profile.Profile, mission Mission, ui MissionUI) (string, error) {
@@ -507,32 +523,8 @@ func playMissionRound(
 		var attackIndex, defendIndex int
 		var attackCard, defendCard game.Card
 		if mirror {
-			// The matching CPU card is virtual; consume a real pool card so the
-			// tutorial clash preserves the game's unique-card accounting.
-			if cpuAttacks {
-				defendIndex, err = choosePlayerPoolCard(ui, exchange, false, nil, defender.Pool)
-				if err != nil {
-					return err
-				}
-				defendCard = defender.Pool[defendIndex]
-				attackIndex, err = mirrorPhysicalCardIndex(attacker.Pool, mission, exchange)
-				if err != nil {
-					return err
-				}
-				attackCard = defendCard
-			} else {
-				attackIndex, err = choosePlayerPoolCard(ui, exchange, true, nil, attacker.Pool)
-				if err != nil {
-					return err
-				}
-				attackCard = attacker.Pool[attackIndex]
-				defendIndex, err = mirrorPhysicalCardIndex(defender.Pool, mission, exchange)
-				if err != nil {
-					return err
-				}
-				defendCard = attackCard
-			}
-			if err := playMirrorClash(state, attackerIndex, attackIndex, defenderIndex, defendIndex); err != nil {
+			attackCard, defendCard, err = playMissionMirror(state, mission, ui, exchange, attackerIndex, cpuAttacks)
+			if err != nil {
 				return err
 			}
 		} else if cpuAttacks {
@@ -576,19 +568,37 @@ func playMissionRound(
 		}
 		outcome := game.ResolveWithModifiers(attackCard, defendCard, state.Modifiers)
 		ui.ShowBattleResult(exchange+1, attackCard, defendCard, outcome, attackerIndex == playerIndex)
-		if outcome.Winner == 0 {
-			roundWins[roundIndex][attackerIndex]++
-			if attackCard.Suit.Beats(defendCard.Suit) {
-				*suitDoublingWin = true
-			}
-		} else if outcome.Winner == 1 {
-			roundWins[roundIndex][defenderIndex]++
-			if defendCard.Suit.Beats(attackCard.Suit) {
-				*suitDoublingWin = true
-			}
-		}
+		recordMissionOutcome(roundIndex, attackerIndex, outcome, attackCard, defendCard, roundWins, suitDoublingWin)
 	}
 	return nil
+}
+
+func playMissionMirror(state *game.GameState, mission Mission, ui MissionUI, exchange, attackerIndex int, cpuAttacks bool) (game.Card, game.Card, error) {
+	attacker, _ := state.Player(attackerIndex)
+	defenderIndex := 1 - attackerIndex
+	defender, _ := state.Player(defenderIndex)
+	var attackIndex, defendIndex int
+	var card game.Card
+	var err error
+	if cpuAttacks {
+		defendIndex, err = choosePlayerPoolCard(ui, exchange, false, nil, defender.Pool)
+		if err != nil {
+			return card, card, err
+		}
+		card = defender.Pool[defendIndex]
+		attackIndex, err = mirrorPhysicalCardIndex(attacker.Pool, mission, exchange)
+	} else {
+		attackIndex, err = choosePlayerPoolCard(ui, exchange, true, nil, attacker.Pool)
+		if err != nil {
+			return card, card, err
+		}
+		card = attacker.Pool[attackIndex]
+		defendIndex, err = mirrorPhysicalCardIndex(defender.Pool, mission, exchange)
+	}
+	if err != nil {
+		return card, card, err
+	}
+	return card, card, playMirrorClash(state, attackerIndex, attackIndex, defenderIndex, defendIndex)
 }
 
 func choosePlayerPoolCard(ui MissionUI, exchange int, attacking bool, revealed *game.Card, pool []game.Card) (int, error) {
@@ -739,6 +749,11 @@ func reportOutcome(
 	suitDoublingWin *bool,
 ) error {
 	ui.ShowBattleResult(exchange+1, attackCard, defendCard, outcome, attackerIndex == playerIndex)
+	recordMissionOutcome(roundIndex, attackerIndex, outcome, attackCard, defendCard, roundWins, suitDoublingWin)
+	return state.Validate()
+}
+
+func recordMissionOutcome(roundIndex, attackerIndex int, outcome game.Outcome, attackCard, defendCard game.Card, roundWins *[3][2]int, suitDoublingWin *bool) {
 	switch outcome.Winner {
 	case 0:
 		roundWins[roundIndex][attackerIndex]++
@@ -751,7 +766,6 @@ func reportOutcome(
 			*suitDoublingWin = true
 		}
 	}
-	return state.Validate()
 }
 
 func otherSeat(seat game.Seat) game.Seat {

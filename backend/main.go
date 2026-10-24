@@ -118,7 +118,11 @@ func main() {
 		fmt.Fprintln(os.Stderr, "unknown UI; use web or terminal")
 		os.Exit(2)
 	}
-	selectedMode, err := parseMode(*modeFlag)
+	runTerminal(*modeFlag, *noColor, rng)
+}
+
+func runTerminal(modeFlag string, noColor bool, rng *rand.Rand) {
+	selectedMode, err := parseMode(modeFlag)
 	if err != nil {
 		fmt.Fprintln(os.Stderr, err)
 		os.Exit(2)
@@ -127,7 +131,7 @@ func main() {
 		scanner:      bufio.NewScanner(os.Stdin),
 		rng:          rng,
 		mode:         selectedMode,
-		forceNoColor: *noColor || os.Getenv("NO_COLOR") != "",
+		forceNoColor: noColor || os.Getenv("NO_COLOR") != "",
 	}
 	playerProfile, err := profile.LoadProfile()
 	if err != nil {
@@ -295,6 +299,13 @@ func (a *app) playRound(state *game.GameState) error {
 		player, _ := state.Player(index)
 		fmt.Printf("P%d is seat %s (%d cards in hand).\n", index+1, player.Seat, len(player.Hand))
 	}
+	if err := a.commitRound(state); err != nil {
+		return err
+	}
+	return a.resolveRound(state)
+}
+
+func (a *app) commitRound(state *game.GameState) error {
 	for playerIndex := 0; playerIndex < 2; playerIndex++ {
 		if a.isHuman(playerIndex) {
 			if a.mode == humanVsHuman {
@@ -318,7 +329,10 @@ func (a *app) playRound(state *game.GameState) error {
 			a.clearScreen()
 		}
 	}
+	return nil
+}
 
+func (a *app) resolveRound(state *game.GameState) error {
 	var roundWinnerCount [2]int
 	for exchange := 0; exchange < 3; exchange++ {
 		if err := gameui.RenderModifierHUD(os.Stdout, state.Modifiers, state.Bounty.Suit.String(), colorsEnabled && !a.forceNoColor); err != nil {
@@ -340,31 +354,7 @@ func (a *app) playRound(state *game.GameState) error {
 			fmt.Println("Exchange skipped: a player has no pool card available.")
 			continue
 		}
-		autoLast := exchange == 2 && len(attacker.Pool) == 1 && len(defender.Pool) == 1
-		attackIndex, defendIndex := 0, 0
-		if !autoLast {
-			a.showDecision(*state, attackerIndex)
-			var err error
-			attackIndex, err = a.choosePool(*state, attackerIndex, true, nil)
-			if err != nil {
-				return err
-			}
-		}
-		attackCard := attacker.Pool[attackIndex]
-		fmt.Printf("P%d reveals %s.\n", attackerIndex+1, a.card(attackCard))
-		if autoLast {
-			fmt.Println("Final cards are played automatically.")
-		} else {
-			a.showDecision(*state, defenderIndex)
-			fmt.Printf("P%d defends after seeing %s.\n", defenderIndex+1, a.card(attackCard))
-			var err error
-			defendIndex, err = a.choosePool(*state, defenderIndex, false, &attackCard)
-			if err != nil {
-				return err
-			}
-		}
-		defendCard := defender.Pool[defendIndex]
-		outcome, err := game.PlayExchange(state, attackerIndex, attackIndex, defenderIndex, defendIndex)
+		attackCard, defendCard, outcome, err := a.playTerminalExchange(state, attackerIndex, defenderIndex, exchange)
 		if err != nil {
 			return err
 		}
@@ -391,6 +381,37 @@ func (a *app) playRound(state *game.GameState) error {
 		return err
 	}
 	return gameui.RenderModifierHUD(os.Stdout, state.Modifiers, state.Bounty.Suit.String(), colorsEnabled && !a.forceNoColor)
+}
+
+func (a *app) playTerminalExchange(state *game.GameState, attackerIndex, defenderIndex, exchange int) (game.Card, game.Card, game.Outcome, error) {
+	attacker, _ := state.Player(attackerIndex)
+	defender, _ := state.Player(defenderIndex)
+	autoLast := exchange == 2 && len(attacker.Pool) == 1 && len(defender.Pool) == 1
+	attackIndex, defendIndex := 0, 0
+	if !autoLast {
+		a.showDecision(*state, attackerIndex)
+		var err error
+		attackIndex, err = a.choosePool(*state, attackerIndex, true, nil)
+		if err != nil {
+			return game.Card{}, game.Card{}, game.Outcome{}, err
+		}
+	}
+	attackCard := attacker.Pool[attackIndex]
+	fmt.Printf("P%d reveals %s.\n", attackerIndex+1, a.card(attackCard))
+	if autoLast {
+		fmt.Println("Final cards are played automatically.")
+	} else {
+		a.showDecision(*state, defenderIndex)
+		fmt.Printf("P%d defends after seeing %s.\n", defenderIndex+1, a.card(attackCard))
+		var err error
+		defendIndex, err = a.choosePool(*state, defenderIndex, false, &attackCard)
+		if err != nil {
+			return game.Card{}, game.Card{}, game.Outcome{}, err
+		}
+	}
+	defendCard := defender.Pool[defendIndex]
+	outcome, err := game.PlayExchange(state, attackerIndex, attackIndex, defenderIndex, defendIndex)
+	return attackCard, defendCard, outcome, err
 }
 
 func (a *app) assignRoundThreeSeats(state *game.GameState) error {
@@ -719,28 +740,12 @@ func simulate(count int, rng *rand.Rand) error {
 		for state.Round <= 3 {
 			roundPlayed := state.Round
 			if state.Round == 3 {
-				s1 := game.ScorePlayer(state.P1, state.Bounty.Suit, state.Modifiers).Total
-				s2 := game.ScorePlayer(state.P2, state.Bounty.Suit, state.Modifiers).Total
-				chooser := 0
-				if s2 < s1 || (s1 == s2 && rng.Intn(2) == 1) {
-					chooser = 1
-				}
-				seat, err := ai.ChooseSeat(state, chooser, ai.Hard, rng)
-				if err != nil {
+				if err := assignSimulationSeat(&state, [2]ai.Difficulty{ai.Hard, ai.Hard}, rng); err != nil {
 					return err
 				}
-				player, _ := state.Player(chooser)
-				opponent, _ := state.Player(1 - chooser)
-				player.Seat, opponent.Seat = seat, otherSeat(seat)
 			}
-			for index := 0; index < 2; index++ {
-				indices, err := ai.ChooseCommit(state, index, ai.Hard, rng)
-				if err != nil {
-					return err
-				}
-				if err := game.Commit(&state, index, indices); err != nil {
-					return err
-				}
+			if err := commitSimulationPlayers(&state, [2]ai.Difficulty{ai.Hard, ai.Hard}, rng); err != nil {
+				return err
 			}
 			for exchange := 0; exchange < 3; exchange++ {
 				seat := game.SeatX
@@ -767,14 +772,7 @@ func simulate(count int, rng *rand.Rand) error {
 					return err
 				}
 			}
-			game.DiscardPools(&state)
-			if roundPlayed < 3 {
-				if err := game.EndRound(&state, state.Round == 1, true); err != nil {
-					return err
-				}
-				state.Round++
-			}
-			if err := state.Validate(); err != nil {
+			if err := finishSimulationRound(&state, roundPlayed); err != nil {
 				return err
 			}
 			if roundPlayed == 3 {
@@ -907,28 +905,12 @@ func simulateHeroGame(first, second heroes.Hero, p1Difficulty, p2Difficulty ai.D
 	for state.Round <= 3 {
 		roundPlayed := state.Round
 		if roundPlayed == 3 {
-			s1 := game.ScorePlayer(state.P1, state.Bounty.Suit, state.Modifiers).Total
-			s2 := game.ScorePlayer(state.P2, state.Bounty.Suit, state.Modifiers).Total
-			chooser := 0
-			if s2 < s1 || s1 == s2 && rng.Intn(2) == 1 {
-				chooser = 1
-			}
-			seat, err := ai.ChooseSeat(state, chooser, difficulties[chooser], rng)
-			if err != nil {
+			if err := assignSimulationSeat(&state, difficulties, rng); err != nil {
 				return heroSimulationGameResult{}, err
 			}
-			player, _ := state.Player(chooser)
-			opponent, _ := state.Player(1 - chooser)
-			player.Seat, opponent.Seat = seat, otherSeat(seat)
 		}
-		for playerIndex := 0; playerIndex < 2; playerIndex++ {
-			indices, err := ai.ChooseCommit(state, playerIndex, difficulties[playerIndex], rng)
-			if err != nil {
-				return heroSimulationGameResult{}, err
-			}
-			if err := game.Commit(&state, playerIndex, indices); err != nil {
-				return heroSimulationGameResult{}, err
-			}
+		if err := commitSimulationPlayers(&state, difficulties, rng); err != nil {
+			return heroSimulationGameResult{}, err
 		}
 		roundWins := 0
 		for exchange := 0; exchange < 3; exchange++ {
@@ -966,14 +948,7 @@ func simulateHeroGame(first, second heroes.Hero, p1Difficulty, p2Difficulty ai.D
 		if roundWins <= 1 {
 			stalls++
 		}
-		game.DiscardPools(&state)
-		if roundPlayed < 3 {
-			if err := game.EndRound(&state, state.Round == 1, true); err != nil {
-				return heroSimulationGameResult{}, err
-			}
-			state.Round++
-		}
-		if err := state.Validate(); err != nil {
+		if err := finishSimulationRound(&state, roundPlayed); err != nil {
 			return heroSimulationGameResult{}, err
 		}
 		if roundPlayed == 3 {
@@ -991,4 +966,45 @@ func percentage(part, total int) float64 {
 		return 0
 	}
 	return 100 * float64(part) / float64(total)
+}
+
+func assignSimulationSeat(state *game.GameState, difficulties [2]ai.Difficulty, rng *rand.Rand) error {
+	s1 := game.ScorePlayer(state.P1, state.Bounty.Suit, state.Modifiers).Total
+	s2 := game.ScorePlayer(state.P2, state.Bounty.Suit, state.Modifiers).Total
+	chooser := 0
+	if s2 < s1 || (s1 == s2 && rng.Intn(2) == 1) {
+		chooser = 1
+	}
+	seat, err := ai.ChooseSeat(*state, chooser, difficulties[chooser], rng)
+	if err != nil {
+		return err
+	}
+	player, _ := state.Player(chooser)
+	opponent, _ := state.Player(1 - chooser)
+	player.Seat, opponent.Seat = seat, otherSeat(seat)
+	return nil
+}
+
+func commitSimulationPlayers(state *game.GameState, difficulties [2]ai.Difficulty, rng *rand.Rand) error {
+	for index := 0; index < 2; index++ {
+		indices, err := ai.ChooseCommit(*state, index, difficulties[index], rng)
+		if err != nil {
+			return err
+		}
+		if err := game.Commit(state, index, indices); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func finishSimulationRound(state *game.GameState, roundPlayed int) error {
+	game.DiscardPools(state)
+	if roundPlayed < 3 {
+		if err := game.EndRound(state, state.Round == 1, true); err != nil {
+			return err
+		}
+		state.Round++
+	}
+	return state.Validate()
 }

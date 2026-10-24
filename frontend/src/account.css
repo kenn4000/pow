@@ -18,3 +18,25 @@
 .account-page pre { max-height: 32rem; overflow: auto; padding: 1rem; background: #101624; font-size: .8rem; }
 .account-page details { margin: .75rem 0; }
 .account-page summary { cursor: pointer; }
+.password-page { max-width: 540px; }
+.card-catalog { max-width: 1400px; }
+.catalog-toolbar { display: flex; flex-wrap: wrap; align-items: end; gap: 1rem; margin: 1.5rem 0; }
+.catalog-toolbar [aria-pressed=true] { color: #101624; background: #f0c75e; }
+.catalog-layout { display: grid; gap: 1.5rem; align-items: start; }
+.catalog-layout.has-details { grid-template-columns: minmax(0, 1fr) minmax(300px, 420px); }
+.contact-sheet { display: grid; grid-template-columns: repeat(auto-fill, minmax(125px, 1fr)); gap: .75rem; }
+.contact-tile { display: grid; gap: .4rem; text-align: center; }
+.contact-tile[aria-expanded=true] { outline: 3px solid #f0c75e; }
+.catalog-image { display: block; position: relative; width: 100%; aspect-ratio: 3 / 4; }
+.catalog-image img { width: 100%; height: 100%; object-fit: contain; }
+.catalog-face { position: absolute; bottom: 8%; left: 0; width: 100%; font-size: clamp(1.3rem, 3vw, 2.5rem); font-weight: 900; color: #fff; text-shadow: 0 1px 5px #000; }
+.card-details { background: #101624; border: 1px solid #62718b; border-radius: 8px; padding: 1rem; min-width: 0; }
+.card-details > .catalog-image { max-width: 240px; margin: 0 auto; }
+.card-facts { display: grid; grid-template-columns: max-content minmax(0, 1fr); gap: .5rem .75rem; }
+.card-facts dt { color: #aeb9cb; }
+.card-facts dd { margin: 0; overflow-wrap: anywhere; }
+.card-facts a { color: #f0c75e; }
+.card-variants { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: .5rem; }
+.card-variants figure { margin: 0; }
+.card-variants figcaption { font-size: .75rem; text-align: center; }
+@media (max-width: 800px) { .catalog-layout.has-details { grid-template-columns: 1fr; } .card-details { grid-row: 1; } }

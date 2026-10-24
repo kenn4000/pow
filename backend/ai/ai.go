@@ -101,58 +101,17 @@ func ChoosePoolIndex(state game.GameState, playerIndex int, attacking bool, reve
 	opponent, _ := state.Player(1 - playerIndex)
 	bestIndex, bestValue := 0, -1<<30
 	if !attacking {
-		if revealedAttack == nil {
-			return 0, errors.New("defense requires the revealed attack card")
-		}
-		for i, card := range player.Pool {
-			outcome := game.ResolveWithModifiers(*revealedAttack, card, state.Modifiers)
-			value := 0
-			switch outcome.Winner {
-			case 1:
-				value, err = game.ScoreDeltaWithModifiers(*player, outcome.Captured, state.Bounty.Suit, state.Modifiers, state.Round)
-			case 0:
-				value, err = game.ScoreDeltaWithModifiers(*opponent, outcome.Captured, state.Bounty.Suit, state.Modifiers, state.Round)
-				value = -value
-			}
-			if err != nil {
-				return 0, err
-			}
-			if value > bestValue || (value == bestValue && card.Face < player.Pool[bestIndex].Face) {
-				bestIndex, bestValue = i, value
-			}
-		}
-		return bestIndex, nil
+		return chooseDefenseIndex(state, player, opponent, revealedAttack)
 	}
 
 	candidates := unseenCards(state, playerIndex)
 	if len(candidates) == 0 {
 		return 0, errors.New("no unseen cards available for attack evaluation")
 	}
+	if difficulty == Greedy {
+		return chooseGreedyAttack(state, player, opponent, candidates)
+	}
 	for index, card := range player.Pool {
-		if difficulty == Greedy {
-			expected := 0
-			for _, oppCard := range candidates {
-				outcome := game.ResolveWithModifiers(card, oppCard, state.Modifiers)
-				switch outcome.Winner {
-				case 0:
-					delta, err := game.ScoreDeltaWithModifiers(*player, outcome.Captured, state.Bounty.Suit, state.Modifiers, state.Round)
-					if err != nil {
-						return 0, err
-					}
-					expected += delta
-				case 1:
-					delta, err := game.ScoreDeltaWithModifiers(*opponent, outcome.Captured, state.Bounty.Suit, state.Modifiers, state.Round)
-					if err != nil {
-						return 0, err
-					}
-					expected -= delta
-				}
-			}
-			if expected > bestValue || (expected == bestValue && card.Face > player.Pool[bestIndex].Face) {
-				bestIndex, bestValue = index, expected
-			}
-			continue
-		}
 		worst := 1 << 30
 		for sample := 0; sample < sampleCount; sample++ {
 			oppCard := candidates[rng.Intn(len(candidates))]
@@ -177,6 +136,55 @@ func ChoosePoolIndex(state game.GameState, playerIndex int, attacking bool, reve
 		}
 	}
 	return bestIndex, nil
+}
+
+func chooseDefenseIndex(state game.GameState, player, opponent *game.Player, revealedAttack *game.Card) (int, error) {
+	if revealedAttack == nil {
+		return 0, errors.New("defense requires the revealed attack card")
+	}
+	bestIndex, bestValue := 0, -1<<30
+	for i, card := range player.Pool {
+		outcome := game.ResolveWithModifiers(*revealedAttack, card, state.Modifiers)
+		value, err := poolOutcomeValue(state, player, opponent, outcome, false)
+		if err != nil {
+			return 0, err
+		}
+		if value > bestValue || (value == bestValue && card.Face < player.Pool[bestIndex].Face) {
+			bestIndex, bestValue = i, value
+		}
+	}
+	return bestIndex, nil
+}
+
+func chooseGreedyAttack(state game.GameState, player, opponent *game.Player, candidates []game.Card) (int, error) {
+	bestIndex, bestValue := 0, -1<<30
+	for index, card := range player.Pool {
+		expected := 0
+		for _, oppCard := range candidates {
+			outcome := game.ResolveWithModifiers(card, oppCard, state.Modifiers)
+			value, err := poolOutcomeValue(state, player, opponent, outcome, true)
+			if err != nil {
+				return 0, err
+			}
+			expected += value
+		}
+		if expected > bestValue || (expected == bestValue && card.Face > player.Pool[bestIndex].Face) {
+			bestIndex, bestValue = index, expected
+		}
+	}
+	return bestIndex, nil
+}
+
+func poolOutcomeValue(state game.GameState, player, opponent *game.Player, outcome game.Outcome, attacking bool) (int, error) {
+	if outcome.Winner == -1 {
+		return 0, nil
+	}
+	won := (attacking && outcome.Winner == 0) || (!attacking && outcome.Winner == 1)
+	if won {
+		return game.ScoreDeltaWithModifiers(*player, outcome.Captured, state.Bounty.Suit, state.Modifiers, state.Round)
+	}
+	value, err := game.ScoreDeltaWithModifiers(*opponent, outcome.Captured, state.Bounty.Suit, state.Modifiers, state.Round)
+	return -value, err
 }
 
 func ChooseSeat(state game.GameState, playerIndex int, difficulty Difficulty, rng *rand.Rand) (game.Seat, error) {

@@ -16,6 +16,14 @@ variables:
   HELM_RELEASE: "prisoner-of-war"
   BOOTSTRAP_ADMIN_SECRET: ""
 
+backend-lint:
+  image: golang:1.25-alpine
+  stage: test
+  before_script:
+    - apk add --no-cache make
+  script:
+    - make -C backend lint
+
 backend-test:
   image: golang:1.25-alpine
   stage: test

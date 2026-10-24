@@ -117,6 +117,11 @@ func TestPostgresApplication(t *testing.T) {
 	a.request("GET", "/state", nil, 401)
 	a.request("GET", "/admin/users", nil, 401)
 	admin.request("POST", "/auth/login", credentials{"admin@example.com", "a-long-admin-password"}, 200)
+	var catalog cardCatalog
+	json.Unmarshal(admin.request("GET", "/admin/cards", nil, 200), &catalog)
+	if len(catalog.Cards) != 27 || len(catalog.Artwork) != 72 {
+		t.Fatal("admin card catalog is incomplete")
+	}
 	var adminMe struct {
 		User account `json:"user"`
 	}
@@ -133,6 +138,7 @@ func TestPostgresApplication(t *testing.T) {
 		t.Fatalf("signup privileges: %+v", alice)
 	}
 	a.request("GET", "/admin/users", nil, 403)
+	a.request("GET", "/admin/cards", nil, 403)
 	a.request("PATCH", "/admin/users/"+alice.User.ID+"/role", map[string]string{"role": "admin"}, 403)
 	b.request("POST", "/auth/signup", credentials{"bob@example.com", "a-long-other-password"}, 200)
 	newClient().request("POST", "/auth/signup", credentials{"alice@example.com", "a-long-user-password"}, 409)

@@ -190,6 +190,18 @@ func LoadProfileFrom(path string) (*Profile, error) {
 	previousSchema := p.SchemaVersion
 	migrated := previousSchema < SchemaVersion
 	normalize(&p)
+	migrateProfile(&p, previousSchema)
+	p.ApplyEnergyTick(time.Now())
+	if migrated {
+		p.SchemaVersion = SchemaVersion
+		if err := p.SaveTo(path); err != nil {
+			return nil, fmt.Errorf("save migrated profile: %w", err)
+		}
+	}
+	return &p, nil
+}
+
+func migrateProfile(p *Profile, previousSchema int) {
 	if previousSchema < 3 {
 		p.ColorOn = true
 		p.ConfirmQuit = true
@@ -221,7 +233,7 @@ func LoadProfileFrom(path string) (*Profile, error) {
 		}
 	}
 	if previousSchema < 7 {
-		migrateCampaignProgress(&p)
+		migrateCampaignProgress(p)
 	}
 	if !containsHero(p.UnlockedHeroes, "recruit") {
 		p.UnlockedHeroes = append(p.UnlockedHeroes, "recruit")
@@ -229,14 +241,6 @@ func LoadProfileFrom(path string) (*Profile, error) {
 	if p.DefaultHeroID == "" || !containsHero(p.UnlockedHeroes, p.DefaultHeroID) {
 		p.DefaultHeroID = DefaultHeroID
 	}
-	p.ApplyEnergyTick(time.Now())
-	if migrated {
-		p.SchemaVersion = SchemaVersion
-		if err := p.SaveTo(path); err != nil {
-			return nil, fmt.Errorf("save migrated profile: %w", err)
-		}
-	}
-	return &p, nil
 }
 
 func (p *Profile) Save() error {
@@ -340,6 +344,11 @@ func (p *Profile) ApplyEnergyTick(now time.Time) {
 }
 
 func normalize(p *Profile) {
+	normalizeResources(p)
+	normalizeProgression(p)
+}
+
+func normalizeResources(p *Profile) {
 	if p.MaxEnergy <= 0 {
 		p.MaxEnergy = DefaultMaxEnergy
 	}
@@ -385,6 +394,9 @@ func normalize(p *Profile) {
 	if p.PendingBoxes == nil {
 		p.PendingBoxes = make(map[string]int)
 	}
+}
+
+func normalizeProgression(p *Profile) {
 	if p.WinStreakByMode == nil {
 		p.WinStreakByMode = make(map[int]int)
 	}

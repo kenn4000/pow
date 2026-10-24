@@ -5,6 +5,8 @@ import { mountGame } from 'virtual:game-controller';
 import 'virtual:game-style.css';
 import { request } from './api';
 import { AdminUsers, SavedGames } from './pages';
+import { PasswordSettings } from './PasswordSettings';
+import { CardCatalog } from './CardCatalog';
 import './account.css';
 
 function Game() {
@@ -104,13 +106,17 @@ function App() {
         <button aria-current={screen === 'game' ? 'page' : undefined} onClick={() => setScreen('game')}>Game</button>
         {user.role !== 'local' && <button onClick={() => setScreen('history')}>Saved games</button>}
         {user.role === 'admin' && <button onClick={() => setScreen('admin')}>Admin</button>}
+        {user.role === 'admin' && <button onClick={() => setScreen('cards')}>Cards</button>}
+        {user.role !== 'local' && <button onClick={() => setScreen('password')}>Password</button>}
         {user.role !== 'local' && <button onClick={logout}>Sign out</button>}
       </nav>
       {error && <p role="alert">{error}</p>}
     </header>
     {screen === 'admin' && user.role === 'admin'
       ? <AdminUsers currentUser={user} onRoleChange={(id, role) => { if (id === user.id) { setUser({ ...user, role }); if (role !== 'admin') setScreen('game'); } }} />
-      : screen === 'history' ? <SavedGames /> : <Game />}
+      : screen === 'cards' && user.role === 'admin' ? <CardCatalog />
+        : screen === 'password' ? <PasswordSettings />
+          : screen === 'history' ? <SavedGames /> : <Game />}
   </>;
 }
 

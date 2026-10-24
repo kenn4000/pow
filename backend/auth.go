@@ -103,7 +103,7 @@ func createAuthSession(ctx context.Context, tx *sql.Tx, userID string) (string, 
 	}
 	token := base64.RawURLEncoding.EncodeToString(data[:])
 	hash := sha256.Sum256([]byte(token))
-	if _, err := tx.ExecContext(ctx, "DELETE FROM auth_sessions WHERE expires_at < now()"); err != nil {
+	if _, err := tx.ExecContext(ctx, "DELETE FROM auth_sessions WHERE user_id=$1 AND expires_at < now()", userID); err != nil {
 		return "", err
 	}
 	_, err := tx.ExecContext(ctx, "INSERT INTO auth_sessions(token_hash,user_id,expires_at) VALUES($1,$2,now()+interval '7 days')", hash[:], userID)
@@ -123,21 +123,29 @@ func (s *webServer) handleAuth(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if action == "logout" {
-		if cookie, err := r.Cookie("pow_session"); err == nil {
-			hash := sha256.Sum256([]byte(cookie.Value))
-			if _, err := s.db.ExecContext(r.Context(), "DELETE FROM auth_sessions WHERE token_hash=$1", hash[:]); err != nil {
-				databaseError(w, err)
-				return
-			}
-		}
-		http.SetCookie(w, sessionCookie("", -1))
-		writeJSON(w, http.StatusOK, map[string]bool{"ok": true})
+		s.handleLogout(w, r)
 		return
 	}
 	if action != "signup" && action != "login" {
 		http.NotFound(w, r)
 		return
 	}
+	s.handleCredentials(w, r, action)
+}
+
+func (s *webServer) handleLogout(w http.ResponseWriter, r *http.Request) {
+	if cookie, err := r.Cookie("pow_session"); err == nil {
+		hash := sha256.Sum256([]byte(cookie.Value))
+		if _, err := s.db.ExecContext(r.Context(), "DELETE FROM auth_sessions WHERE token_hash=$1", hash[:]); err != nil {
+			databaseError(w, err)
+			return
+		}
+	}
+	http.SetCookie(w, sessionCookie("", -1))
+	writeJSON(w, http.StatusOK, map[string]bool{"ok": true})
+}
+
+func (s *webServer) handleCredentials(w http.ResponseWriter, r *http.Request, action string) {
 	var input credentials
 	if err := decodeJSON(r, &input); err != nil {
 		writeError(w, http.StatusBadRequest, err)
@@ -148,15 +156,7 @@ func (s *webServer) handleAuth(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusBadRequest, errors.New("use a valid email and a password between 12 and 72 bytes"))
 		return
 	}
-	var attempts int
-	err = s.db.QueryRowContext(r.Context(), `INSERT INTO auth_attempts(email,attempts,reset_at) VALUES($1,1,now()+interval '15 minutes') ON CONFLICT(email) DO UPDATE SET attempts=CASE WHEN auth_attempts.reset_at<now() THEN 1 ELSE auth_attempts.attempts+1 END,reset_at=CASE WHEN auth_attempts.reset_at<now() THEN now()+interval '15 minutes' ELSE auth_attempts.reset_at END RETURNING attempts`, email).Scan(&attempts)
-	if err != nil {
-		databaseError(w, err)
-		return
-	}
-	if attempts > 15 {
-		w.Header().Set("Retry-After", "900")
-		writeError(w, http.StatusTooManyRequests, errors.New("too many attempts; try again in 15 minutes"))
+	if !s.allowAuthAttempt(w, r, email) {
 		return
 	}
 	tx, err := s.db.BeginTx(r.Context(), nil)
@@ -165,44 +165,12 @@ func (s *webServer) handleAuth(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	defer tx.Rollback()
-	var user account
-	if action == "signup" {
-		hash, err := bcrypt.GenerateFromPassword([]byte(input.Password), bcrypt.DefaultCost)
-		if err != nil {
-			databaseError(w, err)
-			return
-		}
-		user, err = insertAccount(r.Context(), tx, email, hash, "user")
-		if err != nil {
-			var pgErr *pgconn.PgError
-			if errors.As(err, &pgErr) && pgErr.Code == "23505" {
-				writeError(w, http.StatusConflict, errors.New("email is already registered"))
-			} else {
-				databaseError(w, err)
-			}
-			return
-		}
-	} else {
-		var hash []byte
-		err = tx.QueryRowContext(r.Context(), "SELECT id,email,role,created_at,password_hash FROM users WHERE email=$1", email).Scan(&user.ID, &user.Email, &user.Role, &user.CreatedAt, &hash)
-		if errors.Is(err, sql.ErrNoRows) {
-			bcrypt.CompareHashAndPassword(dummyPasswordHash, []byte(input.Password))
-			writeError(w, http.StatusUnauthorized, errors.New("invalid email or password"))
-			return
-		}
-		if err != nil {
-			databaseError(w, err)
-			return
-		}
-		if bcrypt.CompareHashAndPassword(hash, []byte(input.Password)) != nil {
-			writeError(w, http.StatusUnauthorized, errors.New("invalid email or password"))
-			return
-		}
+	user, err := accountForCredentials(r.Context(), tx, email, input.Password, action == "signup")
+	if err != nil {
+		writeRequestError(w, err)
+		return
 	}
-	token, err := createAuthSession(r.Context(), tx, user.ID)
-	if err == nil {
-		_, err = tx.ExecContext(r.Context(), "DELETE FROM auth_attempts WHERE email=$1", email)
-	}
+	token, err := finishAuthentication(r.Context(), tx, user)
 	if err == nil {
 		err = tx.Commit()
 	}
@@ -212,6 +180,59 @@ func (s *webServer) handleAuth(w http.ResponseWriter, r *http.Request) {
 	}
 	http.SetCookie(w, sessionCookie(token, 7*24*60*60))
 	writeJSON(w, http.StatusOK, map[string]any{"user": user})
+}
+
+func (s *webServer) allowAuthAttempt(w http.ResponseWriter, r *http.Request, email string) bool {
+	var attempts int
+	err := s.db.QueryRowContext(r.Context(), `INSERT INTO auth_attempts(email,attempts,reset_at) VALUES($1,1,now()+interval '15 minutes') ON CONFLICT(email) DO UPDATE SET attempts=CASE WHEN auth_attempts.reset_at<now() THEN 1 ELSE auth_attempts.attempts+1 END,reset_at=CASE WHEN auth_attempts.reset_at<now() THEN now()+interval '15 minutes' ELSE auth_attempts.reset_at END RETURNING attempts`, email).Scan(&attempts)
+	if err != nil {
+		databaseError(w, err)
+		return false
+	}
+	if attempts > 15 {
+		w.Header().Set("Retry-After", "900")
+		writeError(w, http.StatusTooManyRequests, errors.New("too many attempts; try again in 15 minutes"))
+		return false
+	}
+	return true
+}
+
+func accountForCredentials(ctx context.Context, tx *sql.Tx, email, password string, signup bool) (account, error) {
+	if signup {
+		hash, err := bcrypt.GenerateFromPassword([]byte(password), bcrypt.DefaultCost)
+		if err != nil {
+			return account{}, err
+		}
+		u, err := insertAccount(ctx, tx, email, hash, "user")
+		var pgErr *pgconn.PgError
+		if errors.As(err, &pgErr) && pgErr.Code == "23505" {
+			return account{}, &requestError{http.StatusConflict, "email is already registered"}
+		}
+		return u, err
+	}
+	var u account
+	var hash []byte
+	err := tx.QueryRowContext(ctx, "SELECT id,email,role,created_at,password_hash FROM users WHERE email=$1 FOR UPDATE", email).Scan(&u.ID, &u.Email, &u.Role, &u.CreatedAt, &hash)
+	if errors.Is(err, sql.ErrNoRows) {
+		bcrypt.CompareHashAndPassword(dummyPasswordHash, []byte(password))
+		return u, &requestError{http.StatusUnauthorized, "invalid email or password"}
+	}
+	if err != nil {
+		return u, err
+	}
+	if bcrypt.CompareHashAndPassword(hash, []byte(password)) != nil {
+		return u, &requestError{http.StatusUnauthorized, "invalid email or password"}
+	}
+	return u, nil
+}
+
+func finishAuthentication(ctx context.Context, tx *sql.Tx, u account) (string, error) {
+	token, err := createAuthSession(ctx, tx, u.ID)
+	if err != nil {
+		return "", err
+	}
+	_, err = tx.ExecContext(ctx, "DELETE FROM auth_attempts WHERE email=$1", u.Email)
+	return token, err
 }
 
 func insertAccount(ctx context.Context, tx *sql.Tx, email string, hash []byte, role string) (account, error) {
@@ -277,31 +298,7 @@ func (s *webServer) handleAdmin(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if r.Method == http.MethodGet {
-		rows, err := s.db.QueryContext(r.Context(), "SELECT id,email,role,created_at FROM users WHERE id>$1 ORDER BY id LIMIT 101", r.URL.Query().Get("after"))
-		if err != nil {
-			databaseError(w, err)
-			return
-		}
-		defer rows.Close()
-		users := []account{}
-		for rows.Next() {
-			var user account
-			if err := rows.Scan(&user.ID, &user.Email, &user.Role, &user.CreatedAt); err != nil {
-				databaseError(w, err)
-				return
-			}
-			users = append(users, user)
-		}
-		if err := rows.Err(); err != nil {
-			databaseError(w, err)
-			return
-		}
-		next := ""
-		if len(users) > 100 {
-			users = users[:100]
-			next = users[99].ID
-		}
-		writeJSON(w, http.StatusOK, map[string]any{"users": users, "next": next})
+		s.listUsers(w, r)
 		return
 	}
 	if r.Method != http.MethodPatch {
@@ -312,7 +309,7 @@ func (s *webServer) handleAdmin(w http.ResponseWriter, r *http.Request) {
 	var input struct {
 		Role string `json:"role"`
 	}
-	if err := decodeJSON(r, &input); err != nil || (input.Role != "user" && input.Role != "admin") {
+	if err := decodeJSON(r, &input); err != nil || !validRole(input.Role) {
 		writeError(w, http.StatusBadRequest, errors.New("role must be user or admin"))
 		return
 	}
@@ -345,13 +342,8 @@ func (s *webServer) handleAdmin(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if oldRole == "admin" && input.Role == "user" {
-		var count int
-		if err := tx.QueryRowContext(r.Context(), "SELECT count(*) FROM users WHERE role='admin'").Scan(&count); err != nil {
-			databaseError(w, err)
-			return
-		}
-		if count == 1 {
-			writeError(w, http.StatusConflict, errors.New("the last administrator cannot be demoted"))
+		if err := ensureAnotherAdmin(r.Context(), tx); err != nil {
+			writeRequestError(w, err)
 			return
 		}
 	}
@@ -367,6 +359,47 @@ func (s *webServer) handleAdmin(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	writeJSON(w, http.StatusOK, map[string]bool{"ok": true})
+}
+
+func validRole(role string) bool { return role == "user" || role == "admin" }
+
+func ensureAnotherAdmin(ctx context.Context, tx *sql.Tx) error {
+	var count int
+	if err := tx.QueryRowContext(ctx, "SELECT count(*) FROM users WHERE role='admin'").Scan(&count); err != nil {
+		return err
+	}
+	if count == 1 {
+		return &requestError{http.StatusConflict, "the last administrator cannot be demoted"}
+	}
+	return nil
+}
+
+func (s *webServer) listUsers(w http.ResponseWriter, r *http.Request) {
+	rows, err := s.db.QueryContext(r.Context(), "SELECT id,email,role,created_at FROM users WHERE id>$1 ORDER BY id LIMIT 101", r.URL.Query().Get("after"))
+	if err != nil {
+		databaseError(w, err)
+		return
+	}
+	defer rows.Close()
+	users := []account{}
+	for rows.Next() {
+		var user account
+		if err := rows.Scan(&user.ID, &user.Email, &user.Role, &user.CreatedAt); err != nil {
+			databaseError(w, err)
+			return
+		}
+		users = append(users, user)
+	}
+	if err := rows.Err(); err != nil {
+		databaseError(w, err)
+		return
+	}
+	next := ""
+	if len(users) > 100 {
+		users = users[:100]
+		next = users[99].ID
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"users": users, "next": next})
 }
 
 func sameOrigin(next http.Handler) http.Handler {

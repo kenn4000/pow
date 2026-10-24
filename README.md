@@ -76,6 +76,12 @@ page for listing users and changing their roles. **Saved games** lists your
 active, completed, and abandoned matches with their state-transition history.
 An unfinished match resumes after refreshing or restarting the backend.
 
+Use **Password** to change your password after confirming the current one.
+The current session is rotated and stays signed in; all other sessions are
+revoked. Administrators also have a **Cards** page: its contact sheet covers
+the 27-card deck and all 72 embedded artwork files. Clicking a thumbnail opens
+a detail panel with suit rules, color/pose variants, and image metadata.
+
 The UI draws the bounty and
 nine battle cells, capture borders, live score, current battle, piles, and
 hands. Cards use configurable colors for Scissors, Paper, and Rock. Click a
@@ -149,6 +155,16 @@ GOWORK=off go -C backend run . --dump-economy
   samples cards that are not known to the AI.
 
 ## Tests and simulation
+
+Enforce a maximum cyclomatic complexity of 20 per production Go function:
+
+```sh
+make -C backend lint
+```
+
+This runs gocyclo pinned to v0.6.0 and is enforced by the GitLab `backend-lint`
+job. Test files are excluded from the complexity metric; no production files
+or existing functions are exempted.
 
 Run the unit and integration tests with:
 

@@ -87,27 +87,38 @@ type Payout struct {
 }
 
 func CalculatePayout(result MatchResult, mode Mode, p *profile.Profile, playerSeat int, now time.Time) (Payout, error) {
+	if err := validatePayout(result, mode, p, playerSeat); err != nil {
+		return Payout{}, err
+	}
+	return calculateValidatedPayout(result, mode, p, playerSeat, now), nil
+}
+
+func validatePayout(result MatchResult, mode Mode, p *profile.Profile, playerSeat int) error {
 	if p == nil {
-		return Payout{}, errors.New("profile is required")
+		return errors.New("profile is required")
 	}
 	if playerSeat != 0 && playerSeat != 1 {
-		return Payout{}, fmt.Errorf("invalid player seat %d", playerSeat)
+		return fmt.Errorf("invalid player seat %d", playerSeat)
 	}
 	if result.WinnerSeat != -1 && result.WinnerSeat != 0 && result.WinnerSeat != 1 {
-		return Payout{}, fmt.Errorf("invalid winner seat %d", result.WinnerSeat)
+		return fmt.Errorf("invalid winner seat %d", result.WinnerSeat)
 	}
 	if result.PlayerSeat != 0 && result.PlayerSeat != 1 {
-		return Payout{}, fmt.Errorf("invalid player seat %d", result.PlayerSeat)
+		return fmt.Errorf("invalid player seat %d", result.PlayerSeat)
 	}
 	if result.PlayerSeat != playerSeat {
-		return Payout{}, fmt.Errorf("match result player seat %d does not match payout seat %d", result.PlayerSeat, playerSeat)
+		return fmt.Errorf("match result player seat %d does not match payout seat %d", result.PlayerSeat, playerSeat)
 	}
 	if result.PlayerScore < 0 || result.OpponentScore < 0 {
-		return Payout{}, errors.New("scores cannot be negative")
+		return errors.New("scores cannot be negative")
 	}
 	if !validMode(mode) {
-		return Payout{}, fmt.Errorf("invalid payout mode %q", mode)
+		return fmt.Errorf("invalid payout mode %q", mode)
 	}
+	return nil
+}
+
+func calculateValidatedPayout(result MatchResult, mode Mode, p *profile.Profile, playerSeat int, now time.Time) Payout {
 	resetDailyWins(p, now)
 	bonuses := skills.AggregateBonuses(p)
 	payoutMultiplier := modeMultiplier(mode)
@@ -154,7 +165,11 @@ func CalculatePayout(result MatchResult, mode Mode, p *profile.Profile, playerSe
 	payout.TotalMarks = int64(math.Floor((base + float64(payout.ScoreBonusMarks)) * payout.ModeMultiplier))
 	p.Marks += payout.TotalMarks
 	p.Crowns += payout.CrownsAwarded
+	applyPayoutProgress(p, &payout)
+	return payout
+}
 
+func applyPayoutProgress(p *profile.Profile, payout *Payout) {
 	if payout.PlayerWon {
 		p.TotalWins++
 		p.CurrentStreak++
@@ -176,7 +191,6 @@ func CalculatePayout(result MatchResult, mode Mode, p *profile.Profile, playerSe
 		p.TotalLosses++
 		p.CurrentStreak = 0
 	}
-	return payout, nil
 }
 
 func modeMultiplier(mode Mode) float64 {

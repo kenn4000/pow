@@ -514,13 +514,7 @@ func (s *webServer) handleNewGame(w http.ResponseWriter, r *http.Request) {
 	}
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	playerHeroID := request.PlayerHeroID
-	if playerHeroID == "" && s.playerProfile != nil {
-		playerHeroID = s.playerProfile.DefaultHeroID
-	}
-	if playerHeroID == "" {
-		playerHeroID = profile.DefaultHeroID
-	}
+	playerHeroID := s.requestedHeroID(request.PlayerHeroID)
 	playerHero, ok := heroes.ByID(playerHeroID)
 	if !ok || !s.heroUnlocked(playerHeroID) {
 		writeError(w, http.StatusBadRequest, fmt.Errorf("player hero %q is not unlocked", playerHeroID))
@@ -620,6 +614,16 @@ func (s *webServer) handleAction(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	writeJSON(w, http.StatusOK, s.view())
+}
+
+func (s *webServer) requestedHeroID(id string) string {
+	if id == "" && s.playerProfile != nil {
+		id = s.playerProfile.DefaultHeroID
+	}
+	if id == "" {
+		id = profile.DefaultHeroID
+	}
+	return id
 }
 
 func (s *webServer) profileForRequest(r *http.Request) (*profile.Profile, bool, error) {
@@ -932,34 +936,7 @@ func (s *webServer) applyShopAction(p *profile.Profile, request actionRequest) (
 		evaluateAchievementEvent(p, achievements.EventPurchase, "shop")
 		return "Purchased bundle " + request.ID + ".", nil
 	case "buy-box":
-		switch request.BoxType {
-		case "wooden", "silver":
-			if p.Marks < shopBoxMarksCost {
-				return "", fmt.Errorf("need %d Marks; you have %d", shopBoxMarksCost, p.Marks)
-			}
-			if err := p.GrantBox(request.BoxType, 1); err != nil {
-				return "", err
-			}
-			p.Marks -= shopBoxMarksCost
-		case "gold":
-			if p.Crowns < shopGoldenBoxCrownsCost {
-				return "", fmt.Errorf("need %d Crowns; you have %d", shopGoldenBoxCrownsCost, p.Crowns)
-			}
-			if err := p.GrantBox(request.BoxType, 1); err != nil {
-				return "", err
-			}
-			p.Crowns -= shopGoldenBoxCrownsCost
-		case "hero":
-			if p.Marks < shopBoxMarksCost {
-				return "", fmt.Errorf("need %d Marks; you have %d", shopBoxMarksCost, p.Marks)
-			}
-			p.Marks -= shopBoxMarksCost
-			p.HeroBoxesAvailable++
-		default:
-			return "", fmt.Errorf("unknown box type %q", request.BoxType)
-		}
-		evaluateAchievementEvent(p, achievements.EventPurchase, "shop")
-		return "Purchased " + request.BoxType + " box.", nil
+		return buyShopBox(p, request.BoxType)
 	case "open-hero-box":
 		var result heroes.HeroBoxResult
 		var err error
@@ -1001,6 +978,37 @@ func (s *webServer) applyShopAction(p *profile.Profile, request actionRequest) (
 	default:
 		return "", errors.New("unknown shop action")
 	}
+}
+
+func buyShopBox(p *profile.Profile, boxType string) (string, error) {
+	switch boxType {
+	case "wooden", "silver":
+		if p.Marks < shopBoxMarksCost {
+			return "", fmt.Errorf("need %d Marks; you have %d", shopBoxMarksCost, p.Marks)
+		}
+		if err := p.GrantBox(boxType, 1); err != nil {
+			return "", err
+		}
+		p.Marks -= shopBoxMarksCost
+	case "gold":
+		if p.Crowns < shopGoldenBoxCrownsCost {
+			return "", fmt.Errorf("need %d Crowns; you have %d", shopGoldenBoxCrownsCost, p.Crowns)
+		}
+		if err := p.GrantBox(boxType, 1); err != nil {
+			return "", err
+		}
+		p.Crowns -= shopGoldenBoxCrownsCost
+	case "hero":
+		if p.Marks < shopBoxMarksCost {
+			return "", fmt.Errorf("need %d Marks; you have %d", shopBoxMarksCost, p.Marks)
+		}
+		p.Marks -= shopBoxMarksCost
+		p.HeroBoxesAvailable++
+	default:
+		return "", fmt.Errorf("unknown box type %q", boxType)
+	}
+	evaluateAchievementEvent(p, achievements.EventPurchase, "shop")
+	return "Purchased " + boxType + " box.", nil
 }
 
 func (s *webServer) handleSkills(w http.ResponseWriter, r *http.Request) {
@@ -1230,40 +1238,9 @@ func (s *webServer) applyAction(request actionRequest) error {
 	session := s.session
 	switch request.Action {
 	case "commit":
-		if session.phase != "commit" || isAI(session.mode, session.actor) {
-			return errors.New("it is not your commit turn")
-		}
-		if err := game.Commit(&session.state, session.actor, request.Cards); err != nil {
-			return err
-		}
-		if session.mode == "hvh" {
-			if session.actor == 0 {
-				session.actor = 1
-				session.handoffTarget = 1
-				session.handoffPhase = "commit"
-				session.phase = "handoff"
-				session.message = "Pass the screen to Player 2, then continue."
-				return nil
-			}
-			s.beginBattles()
-			return nil
-		}
-		session.actor = 1
-		session.message = "Player 2 is committing."
+		return s.commitAction(request.Cards)
 	case "ready":
-		if session.phase != "handoff" {
-			return errors.New("there is no handoff to acknowledge")
-		}
-		session.actor = session.handoffTarget
-		session.phase = session.handoffPhase
-		session.handoffPhase = ""
-		if session.phase == "commit" {
-			session.message = fmt.Sprintf("Player %d, choose three cards to commit.", session.actor+1)
-		} else if session.phase == "attack" {
-			session.message = fmt.Sprintf("Player %d attacks. Choose a card from their pile.", session.actor+1)
-		} else {
-			session.message = "Choose a response to the revealed attack."
-		}
+		return s.readyAction()
 	case "attack":
 		if session.phase != "attack" || isAI(session.mode, session.attacker) {
 			return errors.New("it is not your attack turn")
@@ -1302,6 +1279,49 @@ func (s *webServer) applyAction(request actionRequest) error {
 		s.beginRoundThree()
 	default:
 		return errors.New("unknown action")
+	}
+	return nil
+}
+
+func (s *webServer) commitAction(cards []int) error {
+	session := s.session
+	if session.phase != "commit" || isAI(session.mode, session.actor) {
+		return errors.New("it is not your commit turn")
+	}
+	if err := game.Commit(&session.state, session.actor, cards); err != nil {
+		return err
+	}
+	if session.mode == "hvh" {
+		if session.actor == 0 {
+			session.actor = 1
+			session.handoffTarget = 1
+			session.handoffPhase = "commit"
+			session.phase = "handoff"
+			session.message = "Pass the screen to Player 2, then continue."
+			return nil
+		}
+		s.beginBattles()
+		return nil
+	}
+	session.actor = 1
+	session.message = "Player 2 is committing."
+	return nil
+}
+
+func (s *webServer) readyAction() error {
+	session := s.session
+	if session.phase != "handoff" {
+		return errors.New("there is no handoff to acknowledge")
+	}
+	session.actor = session.handoffTarget
+	session.phase = session.handoffPhase
+	session.handoffPhase = ""
+	if session.phase == "commit" {
+		session.message = fmt.Sprintf("Player %d, choose three cards to commit.", session.actor+1)
+	} else if session.phase == "attack" {
+		session.message = fmt.Sprintf("Player %d attacks. Choose a card from their pile.", session.actor+1)
+	} else {
+		session.message = "Choose a response to the revealed attack."
 	}
 	return nil
 }
@@ -1677,43 +1697,13 @@ func (s *webServer) view() webView {
 	}
 	result.Players = make([]webPlayer, 2)
 	for i, player := range session.state.Players() {
-		color := s.colorName(i)
-		private := session.mode == "hvh" && i == session.actor && session.phase != "handoff" ||
-			session.mode != "hvh" && i == 0
-		view := webPlayer{
-			Color: color, You: session.mode != "hvh" && i == 0, Seat: player.Seat.String(), Score: scores[i].Total,
-			Hand: []webCard{}, Pool: []webCard{}, HiddenHand: len(player.Hand), HiddenPool: len(player.Pool),
-		}
-		if (session.phase == "defend" || session.phase == "handoff" && session.handoffPhase == "defend") && i == session.attacker {
-			view.HiddenPool--
-		}
-		if private {
-			view.Hand = make([]webCard, len(player.Hand))
-			for cardIndex, card := range player.Hand {
-				view.Hand[cardIndex] = webCard{Card: card, Index: cardIndex, Selectable: session.phase == "commit"}
-			}
-			view.HiddenHand = 0
-			view.Pool = make([]webCard, 0, len(player.Pool))
-			for cardIndex, card := range player.Pool {
-				if session.phase == "defend" && i == session.attacker && cardIndex == session.attackIndex {
-					continue
-				}
-				view.Pool = append(view.Pool, webCard{Card: card, Index: cardIndex, Selectable: (session.phase == "attack" && i == session.attacker) || (session.phase == "defend" && i != session.attacker)})
-			}
-			view.HiddenPool = len(player.Pool) - len(view.Pool)
-			view.CanSelectHand = session.phase == "commit"
-			view.CanSelectPool = (session.phase == "attack" && i == session.attacker) || (session.phase == "defend" && i != session.attacker)
-		}
-		result.Players[i] = view
+		result.Players[i] = s.playerView(i, player, scores[i].Total)
 	}
 	if session.phase == "gameover" && session.mode != "hvh" {
 		if session.winner == 0 {
 			result.Message = "You Won!"
 		} else {
 			result.Message = "You Lost."
-		}
-		if session.phase == "gameover" && session.mode == "hvh" {
-			result.Message = fmt.Sprintf("%s wins.", s.colorName(session.winner))
 		}
 	}
 	if session.phase == "seat" && session.actor == 0 {
@@ -1729,6 +1719,42 @@ func (s *webServer) view() webView {
 		s.scoreLabel(session.whitePlayer), scores[session.whitePlayer].Total,
 		s.scoreLabel(1-session.whitePlayer), scores[1-session.whitePlayer].Total)
 	return result
+}
+
+func (s *webServer) playerView(index int, player game.Player, score int) webPlayer {
+	session := s.session
+	private := session.mode == "hvh" && index == session.actor && session.phase != "handoff" || session.mode != "hvh" && index == 0
+	view := webPlayer{Color: s.colorName(index), You: session.mode != "hvh" && index == 0, Seat: player.Seat.String(), Score: score, Hand: []webCard{}, Pool: []webCard{}, HiddenHand: len(player.Hand), HiddenPool: len(player.Pool)}
+	if (session.phase == "defend" || session.phase == "handoff" && session.handoffPhase == "defend") && index == session.attacker {
+		view.HiddenPool--
+	}
+	if private {
+		s.fillPrivateCards(&view, index, player)
+	}
+	return view
+}
+
+func (s *webServer) canSelectPool(index int) bool {
+	return (s.session.phase == "attack" && index == s.session.attacker) || (s.session.phase == "defend" && index != s.session.attacker)
+}
+
+func (s *webServer) fillPrivateCards(view *webPlayer, index int, player game.Player) {
+	session := s.session
+	view.Hand = make([]webCard, len(player.Hand))
+	for cardIndex, card := range player.Hand {
+		view.Hand[cardIndex] = webCard{Card: card, Index: cardIndex, Selectable: session.phase == "commit"}
+	}
+	view.HiddenHand = 0
+	view.Pool = make([]webCard, 0, len(player.Pool))
+	for cardIndex, card := range player.Pool {
+		if session.phase == "defend" && index == session.attacker && cardIndex == session.attackIndex {
+			continue
+		}
+		view.Pool = append(view.Pool, webCard{Card: card, Index: cardIndex, Selectable: s.canSelectPool(index)})
+	}
+	view.HiddenPool = len(player.Pool) - len(view.Pool)
+	view.CanSelectHand = session.phase == "commit"
+	view.CanSelectPool = s.canSelectPool(index)
 }
 
 func (s *webServer) viewForRequest(r *http.Request) (webView, error) {

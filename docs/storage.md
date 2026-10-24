@@ -55,6 +55,16 @@ The `user` role can access its own game/profile/history. The `admin` role also
 lists accounts and changes roles. Role changes are audited. Concurrent role
 changes are serialized, and the last administrator cannot be demoted.
 
+Authenticated users can change their password through **Password** or
+`POST /api/account/password` with `currentPassword` and `newPassword`.
+The current password must be correct and the new one must differ and meet
+the 12–72 byte policy. The hash update, revocation of all previous sessions,
+and creation of a replacement session commit atomically. Only after commit
+does the response set the replacement HttpOnly cookie. Password changes are
+rate-limited with login/signup attempts. Login and password change both lock
+the account row, so a concurrent old-password login cannot leave a valid
+session behind after the change. Bootstrap does not reset a changed password.
+
 Create the initial admin with `BOOTSTRAP_ADMIN_EMAIL` and
 `BOOTSTRAP_ADMIN_PASSWORD` at startup. A public signup is never automatically
 made an administrator. Repeated bootstrap does not reset passwords or override
@@ -74,7 +84,10 @@ root                                    panic recovery
         ├── /auth                       public login/signup endpoints
         │   └── GET/POST /{authAction}
         └── protected group             session authentication
+            ├── /account
+            │   └── POST /password
             ├── /admin                  admin role middleware
+            │   ├── GET /cards          deck and artwork metadata
             │   └── /users
             │       ├── GET /
             │       └── PATCH /{userID}/role
@@ -104,11 +117,31 @@ All paths below are relative to `BASE_PATH` and return JSON.
 | POST | `/api/auth/login` | Sign in with `email` and `password` |
 | POST | `/api/auth/logout` | Revoke the current session |
 | GET | `/api/auth/me` | Current account and role, or HTTP 401 |
+| POST | `/api/account/password` | Confirm `currentPassword`, set `newPassword`, rotate session and revoke others |
 | GET | `/api/admin/users?after=<id>` | Admin-only account list, 100 per page |
 | PATCH | `/api/admin/users/<id>/role` | Admin-only `{"role":"user"}` or `{"role":"admin"}` |
+| GET | `/api/admin/cards` | Admin-only 27-card deck and all embedded artwork with dimensions, size, tier, pose, and color |
 | GET | `/api/games?before=<id>` | Own match list, 50 per page |
 | GET | `/api/games/<id>?after=<sequence>` | Own redacted transition history, 100 per page |
 
 Lists include a `next` cursor when more records are available. Existing game
 and progression endpoints keep their payloads and require a session in
 PostgreSQL mode.
+
+## Admin card contact sheet
+
+The **Cards** page has deck and artwork views, color selection, search, and a
+keyboard-accessible detail panel. The deck view includes every suit/face pair;
+the artwork view includes all PNG files discovered in the embedded skin
+filesystem. Dimensions are read from PNG headers without decoding full images.
+The panel displays all available color/pose variations for the selected tier,
+and its Close button or Escape key returns focus to the selected thumbnail.
+Image requests remain under the inherited application base path.
+
+## Complexity enforcement
+
+`make -C backend lint` runs gocyclo v0.6.0 with `-over 20` across every
+production Go package. Any function above 20 fails the command and the
+GitLab test stage. Only `_test.go` files are excluded. Existing violations
+were refactored into validation, rendering, game-phase, and progression
+helpers rather than allowlisted.

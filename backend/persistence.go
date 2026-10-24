@@ -131,28 +131,8 @@ func (s *webServer) withPlayer(next http.Handler) http.Handler {
 			writeError(w, http.StatusConflict, errors.New("game state changed; refresh before trying again"))
 			return
 		}
-		var p profile.Profile
-		var snapshot playerSnapshot
-		if err := json.Unmarshal(profileJSON, &p); err != nil {
-			databaseError(w, err)
-			return
-		}
-		if err := json.Unmarshal(stateJSON, &snapshot); err != nil {
-			databaseError(w, err)
-			return
-		}
-		if snapshot.Schema > 1 || p.SchemaVersion > profile.SchemaVersion {
-			databaseError(w, errors.New("saved data is newer than this server"))
-			return
-		}
-		p.SetSaveHandler(func(*profile.Profile) error { return nil })
-		rng, err := secureRand()
+		current, snapshot, err := s.restorePlayer(profileJSON, stateJSON)
 		if err != nil {
-			databaseError(w, err)
-			return
-		}
-		current := &webServer{rng: rng, defaultMode: s.defaultMode, playerProfile: &p, session: snapshot.Session.restore(), previewProfile: snapshot.PreviewProfile, campDrawSession: lootbox.RestoreSession(snapshot.CampDraw), campDrawPreview: snapshot.CampDrawPreview, lastCampDraw: snapshot.LastCampDraw, lastCampDrawPreview: snapshot.LastCampDrawPreview}
-		if err := (&app{}).initializeProgressionProfile(&p); err != nil {
 			databaseError(w, err)
 			return
 		}
@@ -176,12 +156,7 @@ func (s *webServer) withPlayer(next http.Handler) http.Handler {
 		snapshot.CampDrawPreview = current.campDrawPreview
 		snapshot.LastCampDraw = current.lastCampDraw
 		snapshot.LastCampDrawPreview = current.lastCampDrawPreview
-		stateJSON, err = json.Marshal(snapshot)
-		if err != nil {
-			databaseError(w, err)
-			return
-		}
-		profileJSON, err = json.Marshal(&p)
+		stateJSON, profileJSON, err = encodePlayerSnapshot(snapshot, current.playerProfile)
 		if err != nil {
 			databaseError(w, err)
 			return
@@ -203,6 +178,39 @@ func (s *webServer) withPlayer(next http.Handler) http.Handler {
 		response.header.Set("X-State-Version", strconv.FormatInt(version+1, 10))
 		response.send(w)
 	})
+}
+
+func encodePlayerSnapshot(snapshot playerSnapshot, p *profile.Profile) ([]byte, []byte, error) {
+	state, err := json.Marshal(snapshot)
+	if err != nil {
+		return nil, nil, err
+	}
+	data, err := json.Marshal(p)
+	return state, data, err
+}
+
+func (s *webServer) restorePlayer(profileJSON, stateJSON []byte) (*webServer, playerSnapshot, error) {
+	var p profile.Profile
+	var snapshot playerSnapshot
+	if err := json.Unmarshal(profileJSON, &p); err != nil {
+		return nil, snapshot, err
+	}
+	if err := json.Unmarshal(stateJSON, &snapshot); err != nil {
+		return nil, snapshot, err
+	}
+	if snapshot.Schema > 1 || p.SchemaVersion > profile.SchemaVersion {
+		return nil, snapshot, errors.New("saved data is newer than this server")
+	}
+	p.SetSaveHandler(func(*profile.Profile) error { return nil })
+	rng, err := secureRand()
+	if err != nil {
+		return nil, snapshot, err
+	}
+	current := &webServer{rng: rng, defaultMode: s.defaultMode, playerProfile: &p, session: snapshot.Session.restore(), previewProfile: snapshot.PreviewProfile, campDrawSession: lootbox.RestoreSession(snapshot.CampDraw), campDrawPreview: snapshot.CampDrawPreview, lastCampDraw: snapshot.LastCampDraw, lastCampDrawPreview: snapshot.LastCampDrawPreview}
+	if err := (&app{}).initializeProgressionProfile(&p); err != nil {
+		return nil, snapshot, err
+	}
+	return current, snapshot, nil
 }
 
 func saveGame(ctx context.Context, tx *sql.Tx, userID string, snapshot playerSnapshot, current *webServer, state, action []byte) error {

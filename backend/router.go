@@ -47,8 +47,12 @@ func (s *webServer) applicationRoutes(r chi.Router) {
 		})
 		api.Group(func(protected chi.Router) {
 			protected.Use(s.authenticate)
+			protected.Route("/account", func(account chi.Router) {
+				account.Post("/password", s.handleChangePassword)
+			})
 			protected.Route("/admin", func(admin chi.Router) {
 				admin.Use(requireAdmin)
+				admin.Get("/cards", s.handleCardCatalog)
 				admin.Route("/users", func(users chi.Router) {
 					users.Get("/", s.handleAdmin)
 					users.Patch("/{userID}/role", s.handleAdmin)

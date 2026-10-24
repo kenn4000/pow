@@ -104,25 +104,13 @@ func (a *app) progressionMenu(p *profile.Profile, preferred mode) error {
 		if err != nil {
 			return err
 		}
-		switch strings.ToLower(strings.TrimSpace(answer)) {
-		case "1":
-			if err := a.playMenu(p, preferred); err != nil {
-				fmt.Println("Unable to start match:", err)
-			}
+		choice := strings.ToLower(strings.TrimSpace(answer))
+		if a.runSimpleProgressionAction(choice, p, preferred) {
+			continue
+		}
+		switch choice {
 		case "2":
-			if p.DrawsAvailable > 0 || p.TotalPendingBoxes() > 0 {
-				if err := a.campDrawHub(p); err != nil {
-					fmt.Println("Camp Draw unavailable:", err)
-				}
-			}
-		case "3":
-			if err := a.shopMenu(p); err != nil {
-				fmt.Println("Shop action failed:", err)
-			}
-		case "4":
-			if err := a.skillMenu(p); err != nil {
-				fmt.Println("Skill action failed:", err)
-			}
+			a.tryCampDrawHub(p)
 		case "5":
 			markAchievementsSeen(p)
 			if err := p.Save(); err != nil {
@@ -140,52 +128,80 @@ func (a *app) progressionMenu(p *profile.Profile, preferred mode) error {
 			} else if quitAfterDelete {
 				return nil
 			}
-		case "8":
-			if err := a.heroesMenu(p); err != nil {
-				fmt.Println("Heroes unavailable:", err)
-			}
-		case "9":
-			if err := a.campaignsMenu(p); err != nil {
-				fmt.Println("Campaign unavailable:", err)
-			}
 		case "w":
-			if p.Energy >= p.MaxEnergy || p.AdsWatchedToday >= energy.DailyAdLimit {
-				fmt.Println("Watch Ad is not available right now.")
-				continue
-			}
-			fmt.Println("Simulating a short ad break...")
-			time.Sleep(2 * time.Second)
-			if err := energy.WatchAd(p, time.Now()); err != nil {
-				fmt.Println("Ad reward unavailable:", err)
-			} else {
-				fmt.Printf("Ad reward: +%d energy (now %d/%d).\n", energy.EnergyPerAd, p.Energy, p.MaxEnergy)
-				if err := p.Save(); err != nil {
-					return err
-				}
-			}
-		case "r":
-			if err := a.energyRefillMenu(p); err != nil {
-				fmt.Println("Energy refill unavailable:", err)
-			}
-		case "q":
-			if p.ConfirmQuit {
-				answer, err := a.ask("Quit Prisoners of War? (y/N): ")
-				if err != nil {
-					return err
-				}
-				if !strings.EqualFold(strings.TrimSpace(answer), "y") &&
-					!strings.EqualFold(strings.TrimSpace(answer), "yes") {
-					continue
-				}
-			}
-			if err := p.Save(); err != nil {
+			if err := a.watchProgressionAd(p); err != nil {
 				return err
 			}
-			return nil
+		case "q":
+			confirmed, err := a.confirmQuit(p)
+			if err != nil {
+				return err
+			}
+			if !confirmed {
+				continue
+			}
+			return p.Save()
 		default:
 			fmt.Println("Choose 1-9, W, R, or Q.")
 		}
 	}
+}
+
+func (a *app) tryCampDrawHub(p *profile.Profile) {
+	if p.DrawsAvailable > 0 || p.TotalPendingBoxes() > 0 {
+		if err := a.campDrawHub(p); err != nil {
+			fmt.Println("Camp Draw unavailable:", err)
+		}
+	}
+}
+
+func (a *app) runSimpleProgressionAction(choice string, p *profile.Profile, preferred mode) bool {
+	type action struct {
+		label string
+		run   func() error
+	}
+	actions := map[string]action{
+		"1": {"Unable to start match:", func() error { return a.playMenu(p, preferred) }},
+		"3": {"Shop action failed:", func() error { return a.shopMenu(p) }},
+		"4": {"Skill action failed:", func() error { return a.skillMenu(p) }},
+		"8": {"Heroes unavailable:", func() error { return a.heroesMenu(p) }},
+		"9": {"Campaign unavailable:", func() error { return a.campaignsMenu(p) }},
+		"r": {"Energy refill unavailable:", func() error { return a.energyRefillMenu(p) }},
+	}
+	selected, ok := actions[choice]
+	if !ok {
+		return false
+	}
+	if err := selected.run(); err != nil {
+		fmt.Println(selected.label, err)
+	}
+	return true
+}
+
+func (a *app) watchProgressionAd(p *profile.Profile) error {
+	if p.Energy >= p.MaxEnergy || p.AdsWatchedToday >= energy.DailyAdLimit {
+		fmt.Println("Watch Ad is not available right now.")
+		return nil
+	}
+	fmt.Println("Simulating a short ad break...")
+	time.Sleep(2 * time.Second)
+	if err := energy.WatchAd(p, time.Now()); err != nil {
+		fmt.Println("Ad reward unavailable:", err)
+		return nil
+	}
+	fmt.Printf("Ad reward: +%d energy (now %d/%d).\n", energy.EnergyPerAd, p.Energy, p.MaxEnergy)
+	return p.Save()
+}
+
+func (a *app) confirmQuit(p *profile.Profile) (bool, error) {
+	if !p.ConfirmQuit {
+		return true, nil
+	}
+	answer, err := a.ask("Quit Prisoners of War? (y/N): ")
+	if err != nil {
+		return false, err
+	}
+	return strings.EqualFold(strings.TrimSpace(answer), "y") || strings.EqualFold(strings.TrimSpace(answer), "yes"), nil
 }
 
 func (a *app) playMenu(p *profile.Profile, preferred mode) error {
@@ -313,16 +329,7 @@ func (a *app) campaignMissionsMenu(p *profile.Profile, campaign campaigns.Campai
 		}
 		fmt.Printf("\n=== %s: %d/%d missions ===\n%s\n",
 			campaign.Name, completed, len(campaign.Missions), campaign.Description)
-		for _, mission := range campaign.Missions {
-			state := "locked"
-			if progress != nil && missionIsComplete(progress, mission.Index) {
-				state = "complete"
-			} else if progress == nil && mission.Index == 1 ||
-				progress != nil && !progress.Completed && mission.Index == progress.MissionsCompleted+1 {
-				state = "next"
-			}
-			fmt.Printf("[%d] %s — %s (%s)\n", mission.Index, mission.Name, mission.Flavor, state)
-		}
+		printCampaignMissions(campaign, progress)
 		if completed < len(campaign.Missions) {
 			fmt.Println("[P] Play Next Mission")
 		} else {
@@ -369,6 +376,18 @@ func (a *app) campaignMissionsMenu(p *profile.Profile, campaign campaigns.Campai
 		default:
 			fmt.Println("Enter P, R, or 0.")
 		}
+	}
+}
+
+func printCampaignMissions(campaign campaigns.Campaign, progress *profile.CampaignProgress) {
+	for _, mission := range campaign.Missions {
+		state := "locked"
+		if progress != nil && missionIsComplete(progress, mission.Index) {
+			state = "complete"
+		} else if progress == nil && mission.Index == 1 || progress != nil && !progress.Completed && mission.Index == progress.MissionsCompleted+1 {
+			state = "next"
+		}
+		fmt.Printf("[%d] %s — %s (%s)\n", mission.Index, mission.Name, mission.Flavor, state)
 	}
 }
 
@@ -513,48 +532,52 @@ func (a *app) startCampaignMission(p *profile.Profile, campaign campaigns.Campai
 				result.PlayerScore, result.CPUScore)
 			return p.Save()
 		}
-		outcome, err := campaigns.CompleteMission(
-			p, campaign.ID, mission.Index, skills.AggregateBonuses(p).CampaignMarksPercent)
-		if err != nil {
+		return a.completeCampaignProgress(p, campaign, mission)
+	}
+}
+
+func (a *app) completeCampaignProgress(p *profile.Profile, campaign campaigns.Campaign, mission campaigns.Mission) error {
+	outcome, err := campaigns.CompleteMission(
+		p, campaign.ID, mission.Index, skills.AggregateBonuses(p).CampaignMarksPercent)
+	if err != nil {
+		return err
+	}
+	fmt.Printf("Mission complete! +%d Marks.\n", outcome.MissionMarks)
+	if outcome.CampaignCompleted {
+		fmt.Printf("\n=== CAMPAIGN COMPLETE: %s ===\n", campaign.Name)
+		fmt.Printf("Completion reward: +%d Marks.\n", outcome.CompletionMarks)
+		for _, heroID := range outcome.HeroesUnlocked {
+			for _, event := range evaluateAchievementEvent(p, achievements.EventHeroAcquired, "campaign") {
+				showUnlockToast(event)
+			}
+			fmt.Printf("Unlocked %s.\n", heroName(heroID))
+		}
+		if outcome.HeroBoxesAwarded > 0 {
+			fmt.Printf("Received %d Hero Box(es).\n", outcome.HeroBoxesAwarded)
+		}
+		if outcome.BadgeAwarded != "" {
+			fmt.Printf("Badge earned: %s\n", outcome.BadgeAwarded)
+		}
+		if campaign.Completion.UnlocksCampaign != "" {
+			if next, ok := campaigns.ByID(campaign.Completion.UnlocksCampaign); ok {
+				fmt.Printf("Unlocked campaign: %s.\n", next.Name)
+			}
+		}
+		for _, event := range evaluateAchievementEvent(p, achievements.EventCampaignCompleted, "campaign") {
+			showUnlockToast(event)
+		}
+		for _, event := range evaluateAchievementEvent(p, achievements.EventProfileLoad, "campaign") {
+			showUnlockToast(event)
+		}
+		if len(p.MatchHistory) > 0 {
+			p.MatchHistory[0].MarksEarned = outcome.MissionMarks + outcome.CompletionMarks
+		}
+		fmt.Println("Press Enter to continue.")
+		if _, err := a.ask(""); err != nil {
 			return err
 		}
-		fmt.Printf("Mission complete! +%d Marks.\n", outcome.MissionMarks)
-		if outcome.CampaignCompleted {
-			fmt.Printf("\n=== CAMPAIGN COMPLETE: %s ===\n", campaign.Name)
-			fmt.Printf("Completion reward: +%d Marks.\n", outcome.CompletionMarks)
-			for _, heroID := range outcome.HeroesUnlocked {
-				for _, event := range evaluateAchievementEvent(p, achievements.EventHeroAcquired, "campaign") {
-					showUnlockToast(event)
-				}
-				fmt.Printf("Unlocked %s.\n", heroName(heroID))
-			}
-			if outcome.HeroBoxesAwarded > 0 {
-				fmt.Printf("Received %d Hero Box(es).\n", outcome.HeroBoxesAwarded)
-			}
-			if outcome.BadgeAwarded != "" {
-				fmt.Printf("Badge earned: %s\n", outcome.BadgeAwarded)
-			}
-			if campaign.Completion.UnlocksCampaign != "" {
-				if next, ok := campaigns.ByID(campaign.Completion.UnlocksCampaign); ok {
-					fmt.Printf("Unlocked campaign: %s.\n", next.Name)
-				}
-			}
-			for _, event := range evaluateAchievementEvent(p, achievements.EventCampaignCompleted, "campaign") {
-				showUnlockToast(event)
-			}
-			for _, event := range evaluateAchievementEvent(p, achievements.EventProfileLoad, "campaign") {
-				showUnlockToast(event)
-			}
-			if len(p.MatchHistory) > 0 {
-				p.MatchHistory[0].MarksEarned = outcome.MissionMarks + outcome.CompletionMarks
-			}
-			fmt.Println("Press Enter to continue.")
-			if _, err := a.ask(""); err != nil {
-				return err
-			}
-		}
-		return p.Save()
 	}
+	return p.Save()
 }
 
 type campaignMissionUI struct {
@@ -1266,6 +1289,13 @@ func colorAssignment(p *profile.Profile, suit string) string {
 }
 
 func (a *app) shopMenu(p *profile.Profile) error {
+	if err := a.showShopCatalog(p); err != nil {
+		return err
+	}
+	return a.chooseShopAction(p)
+}
+
+func (a *app) showShopCatalog(p *profile.Profile) error {
 	fmt.Printf("\n=== CHROMA CATALOG | Marks %d | Crowns %d ===\n", p.Marks, p.Crowns)
 	fmt.Println("Real-money equivalent: not configured; Crowns are informational in this local build.")
 	for _, chroma := range catalog.AllChromas() {
@@ -1296,6 +1326,10 @@ func (a *app) shopMenu(p *profile.Profile) error {
 	if p.ChromaPickTokens > 0 {
 		fmt.Printf("[Redeem Pick-Any-Chroma token (%d available)]\n", p.ChromaPickTokens)
 	}
+	return nil
+}
+
+func (a *app) chooseShopAction(p *profile.Profile) error {
 	answer, err := a.ask("Enter a chroma ID, bundle:<id>, hero-box, free-hero-box, buy-hero, pick, or blank to return: ")
 	if err != nil {
 		return err
@@ -1313,25 +1347,7 @@ func (a *app) shopMenu(p *profile.Profile) error {
 		return a.buyHeroMenu(p)
 	}
 	if strings.EqualFold(answer, "pick") {
-		if p.ChromaPickTokens < 1 {
-			return errors.New("no Pick Any Chroma tokens are available")
-		}
-		for _, chroma := range catalog.AllChromas() {
-			state := ""
-			if p.OwnedChromas[chroma.ID] {
-				state = " (owned)"
-			}
-			fmt.Printf("%-12s %-14s %-10s%s\n", chroma.ID, chroma.Name, chroma.Rarity, state)
-		}
-		chromaID, err := a.ask("Choose an unowned chroma to claim: ")
-		if err != nil {
-			return err
-		}
-		if err := redeemPickAny(p, strings.TrimSpace(chromaID)); err != nil {
-			return err
-		}
-		fmt.Printf("Claimed %s.\n", strings.TrimSpace(chromaID))
-		return p.Save()
+		return a.redeemChromaMenu(p)
 	}
 	if strings.HasPrefix(answer, "bundle:") {
 		if err := catalog.BuyBundle(p, strings.TrimPrefix(answer, "bundle:")); err != nil {
@@ -1362,6 +1378,28 @@ func (a *app) shopMenu(p *profile.Profile) error {
 		showUnlockToast(event)
 	}
 	return nil
+}
+
+func (a *app) redeemChromaMenu(p *profile.Profile) error {
+	if p.ChromaPickTokens < 1 {
+		return errors.New("no Pick Any Chroma tokens are available")
+	}
+	for _, chroma := range catalog.AllChromas() {
+		state := ""
+		if p.OwnedChromas[chroma.ID] {
+			state = " (owned)"
+		}
+		fmt.Printf("%-12s %-14s %-10s%s\n", chroma.ID, chroma.Name, chroma.Rarity, state)
+	}
+	chromaID, err := a.ask("Choose an unowned chroma to claim: ")
+	if err != nil {
+		return err
+	}
+	if err := redeemPickAny(p, strings.TrimSpace(chromaID)); err != nil {
+		return err
+	}
+	fmt.Printf("Claimed %s.\n", strings.TrimSpace(chromaID))
+	return p.Save()
 }
 
 func (a *app) openHeroBoxMenu(p *profile.Profile, free bool) error {
