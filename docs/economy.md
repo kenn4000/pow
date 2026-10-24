@@ -78,10 +78,13 @@ Draw services. The CLI skill tree shows availability, costs, and prerequisites.
 
 The chroma catalog includes rarity, color, price, currency, and optional bundle
 membership. Purchases validate balances and ownership; repeated bundle
-purchases are idempotent. A chroma can be assigned to Scissors (`B`), Paper
-(`F`), or Rock (`S`) only if that color is not assigned to another suit.
-Assignments affect terminal ANSI card colors. The initial assignments are red,
-yellow, and blue.
+purchases are idempotent. New profiles own Tribal (red), Tribal (blue), and
+Tribal (yellow). The four Conquistador chromas (lime green, gold, pink, and sky
+blue) cost 100 Marks each. Browser suit choices show only owned chromas; each
+can be assigned to Scissors (`B`), Paper (`F`), or Rock (`S`) as long as no
+other suit uses the same color. The selected chroma controls the deck artwork
+and face-number color. Initial assignments are Tribal (blue) for Scissors,
+Tribal (yellow) for Paper, and Tribal (red) for Rock.
 
 ## CLI
 

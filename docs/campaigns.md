@@ -32,7 +32,7 @@ single-round tutorials; missions 5-10 are three-round matches.
 | 10 | Final Exam | Kess combines the modifiers and challenges the Recruit to become a Warden. | Three rounds; Rock bounty +2, Shift +1, Favored -1, weights 1/1/2. |
 
 Each mission awards 100 Marks. Completing Basic Training awards 1,000
-additional Marks, unlocks Warden, Hunter, and Anchor, grants
+additional Marks, unlocks Warden, Hunter, and the Turtle, grants
 `badge_basic_training`, and unlocks Advanced Training. Total campaign Marks:
 2,000.
 
@@ -43,13 +43,13 @@ additional Marks, unlocks Warden, Hunter, and Anchor, grants
 **Description:** Learn to fight with heroes. Every hero changes the game.
 
 Every mission is a three-round match. Before each mission, choose Warden,
-Hunter, or Anchor. The opponent's hero and AI level are fixed.
+Hunter, or the Turtle. The opponent's hero and AI level are fixed.
 
 | # | Mission | Opponent | Narrative and hint |
 |---|---|---|---|
 | 1 | The Hunter's Game | Hunter, Greedy AI | Hunter adds +2 Bounty. Kess suggests Warden as a safe choice. |
 | 2 | The Treasurer | Treasurer, Greedy AI | Treasurer subtracts 2 Bounty. Kess explains how hero bounty modifiers combine. |
-| 3 | The Ascendant | Ascendant, Greedy AI | Ascendant adds +2 Shift, strengthening every card and its cycle wins. |
+| 3 | The Gorilla | Gorilla, Greedy AI | The Gorilla adds +2 Shift, strengthening every card and its cycle wins. |
 | 4 | The Gambler | Gambler, Greedy AI | Gambler adds +2 Bounty and +1 Shift. Kess suggests balancing or leaning into Bounty. |
 | 5 | The Hater | Hater, Greedy AI | Hater flips the opponent's Bounty contribution. Kess explains the risks for positive and negative Bounty heroes. |
 

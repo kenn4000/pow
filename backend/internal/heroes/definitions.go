@@ -32,12 +32,12 @@ var roster = []Hero{
 	{ID: "warden", Name: "The Warden", Flavor: "Order is the first wall against chaos.", Bounty: 1, Favored: 1, Unlock: "campaign:basic"},
 	{ID: "hunter", Name: "The Hunter", Flavor: "Every weakness leaves a trail.", Bounty: 2, Unlock: "campaign:basic"},
 	{ID: "treasurer", Name: "The Treasurer", Flavor: "A careful count can turn any battle.", Bounty: -2, Favored: 1, Unlock: "hero_lootbox"},
-	{ID: "ascendant", Name: "The Ascendant", Flavor: "Rise above the limits of the hand.", Shift: 2, Unlock: "hero_lootbox"},
-	{ID: "anchor", Name: "The Anchor", Flavor: "Hold fast when the tide turns.", Bounty: -1, Favored: -1, Unlock: "campaign:basic"},
+	{ID: "ascendant", Name: "The Gorilla", Flavor: "Rise above the limits of the hand.", Shift: 2, Unlock: "hero_lootbox"},
+	{ID: "anchor", Name: "The Turtle", Flavor: "Hold fast when the tide turns.", Bounty: -1, Favored: -1, Unlock: "campaign:basic"},
 	{ID: "gambler", Name: "The Gambler", Flavor: "Fortune favors the bold wager.", Bounty: 2, Shift: 1, Unlock: "hero_lootbox"},
 	{ID: "diplomat", Name: "The Diplomat", Flavor: "A quiet bargain changes the odds.", Bounty: -2, Shift: 1, Favored: 1, Unlock: "hero_lootbox"},
-	{ID: "ascetic", Name: "The Ascetic", Flavor: "Want less, and endure more.", Bounty: -1, Shift: 1, Favored: -1, Unlock: "hero_lootbox"},
-	{ID: "herald", Name: "The Herald", Flavor: "A new reckoning is always at hand.", Bounty: 3, Favored: -1, Unlock: "hero_lootbox"},
+	{ID: "ascetic", Name: "The Bureaucrat", Flavor: "Want less, and endure more.", Bounty: -1, Shift: 1, Favored: -1, Unlock: "hero_lootbox"},
+	{ID: "herald", Name: "The Bodybuilder", Flavor: "A new reckoning is always at hand.", Bounty: 3, Favored: -1, Unlock: "hero_lootbox"},
 	{ID: "hater", Name: "The Hater", Flavor: "Your advantage belongs to me now.", Bounty: 1, Favored: 1, Flip: true, Unlock: "hero_lootbox"},
 }
 

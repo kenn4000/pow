@@ -11,7 +11,7 @@ import (
 	"time"
 )
 
-const SchemaVersion = 7
+const SchemaVersion = 8
 
 const DefaultHeroID = "recruit"
 
@@ -121,8 +121,8 @@ func New(now time.Time) (*Profile, error) {
 		AdsResetAt:          nextLocalMidnight(now),
 		FreeRefillResetAt:   nextLocalMidnight(now),
 		SkillNodes:          make(map[string]bool),
-		OwnedChromas:        make(map[string]bool),
-		AssignedChromas:     map[string]string{"B": "blue", "F": "yellow", "S": "red"},
+		OwnedChromas:        map[string]bool{"crimson": true, "cobalt": true, "sunflower": true},
+		AssignedChromas:     map[string]string{"B": "cobalt", "F": "sunflower", "S": "crimson"},
 		PurchasedBundles:    make(map[string]bool),
 		SeenChromas:         make(map[string]bool),
 		PendingBoxes:        make(map[string]int),
@@ -365,6 +365,9 @@ func normalizeResources(p *Profile) {
 	if p.OwnedChromas == nil {
 		p.OwnedChromas = make(map[string]bool)
 	}
+	p.OwnedChromas["crimson"] = true
+	p.OwnedChromas["cobalt"] = true
+	p.OwnedChromas["sunflower"] = true
 	if p.AssignedChromas == nil {
 		p.AssignedChromas = make(map[string]string)
 	}

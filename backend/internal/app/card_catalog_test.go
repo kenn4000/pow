@@ -3,6 +3,7 @@ package app
 import (
 	"bytes"
 	"image/png"
+	"strings"
 	"testing"
 )
 
@@ -11,9 +12,10 @@ func TestCardCatalogIncludesDeckAndEveryArtwork(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(catalog.Cards) != 27 || len(catalog.Artwork) != 72 {
+	if len(catalog.Cards) != 27 || len(catalog.Artwork) != 120 {
 		t.Fatalf("catalog has %d cards and %d artwork files", len(catalog.Cards), len(catalog.Artwork))
 	}
+
 	artwork := map[string]cardArtwork{}
 	for _, art := range catalog.Artwork {
 		if _, duplicate := artwork[art.ID]; duplicate {
@@ -38,6 +40,25 @@ func TestCardCatalogIncludesDeckAndEveryArtwork(t *testing.T) {
 		}
 		if _, ok := artwork[card.DefaultSkin+"/"+card.Tier+"_idle.png"]; !ok {
 			t.Fatalf("missing artwork for %s", card.ID)
+		}
+	}
+}
+
+func TestCardCatalogExcludesHeroIcons(t *testing.T) {
+	catalog, err := loadCardCatalog()
+	if err != nil {
+		t.Fatal(err)
+	}
+	artwork := make(map[string]bool, len(catalog.Artwork))
+	for _, art := range catalog.Artwork {
+		if strings.HasPrefix(art.ID, "hero_icons/") {
+			t.Fatalf("hero icon included as card artwork: %q", art.ID)
+		}
+		artwork[art.ID] = true
+	}
+	for _, id := range []string{"conq_lime/small_idle.png", "conq_gold/med_attack.png", "conq_pink/large_win.png", "conq_blue/large_lose.png"} {
+		if !artwork[id] {
+			t.Errorf("Conquistador artwork %q is missing", id)
 		}
 	}
 }

@@ -23,6 +23,19 @@ func TestCombineAllPairsStayWithinEnvelope(t *testing.T) {
 	}
 }
 
+func TestRenamedHeroesKeepTheirExistingIDs(t *testing.T) {
+	want := map[string]string{
+		"ascendant": "The Gorilla", "anchor": "The Turtle",
+		"ascetic": "The Bureaucrat", "herald": "The Bodybuilder",
+	}
+	for id, name := range want {
+		hero, ok := ByID(id)
+		if !ok || hero.Name != name {
+			t.Errorf("hero %q name = %q, want %q", id, hero.Name, name)
+		}
+	}
+}
+
 func TestRecruitMirrorMatchDefaultsToPositiveBounty(t *testing.T) {
 	recruit, ok := ByID("recruit")
 	if !ok {

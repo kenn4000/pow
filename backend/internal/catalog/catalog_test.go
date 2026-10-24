@@ -38,17 +38,45 @@ func TestShopPurchasesBundlesAndColorAssignments(t *testing.T) {
 	if err := AssignChroma(p, "F", "emerald"); err == nil {
 		t.Fatal("same color should not be assigned to multiple suits")
 	}
-	if err := BuyChroma(p, "crimson"); err != nil {
+	p.Marks = 100
+	if err := BuyChroma(p, "conq-pink"); err != nil {
 		t.Fatal(err)
 	}
-	if err := BuyChroma(p, "crimson"); err == nil {
+	if p.Marks != 0 {
+		t.Fatalf("Conquistador purchase left %d Marks, want 0", p.Marks)
+	}
+	if err := BuyChroma(p, "conq-pink"); err == nil {
 		t.Fatal("already-owned chroma should not be charged twice")
 	}
-	if err := MarkChromaSeen(p, "crimson"); err != nil {
+	if err := MarkChromaSeen(p, "conq-pink"); err != nil {
 		t.Fatal(err)
 	}
-	if !p.SeenChromas["crimson"] {
+	if !p.SeenChromas["conq-pink"] {
 		t.Fatal("viewing the catalog did not mark the owned chroma as seen")
+	}
+}
+
+func TestTribalAndConquistadorChromaNames(t *testing.T) {
+	want := map[string]string{
+		"crimson": "Tribal (red)", "cobalt": "Tribal (blue)", "sunflower": "Tribal (yellow)",
+		"emerald": "Tribal (green)", "tangerine": "Tribal (orange)", "amethyst": "Tribal (purple)",
+		"conq-lime": "Conquistador (lime green)", "conq-gold": "Conquistador (gold)",
+		"conq-pink": "Conquistador (pink)", "conq-blue": "Conquistador (sky blue)",
+	}
+	for id, name := range want {
+		chroma, ok := FindChroma(id)
+		if !ok || chroma.Name != name {
+			t.Errorf("chroma %q name = %q, want %q", id, chroma.Name, name)
+		}
+	}
+}
+
+func TestConquistadorChromasCost100Marks(t *testing.T) {
+	for _, id := range []string{"conq-lime", "conq-gold", "conq-pink", "conq-blue"} {
+		chroma, ok := FindChroma(id)
+		if !ok || chroma.Cost != 100 || chroma.Currency != string(Marks) {
+			t.Errorf("chroma %q = %+v, want 100 Marks", id, chroma)
+		}
 	}
 }
 

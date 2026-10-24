@@ -12,12 +12,12 @@ for every game, including each game in a best-of-three match.
 | The Warden | +1 | 0 | +1 | Basic Training or 1,200 Crowns |
 | The Hunter | +2 | 0 | 0 | Basic Training or 1,200 Crowns |
 | The Treasurer | -2 | 0 | +1 | Hero Box or 1,200 Crowns |
-| The Ascendant | 0 | +2 | 0 | Hero Box or 1,200 Crowns |
-| The Anchor | -1 | 0 | -1 | Basic Training or 1,200 Crowns |
+| The Gorilla | 0 | +2 | 0 | Hero Box or 1,200 Crowns |
+| The Turtle | -1 | 0 | -1 | Basic Training or 1,200 Crowns |
 | The Gambler | +2 | +1 | 0 | Hero Box or 1,200 Crowns |
 | The Diplomat | -2 | +1 | +1 | Hero Box or 1,200 Crowns |
-| The Ascetic | -1 | +1 | -1 | Hero Box or 1,200 Crowns |
-| The Herald | +3 | 0 | -1 | Hero Box or 1,200 Crowns |
+| The Bureaucrat | -1 | +1 | -1 | Hero Box or 1,200 Crowns |
+| The Bodybuilder | +3 | 0 | -1 | Hero Box or 1,200 Crowns |
 | The Hater | +1 | 0 | +1 | Hero Box or 1,200 Crowns |
 
 The Hater flips the other hero's Bounty contribution only; it never changes

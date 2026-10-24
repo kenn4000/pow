@@ -119,7 +119,7 @@ func TestPostgresApplication(t *testing.T) {
 	admin.request("POST", "/auth/login", credentials{"admin@example.com", "a-long-admin-password"}, 200)
 	var catalog cardCatalog
 	json.Unmarshal(admin.request("GET", "/admin/cards", nil, 200), &catalog)
-	if len(catalog.Cards) != 27 || len(catalog.Artwork) != 72 {
+	if len(catalog.Cards) != 27 || len(catalog.Artwork) != 120 {
 		t.Fatal("admin card catalog is incomplete")
 	}
 	var adminMe struct {

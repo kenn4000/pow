@@ -1,6 +1,7 @@
 package profile
 
 import (
+	"encoding/json"
 	"os"
 	"path/filepath"
 	"testing"
@@ -15,6 +16,11 @@ func TestLoadSaveProfileRoundTripAndSchemaValidation(t *testing.T) {
 	}
 	if p.PlayerID == "" || p.Energy != DefaultMaxEnergy {
 		t.Fatalf("new profile = ID %q, energy %d", p.PlayerID, p.Energy)
+	}
+	for _, id := range []string{"crimson", "cobalt", "sunflower"} {
+		if !p.OwnedChromas[id] {
+			t.Errorf("new profile does not own default chroma %q", id)
+		}
 	}
 	if p.Campaigns["basic"].TotalMissions != 10 || p.Campaigns["advanced"].TotalMissions != 5 {
 		t.Fatalf("new campaign totals = basic %d, advanced %d",
@@ -54,6 +60,39 @@ func TestLoadSaveProfileRoundTripAndSchemaValidation(t *testing.T) {
 	}
 	if _, err := LoadProfileFrom(path); err == nil {
 		t.Fatal("expected unsupported schema version to fail")
+	}
+}
+
+func TestSchemaV7MigrationGrantsAndPersistsDefaultTribalChromas(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "profile.json")
+	legacy := `{"schema_version":7,"player_id":"v7-player","owned_chromas":{"emerald":true}}`
+	if err := os.WriteFile(path, []byte(legacy), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	p, err := LoadProfileFrom(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if p.SchemaVersion != SchemaVersion {
+		t.Fatalf("migrated schema = %d, want %d", p.SchemaVersion, SchemaVersion)
+	}
+	for _, id := range []string{"crimson", "cobalt", "sunflower", "emerald"} {
+		if !p.OwnedChromas[id] {
+			t.Errorf("migration did not preserve/grant chroma %q", id)
+		}
+	}
+	data, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var persisted Profile
+	if err := json.Unmarshal(data, &persisted); err != nil {
+		t.Fatal(err)
+	}
+	for _, id := range []string{"crimson", "cobalt", "sunflower"} {
+		if !persisted.OwnedChromas[id] {
+			t.Errorf("migration did not persist default chroma %q", id)
+		}
 	}
 }
 

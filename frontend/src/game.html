@@ -23,6 +23,10 @@
       --card-purple: #784bb1;
       --card-brown: #805332;
       --card-silver: #6c747b;
+      --card-gold: #d4a72c;
+      --card-pink: #d94f9d;
+      --card-lime: #84b82d;
+      --card-sky-blue: #57aee2;
     }
 
     * { box-sizing: border-box; }
@@ -119,10 +123,9 @@
     .match-info[hidden] { display: none; }
     .match-side { min-width: 0; }
     .match-hero { display: grid; justify-items: center; gap: 6px; min-width: 0; text-align: center; }
-    .hero-portrait { width: clamp(64px, 9vw, 112px); aspect-ratio: 1; display: grid; place-items: center; overflow: hidden; border: 3px solid #e7ebe8; border-radius: 50%; background: radial-gradient(circle at 50% 32%, #ffffff26 0 18%, transparent 19%), linear-gradient(145deg, #8d7845, #353b37 72%); box-shadow: 0 5px 13px #0005; }
-    .hero-portrait.black { border-color: #171b1a; background: radial-gradient(circle at 50% 32%, #ffffff26 0 18%, transparent 19%), linear-gradient(145deg, #5c6971, #303735 72%); }
-    .hero-portrait svg { width: 68%; height: 68%; fill: #e4e8e4; opacity: .82; }
-    .hero-portrait-mark { position: absolute; color: #f0c75e; font-size: clamp(14px, 2vw, 22px); font-weight: 900; text-shadow: 0 2px 4px #000; }
+    .hero-portrait { width: clamp(64px, 9vw, 112px); aspect-ratio: 1; display: grid; place-items: center; overflow: hidden; border: 3px solid #e7ebe8; border-radius: 10px; background: #353b37; box-shadow: 0 5px 13px #0005; }
+    .hero-portrait.black { border-color: #171b1a; }
+    .hero-portrait img { width: 100%; height: 100%; object-fit: cover; }
     .hero-portrait { position: relative; }
     .match-hero h2 { max-width: 100%; margin: 0; font-size: clamp(11px, 1.5vw, 16px); line-height: 1.2; overflow-wrap: anywhere; }
     .hero-score { margin: 0; font-size: clamp(12px, 1.7vw, 18px); font-weight: 800; }
@@ -145,6 +148,8 @@
     .battle-vs.clash { color: #c4b5fd; }
     .battle-player { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 6px; min-width: 0; }
     .battle-player-name { max-width: 100%; color: #e4e8e4; font-size: 12px; text-align: center; text-transform: uppercase; letter-spacing: .08em; }
+    .battle-card-line { display: flex; align-items: center; justify-content: center; gap: 5px; width: 100%; min-width: 0; }
+    .battle-face { min-width: 22px; color: var(--paper); font-size: clamp(20px, 3vw, 32px); font-weight: 900; line-height: 1; text-align: center; -webkit-text-stroke: .6px #101624; text-shadow: 0 2px 4px #000; }
     .battle-vs { position: relative; color: #d5dbd6; text-align: center; font-weight: 800; letter-spacing: .12em; }
     .battle-vs.exploding { color: transparent; }
     .battle-vs.exploding::before, .battle-vs.exploding::after {
@@ -291,6 +296,7 @@
       background: linear-gradient(145deg, #493814, #171d2a 70%);
       color: #facc15; font: 900 20px Georgia, serif; box-shadow: 0 0 18px #eab30826;
     }
+    .dashboard-avatar img { width: 100%; height: 100%; object-fit: cover; border-radius: 10px; }
     .dashboard-identity { min-width: 0; }
     .dashboard-brand {
       margin: 0; color: #f6d46f; font: 800 15px Georgia, "Times New Roman", serif;
@@ -350,6 +356,7 @@
       font: 900 24px Georgia, "Times New Roman", serif; text-shadow: 0 2px 6px #000;
       box-shadow: 0 0 22px #eab30825;
     }
+    .featured-crest img { width: 100%; height: 100%; object-fit: cover; border-radius: 13px 13px 18px 18px; }
     .commander-card {
       width: 100%; color: inherit; text-align: left; font: inherit; cursor: pointer;
       transition: border-color .15s ease, transform .12s ease, filter .15s ease;
@@ -638,13 +645,45 @@
       Yellow: "tribal_yellow",
       Purple: "tribal_purple",
       Orange: "tribal_orange",
-      Green: "tribal_green"
+      Green: "tribal_green",
+      "Lime Green": "conq_lime",
+      Gold: "conq_gold",
+      Pink: "conq_pink",
+      "Sky Blue": "conq_blue"
     };
     const defaultSuitColors = ["Blue", "Yellow", "Red"];
-    const colors = ["Red", "Blue", "Yellow", "Green", "Orange", "Purple"];
+    const colors = ["Red", "Blue", "Yellow", "Green", "Orange", "Purple", "Lime Green", "Gold", "Pink", "Sky Blue"];
     const colorVars = {
       Red: "var(--card-red)", Blue: "var(--card-blue)", Yellow: "var(--card-yellow)",
-      Green: "var(--card-green)", Orange: "var(--card-orange)", Purple: "var(--card-purple)"
+      Green: "var(--card-green)", Orange: "var(--card-orange)", Purple: "var(--card-purple)",
+      "Lime Green": "var(--card-lime)", Gold: "var(--card-gold)", Pink: "var(--card-pink)",
+      "Sky Blue": "var(--card-sky-blue)"
+    };
+    const chromaLabels = {
+      crimson: "Tribal (red)", cobalt: "Tribal (blue)", sunflower: "Tribal (yellow)",
+      emerald: "Tribal (green)", tangerine: "Tribal (orange)", amethyst: "Tribal (purple)",
+      "conq-lime": "Conquistador (lime green)", "conq-gold": "Conquistador (gold)",
+      "conq-pink": "Conquistador (pink)", "conq-blue": "Conquistador (sky blue)",
+      walnut: "Walnut", silver: "Silver", "rose-gold": "Rose Gold",
+      aurora: "Aurora", obsidian: "Obsidian", prismatic: "Prismatic", "ember-dog": "Ember Dog"
+    };
+    const chromaLooks = {
+      crimson: {color:"Red", skin:"tribal_red"}, cobalt: {color:"Blue", skin:"tribal_blue"},
+      sunflower: {color:"Yellow", skin:"tribal_yellow"}, emerald: {color:"Green", skin:"tribal_green"},
+      tangerine: {color:"Orange", skin:"tribal_orange"}, amethyst: {color:"Purple", skin:"tribal_purple"},
+      "conq-lime": {color:"Lime Green", skin:"conq_lime"}, "conq-gold": {color:"Gold", skin:"conq_gold"},
+      "conq-pink": {color:"Pink", skin:"conq_pink"}, "conq-blue": {color:"Sky Blue", skin:"conq_blue"},
+      walnut: {color:"Orange", skin:"tribal_orange", filter:"saturate(.55) brightness(.7)"},
+      silver: {color:"Blue", skin:"tribal_blue", filter:"grayscale(1) brightness(1.3)"},
+      "rose-gold": {color:"Red", skin:"tribal_red", filter:"sepia(.4) saturate(.7) brightness(1.2)"},
+      aurora: {color:"Purple", skin:"tribal_purple", filter:"hue-rotate(30deg) saturate(1.4)"},
+      obsidian: {color:"Blue", skin:"tribal_blue", filter:"grayscale(.8) brightness(.6)"},
+      prismatic: {color:"Purple", skin:"tribal_purple", filter:"hue-rotate(90deg) saturate(2)"},
+      "ember-dog": {color:"Orange", skin:"tribal_orange"}
+    };
+    const heroIconNames = {
+      ascendant: "gorilla", anchor: "turtle", ascetic: "bureaucrat",
+      herald: "bodybuilder", treasurer: "treasure"
     };
     const suitColors = loadSuitColors();
     const dashboardPreview = new URLSearchParams(window.location.search).get("preview") === "dashboard";
@@ -656,7 +695,6 @@
     let modalReturnFocus = null;
     let achievementFilter = 'all';
     let achievementCategory = 'all';
-    let autoContinue = localStorage.getItem('pow-auto-continue') === 'true';
     let pendingConfirmation = null;
     let setupMode = 'easy';
     let openSuitMenu = null;
@@ -677,12 +715,12 @@
     let battleAnimation = null;
     let battleAnimationTimer = null;
     const skillTreeBranches = [
-      { id: "battle-rewards", label: "Battle Rewards", nodeIDs: ["quartermaster", "field-warden", "first-blood"] },
-      { id: "camp-draw", label: "Camp Draw", nodeIDs: ["camp-lore", "fortune", "chroma-curator"] },
-      { id: "energy", label: "Energy", nodeIDs: ["expanded-rations", "quick-recovery", "second-wind", "daily_energy"] },
-      { id: "hero-acquisition", label: "Hero Acquisition", nodeIDs: ["hero_broker", "lucky_dupe", "premium_dupe"] },
-      { id: "campaigns", label: "Campaigns", nodeIDs: ["curator", "campaign_free"] },
-      { id: "commander-tactics", label: "Commander Tactics", nodeIDs: ["conductor_1", "conductor_2", "hero_history", "hero_preview"] }
+      { id: "battle-rewards", label: "Battle Rewards", icon: "BattleRewards.png", nodeIDs: ["quartermaster", "field-warden", "first-blood"] },
+      { id: "camp-draw", label: "Camp Draw", icon: "CampDraw.png", nodeIDs: ["camp-lore", "fortune", "chroma-curator"] },
+      { id: "energy", label: "Energy", icon: "Energy.png", nodeIDs: ["expanded-rations", "quick-recovery", "second-wind", "daily_energy"] },
+      { id: "hero-acquisition", label: "Hero Acquisition", icon: "HeroAq.png", nodeIDs: ["hero_broker", "lucky_dupe", "premium_dupe"] },
+      { id: "campaigns", label: "Campaigns", icon: "Campaign.png", nodeIDs: ["curator", "campaign_free"] },
+      { id: "commander-tactics", label: "Commander Tactics", icon: "HeroTactics.png", nodeIDs: ["conductor_1", "conductor_2", "hero_history", "hero_preview"] }
     ];
 
     function loadSuitColors() {
@@ -729,7 +767,7 @@
       const equipped = equippedChroma(card.suit);
       const appearance = options.appearance || (equipped ? chromaAppearance(equipped) : null);
       const color = appearance?.color || suitColors[card.suit];
-      const skin = skinFolders[color] || skinFolders[defaultSuitColors[card.suit]];
+      const skin = appearance?.skin || skinFolders[color] || skinFolders[defaultSuitColors[card.suit]];
       const tier = card.face <= 3 ? "small" : card.face <= 6 ? "med" : "large";
       const pose = ["idle", "attack", "win", "lose"].includes(options.pose) ? options.pose : "idle";
       const selectable = Boolean(item.selectable);
@@ -765,7 +803,7 @@
     }
 
     function scheduleBattleContinuation(key) {
-      if (!autoContinue || showDashboard || showFeature) return;
+      if (showDashboard || showFeature) return;
       battleAnimationTimer = window.setTimeout(() => {
         if (!battleAnimation || battleAnimation.key !== key || battleAnimation.stage !== "settled" ||
             !state || state.phase !== "result") return;
@@ -816,12 +854,14 @@
           <path d="M140 232 L200 232"></path>
           <path d="M288 187 L255 141"></path>
         </svg>${locations.map(({ suit, location }) => {
+          const owned = new Set(state?.dashboard?.ownedChromas || []);
           const menu = openSuitMenu === suit
             ? `<div class="color-menu" role="menu" aria-label="Choose an unused color">
-                ${colors.filter(color => !suitColors.includes(color)).map(color =>
-                  `<button type="button" class="color-option" role="menuitem" data-suit-option="${suit}" data-color="${color}">
-                    <span class="color-option-swatch" style="background:${colorVars[color]}"></span>${color}
-                  </button>`).join("")}
+                ${colors.filter(color => !suitColors.includes(color)).flatMap(color =>
+                  Object.entries(chromaLooks).filter(([id, look]) => look.color === color && owned.has(id)).map(([id]) =>
+                    `<button type="button" class="color-option" role="menuitem" data-suit-option="${suit}" data-chroma="${id}">
+                      <span class="color-option-swatch" style="background:${colorVars[color]}"></span>${chromaLabels[id]}
+                    </button>`)).join("")}
               </div>`
             : "";
           return `<div class="suit-node-wrap ${location}${openSuitMenu === suit ? " menu-open" : ""}">
@@ -849,10 +889,12 @@
         const option = event.target.closest("[data-suit-option]");
         if (option) {
           const suit = Number(option.dataset.suitOption);
-          const color = option.dataset.color;
+          const chromaID = option.dataset.chroma;
+          const look = chromaLooks[chromaID];
+          const owned = state?.dashboard?.ownedChromas || [];
           if (!Number.isInteger(suit) || suit < 0 || suit >= suits.length ||
-              !colors.includes(color) || suitColors.includes(color)) return;
-          await saveSuitAppearance({action:'set-suit-color',suit:['B','F','S'][suit],id:color});
+              !look || !owned.includes(chromaID) || suitColors.includes(look.color)) return;
+          await saveSuitAppearance({action:'assign-chroma',suit:['B','F','S'][suit],id:chromaID});
           return;
         }
         const trigger = event.target.closest("[data-suit-trigger]");
@@ -940,17 +982,17 @@
     function heroPanelMarkup(player, heroName, heroID) {
       const color = player.color.toLowerCase();
       const title = heroName || "Commander";
-      const initials = title.replace(/^The\s+/i, "").split(/\s+/)
-        .map(word => word.charAt(0)).join("").slice(0, 2).toUpperCase();
+      const playerIndex = state.players.indexOf(player);
+      const icon = state.campaign && playerIndex !== 0 ? "coach"
+        : state.mode !== "hvh" && playerIndex !== 0
+          ? ({easy:"cpu_easy",normal:"cpu_med",hard:"cpu_hard"}[state.mode] || "cpu_easy")
+          : (heroIconNames[heroID] || heroID || "recruit");
       const priorScore = battleAnimation && battleAnimation.key === battleAnimationKey() &&
         battleAnimation.stage !== "settled" && battleAnimation.previousScores[player.color];
       const scoreText = priorScore || `${playerLabel(player)} = ${player.score}`;
       return `<article class="match-hero ${color}">
         <div class="hero-portrait ${color}" role="img" aria-label="${esc(title)} portrait for ${esc(player.color)}">
-          <svg viewBox="0 0 100 100" aria-hidden="true" focusable="false">
-            <path d="M50 14c-13 0-22 10-22 24 0 10 5 18 12 22-17 7-27 20-27 34v3h74v-3c0-14-10-27-27-34 7-4 12-12 12-22 0-14-9-24-22-24z"></path>
-          </svg>
-          <span class="hero-portrait-mark">${esc(initials || heroID.slice(0, 2).toUpperCase())}</span>
+          <img src="${import.meta.env.BASE_URL}skins/hero_icons/${esc(icon)}.png" alt="" aria-hidden="true">
         </div>
         <h2>${esc(title)}</h2>
         <p class="hero-score ${color}">${esc(scoreText)}</p>
@@ -1050,18 +1092,18 @@
       const resolved = state && state.battleOutcome;
       const settled = animation && animation.stage === "settled";
       const showValues = resolved && animation &&
-        (animation.stage === "values" || animation.stage === "outcome");
+        (animation.stage === "values" || animation.stage === "outcome" || animation.stage === "settled");
       const attacker = state && state.players && state.players[state.attacker];
       const defender = state && state.players && state.players[1 - state.attacker];
       const attackColor = attacker && attacker.color === "White" ? "#fff" : "#151817";
       const defendColor = defender && defender.color === "White" ? "#fff" : "#151817";
-      let attackOptions = { pose: "attack" };
-      let defendOptions = { pose: "attack", mirror: true };
+      let attackOptions = { pose: "attack", hideFace: true };
+      let defendOptions = { pose: "attack", mirror: true, hideFace: true };
       if (showValues) {
         attackOptions = { ...attackOptions, face: resolved.attackerValue, faceColor: attackColor };
         defendOptions = { ...defendOptions, face: resolved.defenderValue, faceColor: defendColor };
       }
-      if (resolved && animation && animation.stage === "outcome") {
+      if (resolved && animation && (animation.stage === "outcome" || animation.stage === "settled")) {
         attackOptions.pose = resolved.winner === 0 ? "win" : "lose";
         defendOptions.pose = resolved.winner === 1 ? "win" : "lose";
       }
@@ -1078,10 +1120,16 @@
         return resolved.winner === side ? '<span class="battle-result win">Captures</span>' : '<span class="battle-result lose">Captured</span>';
       };
       const lost = side => showResult && resolved.winner !== -1 && resolved.winner !== side ? ' battle-card-lost' : '';
+      const attackFace = state?.battleAttack
+        ? (showValues ? resolved.attackerValue : state.battleAttack.face) : "";
+      const defendFace = state?.battleDefend
+        ? (showValues ? resolved.defenderValue : state.battleDefend.face) : "";
+      const attackNumberColor = showValues ? attackColor : colorVars[chromaAppearance(equippedChroma(state.battleAttack?.suit)).color];
+      const defendNumberColor = showValues ? defendColor : colorVars[chromaAppearance(equippedChroma(state.battleDefend?.suit)).color];
       document.getElementById("battleLeft").innerHTML =
-        `<span class="battle-player-name">${esc(attackerName)} ${attackerName === 'You' ? 'attack' : 'attacks'}</span><div class="battle-card-wrap${lost(0)}">${attack}</div>${badge(0)}`;
+        `<span class="battle-player-name">${esc(attackerName)} ${attackerName === 'You' ? 'attack' : 'attacks'}</span><div class="battle-card-line${lost(0)}"><div class="battle-card-wrap">${attack}</div>${state?.battleAttack ? `<span class="battle-face" style="color:${attackNumberColor}">${attackFace}</span>` : ""}</div>${badge(0)}`;
       document.getElementById("battleRight").innerHTML =
-        `<span class="battle-player-name">${esc(defenderName)} ${defenderName === 'You' ? 'defend' : 'defends'}</span><div class="battle-card-wrap${lost(1)}">${defend}</div>${badge(1)}`;
+        `<span class="battle-player-name">${esc(defenderName)} ${defenderName === 'You' ? 'defend' : 'defends'}</span><div class="battle-card-line${lost(1)}"><span class="battle-face" style="color:${defendNumberColor}">${defendFace}</span><div class="battle-card-wrap">${defend}</div></div>${badge(1)}`;
       const versus = document.getElementById("battleVs");
       versus.classList.toggle("exploding", Boolean(animation && animation.stage === "impact"));
       versus.classList.toggle("clash", Boolean(showResult && resolved.winner === -1));
@@ -1101,17 +1149,6 @@
       } else if (state.phase === "seat" && (state.mode === "hvh" || state.actor === 0)) {
         actions.append(makeButton("Take seat X", () => act("seat", { seat: "X" }), "primary"));
         actions.append(makeButton("Take seat Y", () => act("seat", { seat: "Y" }), "primary"));
-      } else if (state.phase === "result") {
-        actions.append(makeButton("Continue", () => act("continue"), "primary"));
-        const pacing = makeButton(autoContinue ? 'Auto-advance: on' : 'Auto-advance: off', () => {
-          autoContinue = !autoContinue;
-          localStorage.setItem('pow-auto-continue', String(autoContinue));
-          window.clearTimeout(battleAnimationTimer);
-          if (autoContinue) scheduleBattleContinuation(battleAnimationKey());
-          render();
-        }, 'secondary');
-        pacing.setAttribute('aria-pressed', String(autoContinue));
-        actions.append(pacing);
       }
       if (state.phase !== "gameover" && state.phase !== "handoff" && activeMode) {
         const divider = document.createElement("span");
@@ -1289,8 +1326,11 @@
         dashboard.displayName || 'Choose a display name';
       const heroInitial = String(dashboard.title || "?").replace(/^The\s+/i, "").trim().charAt(0) || "?";
       document.getElementById("dashboardFeaturedHero").textContent = dashboard.title;
-      document.getElementById("dashboardHeroCrest").textContent = heroInitial.toUpperCase();
-      document.getElementById("dashboardAvatar").textContent = heroInitial.toUpperCase();
+      const heroIcon = heroIconNames[dashboard.defaultHeroId] || dashboard.defaultHeroId || "recruit";
+      document.getElementById("dashboardHeroCrest").innerHTML =
+        `<img src="${import.meta.env.BASE_URL}skins/hero_icons/${esc(heroIcon)}.png" alt="" aria-hidden="true">`;
+      document.getElementById("dashboardAvatar").innerHTML =
+        `<img src="${import.meta.env.BASE_URL}skins/hero_icons/${esc(heroIcon)}.png" alt="" aria-hidden="true">`;
       document.getElementById("dashboardMarks").textContent = formatNumber(dashboard.marks);
       document.getElementById("dashboardCrowns").textContent = formatNumber(dashboard.crowns);
       const energy = `${dashboard.energy}/${dashboard.maxEnergy}`;
@@ -1399,8 +1439,8 @@
 
     function renderFeatureTabs(tabs, selected, dataAttribute) {
       return tabs.map(tab =>
-        `<button id="feature-tab-${esc(tab.id)}" class="feature-tab" type="button" role="tab" aria-selected="${tab.id === selected}" tabindex="${tab.id === selected ? 0 : -1}" aria-controls="featureContent"
-          data-${dataAttribute}="${esc(tab.id)}">${esc(tab.label)}</button>`
+        `<button id="feature-tab-${esc(tab.id)}" class="feature-tab${tab.icon ? " skill-branch-tab" : ""}" type="button" role="tab" aria-selected="${tab.id === selected}" tabindex="${tab.id === selected ? 0 : -1}" aria-controls="featureContent"
+          data-${dataAttribute}="${esc(tab.id)}">${tab.icon ? `<span class="skill-tab-badge"><img src="${import.meta.env.BASE_URL}skills/icons/${esc(tab.icon)}" alt="" aria-hidden="true"></span>` : ""}<span>${esc(tab.label)}</span></button>`
       ).join("");
     }
 
@@ -1809,6 +1849,7 @@
         </article>`;
       }).join("");
       return `<section class="feature-section"><h2>Campaign Progress</h2>
+        <div class="campaign-coach"><img src="${import.meta.env.BASE_URL}skins/hero_icons/coach.png" alt="" aria-hidden="true"><span>Campaign Coach</span></div>
         ${campaigns ? `<div class="feature-list">${campaigns}</div>` : "<p>No campaigns are available.</p>"}
       </section>`;
     }
@@ -2196,15 +2237,17 @@
     }
 
     function chromaAppearance(chroma) {
+      const look = chromaLooks[chroma?.id];
+      if (look) return {...look, filter: look.filter || ''};
       const named = String(chroma?.color || '').replace(/^./, c => c.toUpperCase());
-      if (skinFolders[named]) return {color: named, filter: ''};
+      if (skinFolders[named]) return {color: named, skin: skinFolders[named], filter: ''};
       return {
-        brown: {color:'Orange',filter:'saturate(.55) brightness(.7)'},
-        silver: {color:'Blue',filter:'grayscale(1) brightness(1.3)'},
-        'rose-gold': {color:'Red',filter:'sepia(.4) saturate(.7) brightness(1.2)'},
-        aurora: {color:'Purple',filter:'hue-rotate(30deg) saturate(1.4)'},
-        obsidian: {color:'Blue',filter:'grayscale(.8) brightness(.6)'},
-        prismatic: {color:'Purple',filter:'hue-rotate(90deg) saturate(2)'}
+        brown: {color:'Orange',skin:skinFolders.Orange,filter:'saturate(.55) brightness(.7)'},
+        silver: {color:'Blue',skin:skinFolders.Blue,filter:'grayscale(1) brightness(1.3)'},
+        'rose-gold': {color:'Red',skin:skinFolders.Red,filter:'sepia(.4) saturate(.7) brightness(1.2)'},
+        aurora: {color:'Purple',skin:skinFolders.Purple,filter:'hue-rotate(30deg) saturate(1.4)'},
+        obsidian: {color:'Blue',skin:skinFolders.Blue,filter:'grayscale(.8) brightness(.6)'},
+        prismatic: {color:'Purple',skin:skinFolders.Purple,filter:'hue-rotate(90deg) saturate(2)'}
       }[chroma?.color] || {color:'Blue',filter:''};
     }
 
@@ -2224,7 +2267,7 @@
     function chromaPreview(chroma) {
       if (!chroma) return '';
       const look = chromaAppearance(chroma);
-      return `<span class="chroma-preview-frame" data-preview-id="${esc(chroma.id)}"><span class="preview-placeholder" aria-hidden="true">Loading preview…</span><img class="chroma-preview" src="${import.meta.env.BASE_URL}skins/${skinFolders[look.color]}/large_idle.png?thumb=160" style="filter:${look.filter || 'none'}" alt="${esc(chroma.name)} card artwork preview" loading="lazy" width="160" height="210"></span>`;
+      return `<span class="chroma-preview-frame" data-preview-id="${esc(chroma.id)}"><span class="preview-placeholder" aria-hidden="true">Loading preview…</span><img class="chroma-preview" src="${import.meta.env.BASE_URL}skins/${look.skin || skinFolders[look.color]}/large_idle.png?thumb=160" style="filter:${look.filter || 'none'}" alt="${esc(chroma.name)} card artwork preview" loading="lazy" width="160" height="210"></span>`;
     }
 
     function bindPreviewImages() {
