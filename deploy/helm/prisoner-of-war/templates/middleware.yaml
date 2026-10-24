@@ -1,0 +1,12 @@
+{{- if and .Values.ingress.enabled .Values.ingress.redirectHTTPS }}
+# Redirects plain-HTTP requests for this release's routes to HTTPS. Traefik's
+# redirectScheme leaves requests that already use HTTPS unchanged.
+apiVersion: traefik.io/v1alpha1
+kind: Middleware
+metadata:
+  name: {{ .Release.Name }}-https-redirect
+spec:
+  redirectScheme:
+    scheme: https
+    permanent: true
+{{- end }}

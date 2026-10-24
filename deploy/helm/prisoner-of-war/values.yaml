@@ -50,3 +50,12 @@ ingress:
   host: games.markdownthing.com
   issuer: letsencrypt-prod
   tlsSecretName: games-markdownthing-com-tls
+  # Redirect plain HTTP to HTTPS with a Traefik Middleware (requires traefik.io CRDs).
+  redirectHTTPS: true
+
+# Passwordless "Sign in as any user" picker (GET /api/auth/users, POST /api/auth/assume).
+# Anyone who can reach the site can then sign in as any account, including administrators.
+# Disabled on this public deployment (2026-10-24, audit SEC-01). Enable only on a host that
+# nobody else can reach.
+developmentLogin:
+  enabled: false

@@ -7,7 +7,8 @@ terminal interface, and Helm deployment to
 ## Repository layout
 
 ```text
-backend/                    Go module, server, game packages, tests, and artwork
+backend/cmd/prisoners-of-war/ Go executable entrypoint
+backend/internal/           Application, game packages, tests, storage, and artwork
 frontend/                   Vite/React app and frontend container
 deploy/helm/prisoner-of-war/ Helm chart for k3s
 docs/                       Game systems and feature guides
@@ -18,6 +19,7 @@ compose.yaml                Local PostgreSQL container and persistent volume
 Go module metadata and all Go packages live under `backend/`. HTTP routing uses
 chi, PostgreSQL access uses pgx, and passwords use bcrypt. Local development
 requires Go 1.21+, Node 22.12+, and Docker for PostgreSQL.
+See the [backend layout and commands](backend/README.md) for source organization.
 See [deployment setup](deploy/README.md) for GitLab variables and cluster commands.
 
 The existing browser screens and renderer are preserved in
@@ -59,7 +61,7 @@ docker compose up -d --wait postgres
 set -a
 . ./.env
 set +a
-GOWORK=off go -C backend run .
+GOWORK=off go -C backend run ./cmd/prisoners-of-war
 ```
 
 In another terminal, start Vite:
@@ -76,9 +78,35 @@ page for listing users and changing their roles. **Saved games** lists your
 active, completed, and abandoned matches with their state-transition history.
 An unfinished match resumes after refreshing or restarting the backend.
 
+The development login page also has a **Sign in as any user** side panel.
+It loads every account, including administrators, supports email/role search,
+and opens a real session for the selected account without a password. The
+development endpoints are `GET /api/auth/users` (cursor-paginated) and
+`POST /api/auth/assume` with `{"userId":"…"}`. This workspace intentionally
+enables this account-switching workflow while the game is being developed.
+The picker is off unless `DEVELOPMENT_LOGIN=true` (set in `.env.example`, and by
+the Helm value `developmentLogin.enabled`). When off, both endpoints return 404 and
+the sign-in page hides the panel. Never enable it on a host other people can reach:
+it signs anyone in as any account, including administrators.
+
+Screens have shareable hash routes, such as `#/campaigns`, `#/shop/boxes`,
+`#/skills/energy`, `#/saved-games`, and `#/password`. Refresh and browser
+Back/Forward preserve the selected destination. **Cards & rules** is available
+to every signed-in player, and the rules overview is also on the login page.
+Commander Record lets players save a display name.
+
+Campaigns can launch their scripted missions in the browser, including hero
+selection, prerequisites, energy costs, progress and first-completion rewards.
+Completed missions offer free practice replays without repeated progression
+rewards. Missions and their hidden state persist through refresh like ordinary
+matches. **Choose match mode** can replace an active match with another mode;
+**Restart this mode** restarts its current configuration. The unfinished match
+is archived in Saved games. Battles wait for **Continue** by default, with an
+optional auto-advance setting. Mobile play places the current hand first.
+
 Use **Password** to change your password after confirming the current one.
 The current session is rotated and stays signed in; all other sessions are
-revoked. Administrators also have a **Cards** page: its contact sheet covers
+revoked. Players also have a **Cards & rules** page: its contact sheet covers
 the 27-card deck and all 72 embedded artwork files. Clicking a thumbnail opens
 a detail panel with suit rules, color/pose variants, and image metadata.
 
@@ -97,10 +125,10 @@ The UI offers Human vs Human and Human vs AI at Easy, Normal, or Hard. A mode
 can be preselected:
 
 ```sh
-GOWORK=off go -C backend run . --mode hvh
-GOWORK=off go -C backend run . --mode easy
-GOWORK=off go -C backend run . --mode normal
-GOWORK=off go -C backend run . --mode hard
+GOWORK=off go -C backend run ./cmd/prisoners-of-war --mode hvh
+GOWORK=off go -C backend run ./cmd/prisoners-of-war --mode easy
+GOWORK=off go -C backend run ./cmd/prisoners-of-war --mode normal
+GOWORK=off go -C backend run ./cmd/prisoners-of-war --mode hard
 ```
 
 Each match selects heroes before play. The browser offers hero choices when
@@ -122,8 +150,8 @@ To choose a different local address, use `--listen 127.0.0.1:8081`.
 ## Terminal fallback
 
 ```sh
-GOWORK=off go -C backend run . --ui terminal
-GOWORK=off go -C backend run . --ui terminal --mode hard
+GOWORK=off go -C backend run ./cmd/prisoners-of-war --ui terminal
+GOWORK=off go -C backend run ./cmd/prisoners-of-war --ui terminal --mode hard
 ```
 
 The terminal starts with a progression menu for CPU games, local Ranked and
@@ -142,7 +170,7 @@ Print the economy configuration, including payouts, skills, chromas and
 bundles, as JSON:
 
 ```sh
-GOWORK=off go -C backend run . --dump-economy
+GOWORK=off go -C backend run ./cmd/prisoners-of-war --dump-economy
 ```
 
 ## AI
@@ -186,11 +214,11 @@ for the data model, authentication, router groups, and deployment bootstrap.
 Run a headless Hard-vs-Hard simulation and print summary statistics with:
 
 ```sh
-GOWORK=off go -C backend run . --sim 10000
+GOWORK=off go -C backend run ./cmd/prisoners-of-war --sim 10000
 ```
 
 Run all 66 hero pairings with greedy-vs-greedy and greedy-vs-random samples:
 
 ```sh
-GOWORK=off go -C backend run . --sim-heroes 100
+GOWORK=off go -C backend run ./cmd/prisoners-of-war --sim-heroes 100
 ```

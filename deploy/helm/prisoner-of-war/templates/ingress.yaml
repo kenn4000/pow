@@ -5,6 +5,9 @@ metadata:
   name: {{ .Release.Name }}
   annotations:
     cert-manager.io/cluster-issuer: {{ .Values.ingress.issuer | quote }}
+    {{- if .Values.ingress.redirectHTTPS }}
+    traefik.ingress.kubernetes.io/router.middlewares: {{ printf "%s-%s-https-redirect@kubernetescrd" .Release.Namespace .Release.Name | quote }}
+    {{- end }}
 spec:
   ingressClassName: {{ .Values.ingress.className }}
   tls:

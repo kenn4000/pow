@@ -10,9 +10,20 @@ metadata:
     app.kubernetes.io/component: {{ $component }}
 spec:
   replicas: 1
-  {{- if eq $component "backend" }}
+  {{- if and (eq $component "backend") $.Values.persistence.enabled }}
+  # The legacy profile volume is ReadWriteOnce, so only one backend pod may run.
   strategy:
     type: Recreate
+  {{- else }}
+  # Keep the running pod until its replacement passes readiness, so a bad image
+  # or failed start never removes the only serving pod. For the backend, game
+  # state is loaded per request under a row lock and migrations take an advisory
+  # lock, so a brief overlap of two pods is safe.
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxUnavailable: 0
+      maxSurge: 1
   {{- end }}
   selector:
     matchLabels:
@@ -45,6 +56,11 @@ spec:
         - name: {{ $component }}
           image: {{ printf "%s:%s" $config.image.repository $config.image.tag | quote }}
           imagePullPolicy: {{ $config.image.pullPolicy }}
+          lifecycle:
+            preStop:
+              # Let Traefik stop routing to this pod before it begins shutting down.
+              exec:
+                command: ["sleep", "5"]
           ports:
             - name: http
               containerPort: 8080
@@ -69,6 +85,8 @@ spec:
               value: {{ printf "https://%s" $.Values.ingress.host | quote }}
             - name: COOKIE_SECURE
               value: "true"
+            - name: DEVELOPMENT_LOGIN
+              value: {{ ternary "true" "false" $.Values.developmentLogin.enabled | quote }}
             {{- with $.Values.bootstrapAdmin.existingSecret }}
             - name: BOOTSTRAP_ADMIN_EMAIL
               valueFrom:
