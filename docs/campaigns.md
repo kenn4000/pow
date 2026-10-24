@@ -82,7 +82,7 @@ Marks: 4,000.
 ## Adding a campaign
 
 1. Define the campaign and its missions in a campaign-specific file such as
-   `backend/campaigns/new_campaign.go`.
+   `backend/internal/campaigns/new_campaign.go`.
 2. Set each mission's sequential `Index`, type, briefing and hint, AI level,
    allowed hero IDs, and mission Marks.
 3. For scripted missions, ensure each physical card appears only once across

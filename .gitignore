@@ -9,6 +9,10 @@
 /backend/coverage/
 /backend/prisonersofwar
 /backend/prisonersofwar.exe
+/backend/prisoners-of-war
+/backend/prisoners-of-war.exe
+/backend/cmd/prisoners-of-war/prisoners-of-war
+/backend/cmd/prisoners-of-war/prisoners-of-war.exe
 /backend/server
 /backend/server.exe
 /bin/

@@ -83,7 +83,7 @@ Run every unordered hero pair (including mirror matches) with greedy-vs-greedy
 and greedy-vs-random games. The 11-hero roster has 66 pairings:
 
 ```powershell
-GOWORK=off go -C backend run . --sim-heroes 100
+GOWORK=off go -C backend run ./cmd/prisoners-of-war --sim-heroes 100
 ```
 
 The report flags pairings against these targets:

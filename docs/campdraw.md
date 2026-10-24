@@ -75,7 +75,7 @@ currently stubs in `seasons`; they return zero until those systems are built.
 ## Tuning and simulation
 
 The tuning constants and prize tables live in
-[`backend/lootbox/lootbox_tables.go`](../backend/lootbox/lootbox_tables.go):
+[`backend/internal/lootbox/lootbox_tables.go`](../backend/internal/lootbox/lootbox_tables.go):
 
 | Constant | Value |
 |---|---:|
@@ -91,7 +91,7 @@ base ten-win threshold by two.
 Run headless simulations without loading or saving a player profile:
 
 ```powershell
-GOWORK=off go -C backend run . --sim-campdraw 5000
+GOWORK=off go -C backend run ./cmd/prisoners-of-war --sim-campdraw 5000
 ```
 
 The output includes win-count and box distributions plus average Marks,

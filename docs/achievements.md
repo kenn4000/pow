@@ -107,5 +107,5 @@ progression data adapters; they do not change game rules. Achievement and set
 definitions are also included in the JSON output from:
 
 ```powershell
-GOWORK=off go -C backend run . --dump-economy
+GOWORK=off go -C backend run ./cmd/prisoners-of-war --dump-economy
 ```

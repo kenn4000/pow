@@ -86,7 +86,7 @@ yellow, and blue.
 ## CLI
 
 ```powershell
-GOWORK=off go -C backend run . --ui terminal
+GOWORK=off go -C backend run ./cmd/prisoners-of-war --ui terminal
 ```
 
 The terminal opens on a dashboard with balances, energy and recharge timing,
@@ -119,7 +119,7 @@ To inspect the current economy values, skill tree, catalog, and bundles as
 JSON:
 
 ```powershell
-GOWORK=off go -C backend run . --dump-economy
+GOWORK=off go -C backend run ./cmd/prisoners-of-war --dump-economy
 ```
 
 For development, set the profile directory through `HOME`/`USERPROFILE`, or

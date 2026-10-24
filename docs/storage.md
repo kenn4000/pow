@@ -8,7 +8,7 @@ are supported; `POSTGRES_PASSWORD` is a local fallback for `PGPASSWORD`.
 `DATABASE_URL` takes precedence and can configure TLS for an external database.
 The Helm release runs a PostgreSQL 17 StatefulSet with its own persistent volume.
 
-Versioned SQL migrations live in `backend/storage/migrations/` and run in a
+Versioned SQL migrations live in `backend/internal/storage/migrations/` and run in a
 transaction under an advisory lock before the server starts accepting requests.
 
 | Table | Contents |
