@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"prisonersofwar/energy"
+	"prisonersofwar/game"
 	"prisonersofwar/profile"
 )
 
@@ -69,6 +70,15 @@ func TestWebGameFlowRedactsHandsAndAutoPlaysThirdBattle(t *testing.T) {
 			if view.Players[view.Actor].HiddenHand != 0 {
 				t.Fatal("active player's hand was hidden during the battle result")
 			}
+			if view.BattleAttack == nil || view.BattleDefend == nil || view.BattleOutcome == nil {
+				t.Fatal("battle result omitted its revealed cards or outcome")
+			}
+			outcome := game.ResolveWithModifiers(*view.BattleAttack, *view.BattleDefend, view.Modifiers)
+			if view.BattleOutcome.AttackerValue != outcome.AttackerValue ||
+				view.BattleOutcome.DefenderValue != outcome.DefenderValue ||
+				view.BattleOutcome.Winner != outcome.Winner {
+				t.Fatalf("battle outcome = %+v, want %+v", view.BattleOutcome, outcome)
+			}
 			view = sendWebRequest(t, server.Client(), server.URL+"/api/action", map[string]any{"action": "continue"})
 		case "seat":
 			view = sendWebRequest(t, server.Client(), server.URL+"/api/action", map[string]any{"action": "seat", "seat": "X"})
@@ -78,6 +88,9 @@ func TestWebGameFlowRedactsHandsAndAutoPlaysThirdBattle(t *testing.T) {
 	}
 	if view.Phase != "gameover" {
 		t.Fatalf("game did not finish; stopped in phase %q", view.Phase)
+	}
+	if view.Payout == nil || view.Payout.TotalMarks <= 0 {
+		t.Fatalf("game over response omitted Mark payout: %+v", view.Payout)
 	}
 	if attacks != 6 || defenses != 6 {
 		t.Fatalf("manual attack/defense actions = %d/%d; third battles should be automatic", attacks, defenses)
@@ -92,6 +105,73 @@ func TestWebGameFlowRedactsHandsAndAutoPlaysThirdBattle(t *testing.T) {
 	view = sendWebRequest(t, server.Client(), server.URL+"/api/new", map[string]any{"mode": "hard"})
 	if view.Phase != "commit" || view.Mode != "hard" || len(view.Players[1].Hand) != 0 || view.Players[1].HiddenHand == 0 {
 		t.Fatal("new AI game did not reset or exposed the AI hand")
+	}
+}
+
+func TestWebSkinAssetsAreServedWithImageHeaders(t *testing.T) {
+	web := &webServer{}
+	request := httptest.NewRequest(http.MethodGet, "/skins/tribal_red/small_idle.png", nil)
+	response := httptest.NewRecorder()
+	web.handleSkinAsset(response, request)
+	if response.Code != http.StatusOK {
+		t.Fatalf("status = %d, want %d", response.Code, http.StatusOK)
+	}
+	if got := response.Header().Get("Content-Type"); got != "image/png" {
+		t.Fatalf("content type = %q, want image/png", got)
+	}
+	if got := response.Header().Get("Cache-Control"); got != "public, max-age=3600" {
+		t.Fatalf("cache control = %q", got)
+	}
+	if response.Body.Len() == 0 {
+		t.Fatal("skin image response is empty")
+	}
+	original, err := webFiles.ReadFile("skins/tribal_red/small_idle.png")
+	if err != nil {
+		t.Fatalf("read source skin image: %v", err)
+	}
+	if !bytes.Equal(response.Body.Bytes(), original) {
+		t.Fatal("skin image response changed the source image")
+	}
+
+	request = httptest.NewRequest(http.MethodGet, "/skins/%2e%2e/web/index.html", nil)
+	response = httptest.NewRecorder()
+	web.handleSkinAsset(response, request)
+	if response.Code != http.StatusNotFound {
+		t.Fatalf("traversal status = %d, want %d", response.Code, http.StatusNotFound)
+	}
+}
+
+func TestAwardWebMatchMarksAppliesWinAndQuartermasterMultipliers(t *testing.T) {
+	p, err := profile.New(time.Now())
+	if err != nil {
+		t.Fatal(err)
+	}
+	p.Marks = 250
+	p.SkillNodes["quartermaster"] = true
+
+	win := awardWebMatchMarks(p, 20, true)
+	if win.BaseMarks != 70 || win.WinMultiplier != 3 || win.SkillBonusPct != 10 ||
+		win.TotalMarks != 231 || p.Marks != 481 {
+		t.Fatalf("win payout/profile = %+v / %d", win, p.Marks)
+	}
+
+	loss := awardWebMatchMarks(p, 20, false)
+	if loss.BaseMarks != 70 || loss.WinMultiplier != 1 || loss.SkillBonusPct != 10 ||
+		loss.TotalMarks != 77 || p.Marks != 558 {
+		t.Fatalf("loss payout/profile = %+v / %d", loss, p.Marks)
+	}
+}
+
+func TestAwardWebMatchMarksWithoutQuartermaster(t *testing.T) {
+	p, err := profile.New(time.Now())
+	if err != nil {
+		t.Fatal(err)
+	}
+	p.Marks = 50
+	payout := awardWebMatchMarks(p, 17, true)
+	if payout.BaseMarks != 67 || payout.WinMultiplier != 3 ||
+		payout.SkillBonusPct != 0 || payout.TotalMarks != 201 || p.Marks != 251 {
+		t.Fatalf("payout/profile = %+v / %d", payout, p.Marks)
 	}
 }
 
@@ -282,6 +362,53 @@ func TestWebDashboardFeatureActionsUseTemporaryPreviewProfile(t *testing.T) {
 		map[string]string{"action": "select", "id": "recruit"})
 	if heroResponse.Code != http.StatusOK || p.DefaultHeroID != profile.DefaultHeroID {
 		t.Fatalf("hero selection response=%d saved default=%q: %s", heroResponse.Code, p.DefaultHeroID, heroResponse.Body.String())
+	}
+}
+
+func TestShopBoxPurchasesChargeCurrencyAndGrantInventory(t *testing.T) {
+	p, err := profile.New(time.Now())
+	if err != nil {
+		t.Fatal(err)
+	}
+	p.Marks = 5000
+	p.Crowns = 2000
+	web := &webServer{}
+
+	for _, boxType := range []string{"wooden", "silver", "hero", "gold"} {
+		if _, err := web.applyShopAction(p, actionRequest{Action: "buy-box", BoxType: boxType}); err != nil {
+			t.Fatalf("buy %s box: %v", boxType, err)
+		}
+	}
+	if p.Marks != 2000 || p.Crowns != 1000 ||
+		p.PendingBoxes["wooden"] != 1 || p.PendingBoxes["silver"] != 1 ||
+		p.PendingBoxes["gold"] != 1 || p.HeroBoxesAvailable != 1 {
+		t.Fatalf("box purchase inventory = marks:%d crowns:%d boxes:%v hero boxes:%d",
+			p.Marks, p.Crowns, p.PendingBoxes, p.HeroBoxesAvailable)
+	}
+	offers := web.shopPage(p).BoxOffers
+	if len(offers) != 4 {
+		t.Fatalf("shop returned %d box offers, want 4", len(offers))
+	}
+	wantOffers := []webShopBoxOffer{
+		{Type: "wooden", Currency: "marks", Cost: 1000, Available: 1},
+		{Type: "silver", Currency: "marks", Cost: 1000, Available: 1},
+		{Type: "hero", Currency: "marks", Cost: 1000, Available: 1},
+		{Type: "gold", Currency: "crowns", Cost: 1000, Available: 1},
+	}
+	for index, offer := range offers {
+		want := wantOffers[index]
+		if offer.Type != want.Type || offer.Currency != want.Currency ||
+			offer.Cost != want.Cost || offer.Available != want.Available {
+			t.Errorf("box offer %d = %+v, want %+v", index, offer, want)
+		}
+	}
+
+	p.Marks = 999
+	if _, err := web.applyShopAction(p, actionRequest{Action: "buy-box", BoxType: "wooden"}); err == nil {
+		t.Fatal("wooden box purchase succeeded without enough Marks")
+	}
+	if p.Marks != 999 || p.PendingBoxes["wooden"] != 1 {
+		t.Fatalf("failed purchase changed profile: marks:%d wooden:%d", p.Marks, p.PendingBoxes["wooden"])
 	}
 }
 
