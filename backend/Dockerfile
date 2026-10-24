@@ -3,7 +3,7 @@ WORKDIR /src
 COPY backend/go.mod backend/go.sum ./
 RUN go mod download
 COPY backend/ .
-RUN CGO_ENABLED=0 go build -trimpath -ldflags="-s -w" -o /out/server .
+RUN CGO_ENABLED=0 go build -trimpath -ldflags="-s -w" -o /out/server ./cmd/prisoners-of-war
 
 FROM alpine:3.22
 RUN addgroup -g 10001 app && adduser -D -u 10001 -G app -h /data app

@@ -1,0 +1,438 @@
+package app
+
+import (
+	"context"
+	"crypto/rand"
+	"crypto/sha256"
+	"database/sql"
+	"encoding/base64"
+	"encoding/hex"
+	"encoding/json"
+	"errors"
+	"fmt"
+	"net/http"
+	"net/mail"
+	"net/url"
+	"os"
+	"strings"
+	"time"
+
+	"github.com/go-chi/chi/v5"
+
+	"github.com/jackc/pgx/v5/pgconn"
+	"golang.org/x/crypto/bcrypt"
+	"prisonersofwar/internal/profile"
+)
+
+type account struct {
+	ID        string    `json:"id"`
+	Email     string    `json:"email"`
+	Role      string    `json:"role"`
+	CreatedAt time.Time `json:"createdAt"`
+}
+
+type credentials struct {
+	Email    string `json:"email"`
+	Password string `json:"password"`
+}
+
+var dummyPasswordHash, _ = bcrypt.GenerateFromPassword([]byte("invalid-password-placeholder"), bcrypt.DefaultCost)
+
+func randomID() string {
+	var data [16]byte
+	if _, err := rand.Read(data[:]); err != nil {
+		panic(err)
+	}
+	return hex.EncodeToString(data[:])
+}
+
+func normalizeEmail(input string) (string, error) {
+	email := strings.ToLower(strings.TrimSpace(input))
+	parsed, err := mail.ParseAddress(email)
+	if err != nil || len(email) > 254 || parsed.Address != email {
+		return "", errors.New("enter a valid email address")
+	}
+	return email, nil
+}
+
+func validPassword(password string) bool {
+	return len(password) >= 12 && len(password) <= 72
+}
+
+func (s *webServer) currentAccount(r *http.Request) (account, error) {
+	var user account
+	cookie, err := r.Cookie("pow_session")
+	if err != nil || len(cookie.Value) > 100 {
+		return user, sql.ErrNoRows
+	}
+	hash := sha256.Sum256([]byte(cookie.Value))
+	err = s.db.QueryRowContext(r.Context(), `SELECT u.id,u.email,u.role,u.created_at FROM auth_sessions s JOIN users u ON u.id=s.user_id WHERE s.token_hash=$1 AND s.expires_at>now()`, hash[:]).Scan(&user.ID, &user.Email, &user.Role, &user.CreatedAt)
+	return user, err
+}
+
+func (s *webServer) requireAccount(w http.ResponseWriter, r *http.Request) (account, bool) {
+	if u, ok := r.Context().Value(accountKey).(account); ok {
+		return u, true
+	}
+	user, err := s.currentAccount(r)
+	if errors.Is(err, sql.ErrNoRows) {
+		writeError(w, http.StatusUnauthorized, errors.New("sign in to continue"))
+		return user, false
+	}
+	if err != nil {
+		databaseError(w, err)
+		return user, false
+	}
+	return user, true
+}
+
+func databaseError(w http.ResponseWriter, err error) {
+	fmt.Fprintf(os.Stderr, "database request failed: %v\n", err)
+	writeError(w, http.StatusInternalServerError, errors.New("storage unavailable; please retry"))
+}
+
+func sessionCookie(value string, maxAge int) *http.Cookie {
+	path := strings.TrimRight(os.Getenv("BASE_PATH"), "/") + "/"
+	return &http.Cookie{Name: "pow_session", Value: value, Path: path, HttpOnly: true, Secure: os.Getenv("COOKIE_SECURE") == "true", SameSite: http.SameSiteLaxMode, MaxAge: maxAge}
+}
+
+func createAuthSession(ctx context.Context, tx *sql.Tx, userID string) (string, error) {
+	var data [32]byte
+	if _, err := rand.Read(data[:]); err != nil {
+		return "", err
+	}
+	token := base64.RawURLEncoding.EncodeToString(data[:])
+	hash := sha256.Sum256([]byte(token))
+	if _, err := tx.ExecContext(ctx, "DELETE FROM auth_sessions WHERE user_id=$1 AND expires_at < now()", userID); err != nil {
+		return "", err
+	}
+	_, err := tx.ExecContext(ctx, "INSERT INTO auth_sessions(token_hash,user_id,expires_at) VALUES($1,$2,now()+interval '7 days')", hash[:], userID)
+	return token, err
+}
+
+func (s *webServer) handleAuth(w http.ResponseWriter, r *http.Request) {
+	action := chi.URLParam(r, "authAction")
+	if (action == "users" || action == "assume") && !developmentLoginEnabled() {
+		writeError(w, http.StatusNotFound, errors.New("not found"))
+		return
+	}
+	if action == "users" && r.Method == http.MethodGet {
+		w.Header().Set("Cache-Control", "no-store")
+		s.listUsers(w, r)
+		return
+	}
+	if action == "assume" && r.Method == http.MethodPost {
+		s.handleDevelopmentLogin(w, r)
+		return
+	}
+	if action == "me" && r.Method == http.MethodGet {
+		if user, ok := s.requireAccount(w, r); ok {
+			writeJSON(w, http.StatusOK, map[string]any{"user": user})
+		}
+		return
+	}
+	if r.Method != http.MethodPost {
+		writeError(w, http.StatusMethodNotAllowed, errors.New("method not allowed"))
+		return
+	}
+	if action == "logout" {
+		s.handleLogout(w, r)
+		return
+	}
+	if action != "signup" && action != "login" {
+		http.NotFound(w, r)
+		return
+	}
+	s.handleCredentials(w, r, action)
+}
+
+func (s *webServer) handleLogout(w http.ResponseWriter, r *http.Request) {
+	if cookie, err := r.Cookie("pow_session"); err == nil {
+		hash := sha256.Sum256([]byte(cookie.Value))
+		if _, err := s.db.ExecContext(r.Context(), "DELETE FROM auth_sessions WHERE token_hash=$1", hash[:]); err != nil {
+			databaseError(w, err)
+			return
+		}
+	}
+	http.SetCookie(w, sessionCookie("", -1))
+	writeJSON(w, http.StatusOK, map[string]bool{"ok": true})
+}
+
+func (s *webServer) handleCredentials(w http.ResponseWriter, r *http.Request, action string) {
+	var input credentials
+	if err := decodeJSON(r, &input); err != nil {
+		writeError(w, http.StatusBadRequest, err)
+		return
+	}
+	email, err := normalizeEmail(input.Email)
+	if err != nil || !validPassword(input.Password) {
+		writeError(w, http.StatusBadRequest, errors.New("use a valid email and a password between 12 and 72 bytes"))
+		return
+	}
+	if !s.allowAuthAttempt(w, r, email) {
+		return
+	}
+	tx, err := s.db.BeginTx(r.Context(), nil)
+	if err != nil {
+		databaseError(w, err)
+		return
+	}
+	defer tx.Rollback()
+	user, err := accountForCredentials(r.Context(), tx, email, input.Password, action == "signup")
+	if err != nil {
+		writeRequestError(w, err)
+		return
+	}
+	token, err := finishAuthentication(r.Context(), tx, user)
+	if err == nil {
+		err = tx.Commit()
+	}
+	if err != nil {
+		databaseError(w, err)
+		return
+	}
+	http.SetCookie(w, sessionCookie(token, 7*24*60*60))
+	writeJSON(w, http.StatusOK, map[string]any{"user": user})
+}
+
+func (s *webServer) allowAuthAttempt(w http.ResponseWriter, r *http.Request, email string) bool {
+	var attempts int
+	err := s.db.QueryRowContext(r.Context(), `INSERT INTO auth_attempts(email,attempts,reset_at) VALUES($1,1,now()+interval '15 minutes') ON CONFLICT(email) DO UPDATE SET attempts=CASE WHEN auth_attempts.reset_at<now() THEN 1 ELSE auth_attempts.attempts+1 END,reset_at=CASE WHEN auth_attempts.reset_at<now() THEN now()+interval '15 minutes' ELSE auth_attempts.reset_at END RETURNING attempts`, email).Scan(&attempts)
+	if err != nil {
+		databaseError(w, err)
+		return false
+	}
+	if attempts > 15 {
+		w.Header().Set("Retry-After", "900")
+		writeError(w, http.StatusTooManyRequests, errors.New("too many attempts; try again in 15 minutes"))
+		return false
+	}
+	return true
+}
+
+func accountForCredentials(ctx context.Context, tx *sql.Tx, email, password string, signup bool) (account, error) {
+	if signup {
+		hash, err := bcrypt.GenerateFromPassword([]byte(password), bcrypt.DefaultCost)
+		if err != nil {
+			return account{}, err
+		}
+		u, err := insertAccount(ctx, tx, email, hash, "user")
+		var pgErr *pgconn.PgError
+		if errors.As(err, &pgErr) && pgErr.Code == "23505" {
+			return account{}, &requestError{http.StatusConflict, "email is already registered"}
+		}
+		return u, err
+	}
+	var u account
+	var hash []byte
+	err := tx.QueryRowContext(ctx, "SELECT id,email,role,created_at,password_hash FROM users WHERE email=$1 FOR UPDATE", email).Scan(&u.ID, &u.Email, &u.Role, &u.CreatedAt, &hash)
+	if errors.Is(err, sql.ErrNoRows) {
+		bcrypt.CompareHashAndPassword(dummyPasswordHash, []byte(password))
+		return u, &requestError{http.StatusUnauthorized, "invalid email or password"}
+	}
+	if err != nil {
+		return u, err
+	}
+	if bcrypt.CompareHashAndPassword(hash, []byte(password)) != nil {
+		return u, &requestError{http.StatusUnauthorized, "invalid email or password"}
+	}
+	return u, nil
+}
+
+func finishAuthentication(ctx context.Context, tx *sql.Tx, u account) (string, error) {
+	token, err := createAuthSession(ctx, tx, u.ID)
+	if err != nil {
+		return "", err
+	}
+	_, err = tx.ExecContext(ctx, "DELETE FROM auth_attempts WHERE email=$1", u.Email)
+	return token, err
+}
+
+func insertAccount(ctx context.Context, tx *sql.Tx, email string, hash []byte, role string) (account, error) {
+	u := account{ID: randomID(), Email: email, Role: role}
+	if err := tx.QueryRowContext(ctx, "INSERT INTO users(id,email,password_hash,role) VALUES($1,$2,$3,$4) RETURNING created_at", u.ID, email, hash, role).Scan(&u.CreatedAt); err != nil {
+		return u, err
+	}
+	p, err := profile.New(time.Now())
+	if err != nil {
+		return u, err
+	}
+	p.PlayerID = u.ID
+	data, err := json.Marshal(p)
+	if err != nil {
+		return u, err
+	}
+	_, err = tx.ExecContext(ctx, "INSERT INTO player_data(user_id,profile) VALUES($1,$2)", u.ID, data)
+	return u, err
+}
+
+func (s *webServer) bootstrapAdmin(ctx context.Context) error {
+	email, password := os.Getenv("BOOTSTRAP_ADMIN_EMAIL"), os.Getenv("BOOTSTRAP_ADMIN_PASSWORD")
+	if email == "" && password == "" {
+		return nil
+	}
+	email, err := normalizeEmail(email)
+	if err != nil || !validPassword(password) {
+		return errors.New("bootstrap admin requires valid email and 12–72 byte password")
+	}
+	tx, err := s.db.BeginTx(ctx, nil)
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback()
+	if _, err := tx.ExecContext(ctx, "SELECT pg_advisory_xact_lock(729002)"); err != nil {
+		return err
+	}
+	var role string
+	err = tx.QueryRowContext(ctx, "SELECT role FROM users WHERE email=$1", email).Scan(&role)
+	if err == nil {
+		return tx.Commit()
+	}
+	if !errors.Is(err, sql.ErrNoRows) {
+		return err
+	}
+	hash, err := bcrypt.GenerateFromPassword([]byte(password), bcrypt.DefaultCost)
+	if err != nil {
+		return err
+	}
+	if _, err := insertAccount(ctx, tx, email, hash, "admin"); err != nil {
+		return err
+	}
+	return tx.Commit()
+}
+
+func (s *webServer) handleAdmin(w http.ResponseWriter, r *http.Request) {
+	u, ok := s.requireAccount(w, r)
+	if !ok {
+		return
+	}
+	if u.Role != "admin" {
+		writeError(w, http.StatusForbidden, errors.New("administrator role required"))
+		return
+	}
+	if r.Method == http.MethodGet {
+		s.listUsers(w, r)
+		return
+	}
+	if r.Method != http.MethodPatch {
+		http.NotFound(w, r)
+		return
+	}
+	id := chi.URLParam(r, "userID")
+	var input struct {
+		Role string `json:"role"`
+	}
+	if err := decodeJSON(r, &input); err != nil || !validRole(input.Role) {
+		writeError(w, http.StatusBadRequest, errors.New("role must be user or admin"))
+		return
+	}
+	tx, err := s.db.BeginTx(r.Context(), nil)
+	if err != nil {
+		databaseError(w, err)
+		return
+	}
+	defer tx.Rollback()
+	if _, err := tx.ExecContext(r.Context(), "SELECT pg_advisory_xact_lock(729002)"); err != nil {
+		databaseError(w, err)
+		return
+	}
+	var actorRole, oldRole string
+	if err := tx.QueryRowContext(r.Context(), "SELECT role FROM users WHERE id=$1", u.ID).Scan(&actorRole); err != nil {
+		databaseError(w, err)
+		return
+	}
+	if actorRole != "admin" {
+		writeError(w, http.StatusForbidden, errors.New("administrator role required"))
+		return
+	}
+	err = tx.QueryRowContext(r.Context(), "SELECT role FROM users WHERE id=$1", id).Scan(&oldRole)
+	if errors.Is(err, sql.ErrNoRows) {
+		writeError(w, http.StatusNotFound, errors.New("user not found"))
+		return
+	}
+	if err != nil {
+		databaseError(w, err)
+		return
+	}
+	if oldRole == "admin" && input.Role == "user" {
+		if err := ensureAnotherAdmin(r.Context(), tx); err != nil {
+			writeRequestError(w, err)
+			return
+		}
+	}
+	_, err = tx.ExecContext(r.Context(), "UPDATE users SET role=$1 WHERE id=$2", input.Role, id)
+	if err == nil && oldRole != input.Role {
+		_, err = tx.ExecContext(r.Context(), "INSERT INTO role_audit(actor_id,user_id,previous_role,new_role) VALUES($1,$2,$3,$4)", u.ID, id, oldRole, input.Role)
+	}
+	if err == nil {
+		err = tx.Commit()
+	}
+	if err != nil {
+		databaseError(w, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]bool{"ok": true})
+}
+
+func validRole(role string) bool { return role == "user" || role == "admin" }
+
+func ensureAnotherAdmin(ctx context.Context, tx *sql.Tx) error {
+	var count int
+	if err := tx.QueryRowContext(ctx, "SELECT count(*) FROM users WHERE role='admin'").Scan(&count); err != nil {
+		return err
+	}
+	if count == 1 {
+		return &requestError{http.StatusConflict, "the last administrator cannot be demoted"}
+	}
+	return nil
+}
+
+func (s *webServer) listUsers(w http.ResponseWriter, r *http.Request) {
+	rows, err := s.db.QueryContext(r.Context(), "SELECT id,email,role,created_at FROM users WHERE id>$1 AND email ILIKE '%' || $2 || '%' AND ($3='' OR role=$3) ORDER BY id LIMIT 101", r.URL.Query().Get("after"), r.URL.Query().Get("q"), r.URL.Query().Get("role"))
+	if err != nil {
+		databaseError(w, err)
+		return
+	}
+	defer rows.Close()
+	users := []account{}
+	for rows.Next() {
+		var user account
+		if err := rows.Scan(&user.ID, &user.Email, &user.Role, &user.CreatedAt); err != nil {
+			databaseError(w, err)
+			return
+		}
+		users = append(users, user)
+	}
+	if err := rows.Err(); err != nil {
+		databaseError(w, err)
+		return
+	}
+	next := ""
+	if len(users) > 100 {
+		users = users[:100]
+		next = users[99].ID
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"users": users, "next": next})
+}
+
+func sameOrigin(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodGet && r.Method != http.MethodHead && r.Method != http.MethodOptions {
+			origin := r.Header.Get("Origin")
+			expected := strings.TrimRight(os.Getenv("PUBLIC_URL"), "/")
+			if expected == "" {
+				scheme := "http"
+				if r.TLS != nil {
+					scheme = "https"
+				}
+				expected = scheme + "://" + r.Host
+			}
+			parsed, err := url.Parse(expected)
+			if err != nil || r.Header.Get("Sec-Fetch-Site") == "cross-site" || (origin != "" && origin != parsed.Scheme+"://"+parsed.Host) {
+				writeError(w, http.StatusForbidden, errors.New("cross-origin request rejected"))
+				return
+			}
+		}
+		next.ServeHTTP(w, r)
+	})
+}
