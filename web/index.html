@@ -28,24 +28,46 @@
     * { box-sizing: border-box; }
     body { margin: 0; min-width: 320px; min-height: 100vh; background: #07090e; }
     button { font: inherit; }
-    .shell { width: min(1440px, 100%); margin: 0 auto; padding: 20px clamp(12px, 3vw, 40px) 36px; }
-    .topline { display: flex; justify-content: space-between; align-items: center; gap: 16px; margin-bottom: 18px; }
-    .brand { margin: 0; font-size: clamp(20px, 3vw, 30px); letter-spacing: .08em; text-transform: uppercase; }
+    .shell {
+      position: relative; display: flex; flex-direction: column; overflow: hidden;
+      width: min(430px, 100%); height: 100vh; height: 100dvh; min-height: min(540px, 100vh);
+      container-type: inline-size; margin: 0 auto; padding: 0; border: 1px solid #273148; border-radius: 30px;
+      background: #0b0f19; box-shadow: 0 24px 80px #000a; color: #eef1f7;
+    }
+    .shell::before {
+      position: absolute; inset: 0; z-index: 0; pointer-events: none; content: "";
+      background:
+        radial-gradient(circle at 8% 35%, #dc262610, transparent 32%),
+        radial-gradient(circle at 95% 70%, #2563eb12, transparent 36%),
+        radial-gradient(#ffffff08 1px, transparent 1px);
+      background-size: auto, auto, 24px 24px;
+    }
+    .topline {
+      position: relative; z-index: 1; display: flex; justify-content: space-between; align-items: center;
+      gap: 10px; flex: 0 0 auto; margin: 0; padding: 13px;
+      border-bottom: 1px solid #263047; background: #101624eb;
+    }
+    .brand { margin: 0; color: #f6d46f; font: 800 15px Georgia, "Times New Roman", serif; letter-spacing: .09em; text-transform: uppercase; }
     .brand span { color: var(--gold); }
-    .round-label { color: #c9ceca; font-size: 14px; letter-spacing: .08em; text-transform: uppercase; }
-    .board { padding: clamp(12px, 2vw, 24px); border: 1px solid #919a95; border-radius: 18px; background: var(--felt); box-shadow: 0 18px 50px #0005; }
+    .round-label { color: #aeb9cb; font-size: 9px; letter-spacing: .08em; text-align: right; text-transform: uppercase; }
+    .board {
+      position: relative; z-index: 1; flex: 1 1 auto; min-height: 0; overflow-y: auto;
+      padding: 12px; background: transparent; scrollbar-color: #344159 transparent; scrollbar-width: thin;
+    }
     .track { display: grid; grid-template-columns: repeat(10, minmax(0, 1fr)); align-items: start; gap: 5px; }
-    .bounty-column { display: grid; grid-column: span 1; gap: 5px; min-width: 0; }
-    .track-cell { min-width: 0; height: clamp(76px, 10vw, 126px); display: flex; align-items: center; justify-content: center; position: relative; border: 2px solid #d2d7d2; border-radius: 9px; background: #626a66; }
-    .track-cell.bounty { border: 3px solid var(--gold); background: #6b664f; }
-    .track-cell.bounty .card { border: 3px solid var(--gold); }
+    .bounty-column { display: grid; grid-column: span 1; grid-template-columns: minmax(0, 1fr); gap: 5px; min-width: 0; }
+    .track-cell { min-width: 0; height: clamp(96px, 11vw, 130px); display: flex; align-items: center; justify-content: center; position: relative; border: 2px solid #d2d7d2; border-radius: 9px; background: #626a66; }
+    .track-cell.bounty { border: 3px solid var(--bounty-border-color, var(--gold)); background: #6b664f; }
     .bounty-value { color: #ffe18a; font-size: clamp(8px, 1vw, 12px); font-weight: 800; line-height: 1.2; text-align: center; white-space: nowrap; }
     .track-cell.white-capture { border-color: #fff; }
     .track-cell.black-capture { border-color: #151817; }
-    .track-cell.white-capture .card { border-color: #fff; }
-    .track-cell.black-capture .card { border-color: #151817; }
     .track-cell .card { width: min(64px, calc(100% - 10px)); height: calc(100% - 10px); min-height: 0; }
     .track-cell .card .face { font-size: clamp(18px, 3vw, 32px); }
+    .jailed-card { display: flex; flex-direction: column; align-items: center; justify-content: center; width: 100%; height: 100%; }
+    .jailed-card .card { width: min(64px, calc(100% - 8px)); height: calc(100% - 14px); }
+    .jailed-card { animation: capture-drop .35s ease-out both; }
+    @keyframes capture-drop { from { opacity: 0; transform: translateY(-12px) scale(.9); } to { opacity: 1; transform: translateY(0) scale(1); } }
+    .capture-face { height: 14px; color: #fff; font-size: clamp(10px, 1.2vw, 13px); font-weight: 900; line-height: 14px; text-align: center; }
     .round-group { display: grid; grid-column: span 3; grid-template-rows: auto auto auto; gap: 2px; min-width: 0; }
     .round-slots { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 5px; }
     .round-brace { position: relative; height: 12px; border-bottom: 2px solid #e1e5e1; color: #fff; }
@@ -76,6 +98,15 @@
       cursor: default;
       transition: transform .12s ease, box-shadow .12s ease, outline-color .12s ease;
     }
+    .card.skin-card { overflow: visible; padding: 0; border: 0; border-radius: 0; background: transparent; box-shadow: none; color: #fff; }
+    .card-art { display: block; width: 100%; height: 100%; object-fit: contain; pointer-events: none; }
+    .card.skin-card .face {
+      position: absolute; z-index: 1; top: 7%; left: 50%; transform: translateX(-50%);
+      color: var(--card-suit-color); font-size: clamp(20px, 3vw, 34px);
+      -webkit-text-stroke: .7px #161a18; text-shadow: 0 2px 4px #000, 0 0 2px #000;
+      pointer-events: none;
+    }
+    .card.skin-card.mirrored .card-art { transform: scaleX(-1); }
     button.card { cursor: pointer; }
     button.card:hover { transform: translateY(-5px); box-shadow: 0 8px 13px #0005; }
     button.card:focus-visible { outline: 3px solid var(--gold); outline-offset: 2px; }
@@ -108,11 +139,27 @@
     .battle { width: 100%; display: grid; grid-template-columns: minmax(0, 1fr) minmax(40px, 64px) minmax(0, 1fr); align-items: center; gap: 8px; min-height: 160px; padding: 14px clamp(8px, 3vw, 32px); border: 1px solid #c2c8c4; border-radius: 13px; background: #68716c; }
     .battle-player { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 6px; min-width: 0; }
     .battle-player-name { max-width: 100%; color: #e4e8e4; font-size: 12px; text-align: center; text-transform: uppercase; letter-spacing: .08em; }
-    .battle-vs { color: #d5dbd6; text-align: center; font-weight: 800; letter-spacing: .12em; }
+    .battle-vs { position: relative; color: #d5dbd6; text-align: center; font-weight: 800; letter-spacing: .12em; }
+    .battle-vs.exploding { color: transparent; }
+    .battle-vs.exploding::before, .battle-vs.exploding::after {
+      position: absolute; top: 50%; left: 50%; content: ""; pointer-events: none;
+    }
+    .battle-vs.exploding::before {
+      width: 1em; height: 1em; background: #fff2a6;
+      clip-path: polygon(50% 0, 61% 35%, 96% 20%, 75% 50%, 100% 78%, 64% 68%, 50% 100%, 37% 67%, 0 78%, 24% 50%, 3% 21%, 40% 35%);
+      filter: drop-shadow(0 0 14px #ffcf55); animation: battle-flash .35s ease-out both;
+    }
+    .battle-vs.exploding::after {
+      width: .65em; height: .65em; border: 3px solid #fff2a6; border-radius: 50%;
+      animation: battle-ring .35s ease-out both;
+    }
+    @keyframes battle-flash { from { opacity: 1; transform: translate(-50%, -50%) scale(.1) rotate(0); } to { opacity: 0; transform: translate(-50%, -50%) scale(1.8) rotate(70deg); } }
+    @keyframes battle-ring { from { opacity: .9; transform: translate(-50%, -50%) scale(.1); } to { opacity: 0; transform: translate(-50%, -50%) scale(2.8); } }
     .battle .card { width: clamp(62px, 9vw, 93px); height: clamp(84px, 12vw, 119px); }
+    .battle .card.skin-card .face { top: -23px; font-size: clamp(20px, 3vw, 30px); }
     .battle-empty { width: clamp(62px, 9vw, 93px); height: clamp(84px, 12vw, 119px); border: 2px dashed #bdc5bf; border-radius: 8px; }
     .players { display: grid; grid-template-columns: minmax(0, 1fr); margin-top: 16px; }
-    .player-panel { min-width: 0; padding: 13px clamp(10px, 2vw, 18px) 16px; border: 1px solid #aeb7b1; border-radius: 12px; background: #6c746f; }
+    .player-panel { min-width: 0; padding: 13px clamp(10px, 2vw, 18px) 16px; border: 1px solid #2a354a; border-radius: 12px; background: linear-gradient(145deg, #141b2aef, #101521ee); }
     .player-panel.white { border-top: 4px solid #fff; }
     .player-panel.black { border-top: 4px solid #171b1a; }
     .player-heading { display: flex; justify-content: space-between; align-items: baseline; gap: 8px; margin-bottom: 10px; }
@@ -143,6 +190,14 @@
     .action:hover { background: #ffda74; }
     .action:disabled { border-color: #999f9b; background: #aeb5b0; color: #555d59; cursor: not-allowed; }
     .action.secondary { border-color: #c4ccc6; background: #424a47; color: #f2f4f0; }
+    .shell .action, .modal .action {
+      min-height: 42px; padding: 0 14px; border-color: #344057; border-radius: 10px;
+      background: linear-gradient(145deg, #1b2434, #141b28); color: #e9edf4; font-weight: 700;
+    }
+    .shell .action:hover, .modal .action:hover { border-color: #68758b; background: linear-gradient(145deg, #222d40, #182132); }
+    .shell .action:disabled, .modal .action:disabled { border-color: #29354d; background: #0a0e17; color: #758197; opacity: .7; }
+    .shell .action.secondary, .modal .action.secondary { border-color: #48566d; background: #0d1320; color: #c8d0de; }
+    .shell .action:focus-visible, .modal .action:focus-visible { outline: 2px solid #facc15; outline-offset: 2px; }
     .suit-cycle { position: relative; z-index: 2; width: 100%; aspect-ratio: 4 / 3; margin: 0 auto; }
     .suit-arrows { position: absolute; inset: 0; width: 100%; height: 100%; overflow: visible; }
     .suit-arrows > path { fill: none; stroke: #c5cbc7; stroke-width: 3; marker-end: url(#suit-arrowhead); }
@@ -157,8 +212,10 @@
     .suit-node-wrap.menu-open { z-index: 5; }
     .suit-node {
       display: block; width: 100%; aspect-ratio: 1; padding: 0; cursor: pointer;
-      border: 3px solid #e7ebe8; border-radius: 50%; box-shadow: 0 4px 12px #0006;
+      overflow: hidden; border: 3px solid var(--suit-node-color); border-radius: 50%;
+      background: transparent; box-shadow: 0 4px 12px #0006;
     }
+    .suit-node img { display: block; width: 100%; height: 100%; border-radius: 50%; object-fit: contain; }
     .suit-node:hover { filter: brightness(1.14); }
     .suit-node:focus-visible { outline: 3px solid var(--gold); outline-offset: 3px; }
     .color-menu {
@@ -189,6 +246,9 @@
     .modal p { color: #d6ddd8; line-height: 1.5; }
     .confirmation-actions { display: flex; justify-content: center; gap: 10px; margin-top: 18px; }
     .confirmation-actions .action { flex: 1; }
+    .payout-breakdown { margin: 16px 0; padding: 12px; border: 1px solid #4d593e; border-radius: 10px; background: #171e19; text-align: center; }
+    .payout-breakdown .payout-total { margin: 0; color: #f7d76c; font-size: 14px; font-weight: 800; line-height: 1.6; }
+    .payout-error { color: #ffb5b5 !important; }
     .mode-list { display: grid; gap: 9px; margin-top: 19px; }
     .mode-list .action { width: 100%; }
     .hidden { display: none !important; }
@@ -379,6 +439,18 @@
       position: relative; z-index: 1; display: grid; align-content: start; gap: 10px;
       flex: 1 1 auto; min-height: 0; overflow-y: auto; padding: 10px 12px 78px;
     }
+    .feature-tabs {
+      display: grid; flex: 0 0 auto; grid-template-columns: repeat(3, minmax(0, 1fr));
+      gap: 6px; padding: 8px 12px; border-bottom: 1px solid #263047; background: #101624f2;
+    }
+    .feature-tab {
+      width: 100%; min-width: 0; min-height: 34px; padding: 6px 4px; border: 1px solid #303c53;
+      border-radius: 8px; background: #1a2231; color: #c8d0de; font-size: 9px; font-weight: 700;
+      line-height: 1.15; text-align: center;
+    }
+    .feature-tab[aria-selected="true"] {
+      border-color: #b89136; background: #463717; color: #ffe28a;
+    }
     .feature-section { padding: 13px; border: 1px solid #2a354a; border-radius: 12px; background: linear-gradient(145deg, #141b2a, #101521); }
     .feature-section h2 { margin: 0 0 10px; color: #e7c55e; font: 700 11px Georgia, "Times New Roman", serif; letter-spacing: .12em; text-transform: uppercase; }
     .feature-list { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 210px), 1fr)); gap: 8px; }
@@ -392,19 +464,22 @@
     .feature-progress span { display: block; height: 100%; background: linear-gradient(90deg, #eab308, #facc15); }
     .feature-status { color: #f0d47b !important; font-weight: 700; }
     @media (max-width: 700px) {
-      .shell { padding: 12px 8px 24px; }
-      .board { padding: 9px; border-radius: 12px; }
+      .shell { padding: 0; border-radius: 0; box-shadow: none; }
+      .dashboard-footer { border-radius: 0; }
+    }
+    @container (max-width: 700px) {
+      .board { padding: 9px; }
       .track { gap: 3px; }
       .round-slots { gap: 3px; }
       .round-group { gap: 1px; }
-      .track-cell { height: 68px; border-radius: 6px; }
+      .track-cell { height: 84px; border-radius: 6px; }
       .track-cell .card { width: calc(100% - 4px); height: calc(100% - 4px); }
-      .track-cell .card .face { font-size: 16px; }
+      .jailed-card .card { width: calc(100% - 4px); height: calc(100% - 14px); }
+      .capture-face { font-size: 10px; }
       .bounty-column { gap: 3px; }
       .bounty-value { font-size: 7px; }
       .round-brace { height: 10px; }
       .round-weight { font-size: 9px; }
-      .dashboard-footer { border-radius: 0; }
       .match-info { grid-template-columns: minmax(0, 1fr) minmax(118px, 1.4fr) minmax(0, 1fr); gap: 5px; margin: 12px 0; }
       .hero-portrait { width: clamp(46px, 14vw, 68px); border-width: 2px; }
       .match-hero h2 { font-size: 10px; }
@@ -423,7 +498,7 @@
 
     }
     @media (max-width: 480px) {
-      .dashboard-shell { width: 100%; border: 0; border-radius: 0; box-shadow: none; }
+      .dashboard-shell, .shell { width: 100%; border: 0; border-radius: 0; box-shadow: none; }
     }
   </style>
 </head>
@@ -493,6 +568,7 @@
       <h1 id="featureTitle">Progression</h1>
     </header>
     <p id="featureMessage" class="feature-message" aria-live="polite"></p>
+    <nav id="featureTabs" class="feature-tabs hidden" role="tablist"></nav>
     <div id="featureContent" class="feature-content"></div>
   </main>
   <nav id="dashboardFooter" class="dashboard-footer" aria-label="Quick navigation">
@@ -519,7 +595,7 @@
       </section>
       <section class="battle" aria-label="Current battle">
         <div id="battleLeft" class="battle-player"></div>
-        <div class="battle-vs">VS</div>
+        <div id="battleVs" class="battle-vs">VS</div>
         <div id="battleRight" class="battle-player"></div>
       </section>
       <div id="statusHost">
@@ -529,14 +605,22 @@
       <div id="actions" class="actions"></div>
     </section>
   </main>
-  <div id="modal" class="modal-backdrop"></div>
+  <div id="modal" class="modal-backdrop hidden"></div>
   <script>
     const suits = ["Scissors", "Paper", "Rock"];
-    const colors = ["Red", "Blue", "Yellow", "Green", "Orange", "Purple", "Brown", "Silver"];
+    const skinFolders = {
+      Red: "tribal_red",
+      Blue: "tribal_blue",
+      Yellow: "tribal_yellow",
+      Purple: "tribal_purple",
+      Orange: "tribal_orange",
+      Green: "tribal_green"
+    };
+    const defaultSuitColors = ["Blue", "Yellow", "Red"];
+    const colors = ["Red", "Blue", "Yellow", "Green", "Orange", "Purple"];
     const colorVars = {
       Red: "var(--card-red)", Blue: "var(--card-blue)", Yellow: "var(--card-yellow)",
-      Green: "var(--card-green)", Orange: "var(--card-orange)", Purple: "var(--card-purple)",
-      Brown: "var(--card-brown)", Silver: "var(--card-silver)"
+      Green: "var(--card-green)", Orange: "var(--card-orange)", Purple: "var(--card-purple)"
     };
     const suitColors = loadSuitColors();
     const dashboardPreview = new URLSearchParams(window.location.search).get("preview") === "dashboard";
@@ -549,23 +633,35 @@
     let showDashboard = true;
     let showFeature = false;
     let currentFeature = "";
+    let currentShopTab = "skins";
+    let currentSkillBranch = "battle-rewards";
     let featureData = null;
     let featureError = "";
     let featureActionInProgress = false;
     let showModeSelection = false;
+    let battleAnimation = null;
+    let battleAnimationTimer = null;
+    const skillTreeBranches = [
+      { id: "battle-rewards", label: "Battle Rewards", nodeIDs: ["quartermaster", "field-warden", "first-blood"] },
+      { id: "camp-draw", label: "Camp Draw", nodeIDs: ["camp-lore", "fortune", "chroma-curator"] },
+      { id: "energy", label: "Energy", nodeIDs: ["expanded-rations", "quick-recovery", "second-wind", "daily_energy"] },
+      { id: "hero-acquisition", label: "Hero Acquisition", nodeIDs: ["hero_broker", "lucky_dupe", "premium_dupe"] },
+      { id: "campaigns", label: "Campaigns", nodeIDs: ["curator", "campaign_free"] },
+      { id: "commander-tactics", label: "Commander Tactics", nodeIDs: ["conductor_1", "conductor_2", "hero_history", "hero_preview"] }
+    ];
 
     function loadSuitColors() {
-      const defaults = ["Red", "Yellow", "Blue"];
+      const legacyDefaults = ["Red", "Yellow", "Blue"];
       try {
         const saved = JSON.parse(localStorage.getItem("pow-suit-colors") || "null");
         if (Array.isArray(saved) && saved.length === suits.length &&
             saved.every(color => colors.includes(color)) && new Set(saved).size === suits.length) {
-          return saved;
+          return JSON.stringify(saved) === JSON.stringify(legacyDefaults) ? [...defaultSuitColors] : saved;
         }
       } catch {
-        return defaults;
+        return [...defaultSuitColors];
       }
-      return defaults;
+      return [...defaultSuitColors];
     }
 
     function esc(value) {
@@ -591,13 +687,66 @@
     function cardMarkup(item, options = {}) {
       const card = item.card || item;
       const color = suitColors[card.suit];
+      const skin = skinFolders[color] || skinFolders[defaultSuitColors[card.suit]];
+      const tier = card.face <= 3 ? "small" : card.face <= 6 ? "med" : "large";
+      const pose = ["idle", "attack", "win", "lose"].includes(options.pose) ? options.pose : "idle";
       const selectable = Boolean(item.selectable);
       const chosen = options.commit && selected.has(item.index);
       const tag = selectable ? "button" : "div";
       const attrs = selectable ? `type="button" data-index="${item.index}" aria-pressed="${chosen}"` : "";
-      return `<${tag} class="card${chosen ? " chosen" : ""}" style="--card-suit-color:${colorVars[color]}" ${attrs} aria-label="${esc(color)} ${card.face}">
-        <span class="face">${card.face}</span>
+      const face = options.face === undefined ? card.face : options.face;
+      const faceMarkup = options.hideFace ? "" : `<span class="face">${esc(face)}</span>`;
+      const mirrored = options.mirror ? " mirrored" : "";
+      const faceColor = options.faceColor || colorVars[color] || "var(--paper)";
+      const ariaLabel = options.hideFace ? `${color} card` : `${color} ${face}`;
+      return `<${tag} class="card skin-card${chosen ? " chosen" : ""}${mirrored}" style="--card-suit-color:${faceColor}" ${attrs} aria-label="${esc(ariaLabel)}">
+        <img class="card-art" src="/skins/${skin}/${tier}_${pose}.png?v=3" alt="" aria-hidden="true">
+        ${faceMarkup}
       </${tag}>`;
+    }
+
+    function battleAnimationKey() {
+      if (!state || !state.battleAttack || !state.battleDefend || !state.battleOutcome) return "";
+      return `${state.round}-${state.exchange}-${state.attacker}-${state.battleAttack.face}-${state.battleDefend.face}`;
+    }
+
+    function scheduleBattleAnimation(key, stage, delay) {
+      battleAnimationTimer = window.setTimeout(() => {
+        if (!battleAnimation || battleAnimation.key !== key || !state || state.phase !== "result") return;
+        battleAnimation.stage = stage;
+        render();
+        if (stage === "values") scheduleBattleAnimation(key, "outcome", 2000);
+        else if (stage === "outcome") scheduleBattleAnimation(key, "settled", 2000);
+        else if (stage === "settled") scheduleBattleContinuation(key);
+      }, delay);
+    }
+
+    function scheduleBattleContinuation(key) {
+      battleAnimationTimer = window.setTimeout(() => {
+        if (!battleAnimation || battleAnimation.key !== key || battleAnimation.stage !== "settled" ||
+            !state || state.phase !== "result") return;
+        act("continue");
+      }, 2000);
+    }
+
+    function syncBattleAnimation() {
+      if (!state || state.phase !== "result") {
+        window.clearTimeout(battleAnimationTimer);
+        battleAnimation = null;
+        return;
+      }
+      const key = battleAnimationKey();
+      if (!key || battleAnimation?.key === key) return;
+      window.clearTimeout(battleAnimationTimer);
+      battleAnimation = {
+        key,
+        stage: "impact",
+        previousScores: {
+          White: document.querySelector("#whiteHeroPanel .hero-score")?.textContent || "",
+          Black: document.querySelector("#blackHeroPanel .hero-score")?.textContent || ""
+        }
+      };
+      scheduleBattleAnimation(key, "values", 350);
     }
 
     function renderSuitCycle() {
@@ -628,9 +777,11 @@
             : "";
           return `<div class="suit-node-wrap ${location}${openSuitMenu === suit ? " menu-open" : ""}">
             <button type="button" class="suit-node" data-suit-trigger="${suit}"
-              style="background:${colorVars[suitColors[suit]]}"
+              style="--suit-node-color:${colorVars[suitColors[suit]]}"
               aria-label="${suitColors[suit]} suit color, open color menu" aria-haspopup="menu"
-              aria-expanded="${openSuitMenu === suit}"></button>
+              aria-expanded="${openSuitMenu === suit}">
+              <img src="/skins/${skinFolders[suitColors[suit]]}/large_attack.png?v=3" alt="" aria-hidden="true">
+            </button>
             ${menu}
           </div>`;
         }).join("")}<button type="button" class="rotate-colors" data-rotate-colors
@@ -710,7 +861,9 @@
         return;
       }
       const bounty = `<div class="bounty-column">
-        <div class="track-cell bounty">${cardMarkup(state.bounty)}</div>
+        <div class="track-cell bounty" style="--bounty-border-color:${colorVars[suitColors[state.bounty.suit]]}">
+          ${cardMarkup(state.bounty, { pose: "win", hideFace: true })}
+        </div>
         <span class="bounty-value">Bounty: ${formatModifier(state.modifiers.bounty)}</span>
       </div>`;
       const rounds = [0, 1, 2].map(roundIndex => {
@@ -719,10 +872,17 @@
             const slotIndex = roundIndex * 3 + index;
             const border = cell.capturedBy === "White" ? "white-capture"
               : cell.capturedBy === "Black" ? "black-capture" : "";
-            const content = cell.card
-              ? cardMarkup(cell.card)
+            const resolvingSlot = state.phase === "result" && battleAnimation &&
+              battleAnimation.key === battleAnimationKey() && battleAnimation.stage !== "settled" &&
+              slotIndex === (state.round - 1) * 3 + state.exchange - 1;
+            const content = resolvingSlot
+              ? '<span class="cell-empty" aria-label="Battle resolving"></span>'
+              : cell.card
+              ? `<div class="jailed-card">${cardMarkup(cell.card, { pose: "lose", hideFace: true })}
+                  <span class="capture-face" style="color:${colorVars[suitColors[cell.card.suit]]}">${cell.card.face}</span>
+                </div>`
               : `<span class="cell-empty">${cell.clash ? "CLASH" : String(slotIndex + 1).padStart(2, "0")}</span>`;
-            return `<div class="track-cell ${border}">${content}</div>`;
+            return `<div class="track-cell ${resolvingSlot ? "" : border}">${content}</div>`;
           }).join("");
           return `<div class="round-group">
             <div class="round-slots">${slots}</div>
@@ -742,6 +902,9 @@
       const title = heroName || "Commander";
       const initials = title.replace(/^The\s+/i, "").split(/\s+/)
         .map(word => word.charAt(0)).join("").slice(0, 2).toUpperCase();
+      const priorScore = battleAnimation && battleAnimation.key === battleAnimationKey() &&
+        battleAnimation.stage !== "settled" && battleAnimation.previousScores[player.color];
+      const scoreText = priorScore || `${player.you ? "You" : player.color} = ${player.score}`;
       return `<article class="match-hero ${color}">
         <div class="hero-portrait ${color}" role="img" aria-label="${esc(title)} portrait for ${esc(player.color)}">
           <svg viewBox="0 0 100 100" aria-hidden="true" focusable="false">
@@ -750,7 +913,7 @@
           <span class="hero-portrait-mark">${esc(initials || heroID.slice(0, 2).toUpperCase())}</span>
         </div>
         <h2>${esc(title)}</h2>
-        <p class="hero-score ${color}">${esc(player.you ? "You" : player.color)} = ${player.score}</p>
+        <p class="hero-score ${color}">${esc(scoreText)}</p>
       </article>`;
     }
 
@@ -841,20 +1004,45 @@
     }
 
     function renderBattle() {
-      const attack = state && state.battleAttack ? cardMarkup(state.battleAttack) : '<div class="battle-empty"></div>';
-      const defend = state && state.battleDefend ? cardMarkup(state.battleDefend) : '<div class="battle-empty"></div>';
-      const attackerName = state && state.players ? state.players[state.attacker].color : "Attacker";
-      const defenderName = state && state.players ? state.players[1 - state.attacker].color : "Defender";
+      const animation = battleAnimation && battleAnimation.key === battleAnimationKey()
+        ? battleAnimation : null;
+      const resolved = state && state.battleOutcome;
+      const settled = animation && animation.stage === "settled";
+      const showValues = resolved && animation &&
+        (animation.stage === "values" || animation.stage === "outcome");
+      const attacker = state && state.players && state.players[state.attacker];
+      const defender = state && state.players && state.players[1 - state.attacker];
+      const attackColor = attacker && attacker.color === "White" ? "#fff" : "#151817";
+      const defendColor = defender && defender.color === "White" ? "#fff" : "#151817";
+      let attackOptions = { pose: "attack" };
+      let defendOptions = { pose: "attack", mirror: true };
+      if (showValues) {
+        attackOptions = { ...attackOptions, face: resolved.attackerValue, faceColor: attackColor };
+        defendOptions = { ...defendOptions, face: resolved.defenderValue, faceColor: defendColor };
+      }
+      if (resolved && animation && animation.stage === "outcome") {
+        attackOptions.pose = resolved.winner === 0 ? "win" : "lose";
+        defendOptions.pose = resolved.winner === 1 ? "win" : "lose";
+      }
+      const attack = state && state.battleAttack && !settled
+        ? cardMarkup(state.battleAttack, attackOptions) : '<div class="battle-empty"></div>';
+      const defend = state && state.battleDefend && !settled
+        ? cardMarkup(state.battleDefend, defendOptions) : '<div class="battle-empty"></div>';
+      const attackerName = attacker ? attacker.color : "Attacker";
+      const defenderName = defender ? defender.color : "Defender";
       document.getElementById("battleLeft").innerHTML =
         `<span class="battle-player-name">${esc(attackerName)} attacks</span>${attack}`;
       document.getElementById("battleRight").innerHTML =
         `<span class="battle-player-name">${esc(defenderName)} defends</span>${defend}`;
+      const versus = document.getElementById("battleVs");
+      versus.classList.toggle("exploding", Boolean(animation && animation.stage === "impact"));
+      versus.textContent = "VS";
     }
 
     function renderActions() {
       const actions = document.getElementById("actions");
       actions.innerHTML = "";
-      if (!state || !state.started) return;
+      if (!state || !state.started || state.phase === "gameover") return;
       actions.append(makeButton("Dashboard", openDashboard, "secondary"));
       if (state.phase === "commit" && (state.mode === "hvh" || state.actor === 0)) {
         if (selected.size === 3) {
@@ -863,11 +1051,6 @@
       } else if (state.phase === "seat" && (state.mode === "hvh" || state.actor === 0)) {
         actions.append(makeButton("Take seat X", () => act("seat", { seat: "X" })));
         actions.append(makeButton("Take seat Y", () => act("seat", { seat: "Y" })));
-      } else if (state.phase === "result") {
-        actions.append(makeButton(state.phase === "result" && state.round === 3 && state.exchange === 3
-          ? "Finish game" : "Continue", () => act("continue")));
-      } else if (state.phase === "gameover") {
-        actions.append(makeButton("Play again", () => startNewGame()));
       }
       if (state.phase !== "gameover" && state.phase !== "handoff" && activeMode) {
         actions.append(makeButton("New game", requestNewGameConfirmation, "secondary"));
@@ -950,13 +1133,33 @@
         const heading = state.mode === "hvh"
           ? `${state.players[state.winner].color} wins`
           : state.winner === 0 ? "You Won!" : "You Lost";
+        const payout = state.payout;
+        const payoutDetails = payout
+          ? (() => {
+              const winBonus = payout.playerWon ? " ×3 (win bonus)" : "";
+              const skillMultiplier = payout.skillBonusPercent > 0
+                ? ` ×${(1 + payout.skillBonusPercent / 100).toFixed(2).replace(/0+$/, "").replace(/\.$/, "")} (Quartermaster +${payout.skillBonusPercent}%)`
+                : "";
+              const label = payout.playerWon ? "You Earned:" : "You Earn:";
+              return `<section class="payout-breakdown" aria-label="Match Marks earnings">
+                <p class="payout-total">${label} (50 + ${formatNumber(payout.playerScore)})${winBonus}${skillMultiplier} = ${formatNumber(payout.totalMarks)} Marks</p>
+              </section>`;
+            })()
+          : '<p class="payout-error">Match earnings are unavailable.</p>';
+        const tiebreakDetails = state.tiebreak && state.tiebreak.toLowerCase() !== "higher total score"
+          ? `<p>${esc(state.tiebreak)}.</p>` : "";
         modal.innerHTML = `<section class="modal">
           <h2>${esc(heading)}</h2>
           <p>Final score: <strong>${white.score} – ${black.score}</strong> (White–Black)</p>
-          <p>${esc(state.tiebreak || "Higher total score")}.</p>
-          <button class="action" id="againButton">Play again</button>
+          ${tiebreakDetails}
+          ${payoutDetails}
+          <div class="confirmation-actions">
+            <button type="button" class="action secondary" id="homeButton">Home</button>
+            <button type="button" class="action" id="rematchButton">Rematch</button>
+          </div>
         </section>`;
-        modal.querySelector("#againButton").addEventListener("click", () => startNewGame());
+        modal.querySelector("#homeButton").addEventListener("click", openDashboard);
+        modal.querySelector("#rematchButton").addEventListener("click", () => startNewGame());
       } else {
         modal.classList.add("hidden");
         modal.innerHTML = "";
@@ -1039,6 +1242,8 @@
         history: "/api/history"
       };
       currentFeature = feature;
+      if (feature === "shop") currentShopTab = "skins";
+      if (feature === "skills") currentSkillBranch = skillTreeBranches[0].id;
       showDashboard = false;
       showFeature = true;
       showModeSelection = false;
@@ -1060,6 +1265,13 @@
         data-feature-action="${action}" ${attributes}${disabled ? " disabled" : ""}>${esc(label)}</button>`;
     }
 
+    function renderFeatureTabs(tabs, selected, dataAttribute) {
+      return tabs.map(tab =>
+        `<button class="feature-tab" type="button" role="tab" aria-selected="${tab.id === selected}"
+          data-${dataAttribute}="${esc(tab.id)}">${esc(tab.label)}</button>`
+      ).join("");
+    }
+
     function renderFeatureScreen() {
       const titles = {
         "camp-draw": "Camp Draw",
@@ -1074,6 +1286,24 @@
       document.getElementById("featureTitle").textContent = titles[currentFeature] || "Progression";
       const message = document.getElementById("featureMessage");
       message.textContent = featureError || (featureData && featureData.message) || "";
+      const tabs = document.getElementById("featureTabs");
+      if (currentFeature === "shop") {
+        const shopTabs = [
+          { id: "skins", label: "Skins" },
+          { id: "heroes", label: "Heroes" },
+          { id: "boxes", label: "Boxes" }
+        ];
+        tabs.setAttribute("aria-label", "Shop categories");
+        tabs.innerHTML = renderFeatureTabs(shopTabs, currentShopTab, "shop-tab");
+        tabs.classList.remove("hidden");
+      } else if (currentFeature === "skills") {
+        tabs.setAttribute("aria-label", "Skill tree branches");
+        tabs.innerHTML = renderFeatureTabs(skillTreeBranches, currentSkillBranch, "skill-branch");
+        tabs.classList.remove("hidden");
+      } else {
+        tabs.classList.add("hidden");
+        tabs.innerHTML = "";
+      }
       const content = document.getElementById("featureContent");
       if (!featureData) {
         content.innerHTML = featureError
@@ -1209,6 +1439,12 @@
     }
 
     function renderShopFeature(page) {
+      const content = currentShopTab === "heroes" ? renderShopHeroes(page)
+        : currentShopTab === "boxes" ? renderShopBoxes(page) : renderShopSkins(page);
+      return content;
+    }
+
+    function renderShopSkins(page) {
       const chromas = (page.chromas || []).map(item => {
         const chroma = item.chroma;
         const currency = chroma.currency === "marks" ? "Marks" : "Crowns";
@@ -1232,17 +1468,6 @@
         ${!item.owned ? featureActionButton(`Buy bundle · ${item.bundle.cost_crowns} Crowns`, "buy-bundle",
           `data-id="${esc(item.bundle.id)}"`, page.dashboard.crowns < item.bundle.cost_crowns) : ""}
       </article>`).join("");
-      const heroesForSale = (page.heroes || []).filter(item => item.hero.id !== "recruit").map(item => `<article class="feature-item">
-        <h3>${esc(item.hero.name)}${item.owned ? " · Owned" : ""}</h3>
-        <p>${item.plays} plays · ${item.wins} wins</p>
-        ${!item.owned ? featureActionButton(`Buy for ${page.directHeroCost} Crowns`, "buy-hero",
-          `data-id="${esc(item.hero.id)}"`, !item.canBuy) : ""}
-      </article>`).join("");
-      const freeBox = page.heroBoxesAvailable > 0
-        ? featureActionButton(`Open free Hero Box (${page.heroBoxesAvailable})`, "open-hero-box", 'data-box-type="free"')
-        : "";
-      const paidBox = featureActionButton(`Open Hero Box · ${page.heroBoxCost} Marks`, "open-hero-box",
-        'data-box-type="marks"', page.dashboard.marks < page.heroBoxCost);
       const chromaPick = page.chromaPickTokens > 0
         ? `<article class="feature-item"><h3>Pick Any Chroma · ${page.chromaPickTokens} token(s)</h3>
           <select id="chromaPickChoice">${(page.chromas || []).filter(item => !item.owned).map(item =>
@@ -1251,11 +1476,42 @@
         : "";
       return `<section class="feature-section"><h2>Chroma Catalog</h2><div class="feature-list">${chromas}</div></section>
         <section class="feature-section"><h2>Bundles</h2><div class="feature-list">${bundles}</div></section>
-        <section class="feature-section"><h2>Hero Boxes</h2><p>Available Hero Boxes: ${page.heroBoxesAvailable}</p>
-          ${freeBox} ${paidBox}</section>
-        ${chromaPick ? `<section class="feature-section"><h2>Chroma Tokens</h2><div class="feature-list">${chromaPick}</div></section>` : ""}
-        <section class="feature-section"><h2>Heroes</h2><p>Direct purchase: ${page.directHeroCost} Crowns</p>
+        ${chromaPick ? `<section class="feature-section"><h2>Chroma Tokens</h2><div class="feature-list">${chromaPick}</div></section>` : ""}`;
+    }
+
+    function renderShopHeroes(page) {
+      const heroesForSale = (page.heroes || []).filter(item => item.hero.id !== "recruit").map(item => `<article class="feature-item">
+        <h3>${esc(item.hero.name)}${item.owned ? " · Owned" : ""}</h3>
+        <p>${item.plays} plays · ${item.wins} wins</p>
+        ${!item.owned ? featureActionButton(`Buy for ${page.directHeroCost} Crowns`, "buy-hero",
+          `data-id="${esc(item.hero.id)}"`, !item.canBuy) : ""}
+      </article>`).join("");
+      return `<section class="feature-section"><h2>Heroes</h2><p>Direct purchase: ${page.directHeroCost} Crowns</p>
           <div class="feature-list">${heroesForSale}</div></section>`;
+    }
+
+    function renderShopBoxes(page) {
+      const offers = (page.boxOffers || []).map(offer => {
+        const currency = offer.currency === "crowns" ? "Crowns" : "Marks";
+        const balance = offer.currency === "crowns" ? page.dashboard.crowns : page.dashboard.marks;
+        const openButton = offer.available > 0
+          ? offer.type === "hero"
+            ? featureActionButton("Open Hero Box", "open-hero-box", 'data-box-type="free"')
+            : featureActionButton(`Open ${offer.name}`, "open-box", `data-box-type="${esc(offer.type)}"`)
+          : "";
+        return `<article class="feature-item">
+          <h3>${esc(offer.name)}</h3>
+          <p>${formatNumber(offer.available)} available</p>
+          <p>${formatNumber(offer.cost)} ${currency}</p>
+          ${featureActionButton(`Buy for ${formatNumber(offer.cost)} ${currency}`, "buy-box",
+            `data-box-type="${esc(offer.type)}"`, balance < offer.cost)}
+          ${openButton}
+        </article>`;
+      }).join("");
+      return `<section class="feature-section"><h2>Box Shop</h2>
+        <p>Purchase boxes with Marks or Crowns. Open them here when available.</p>
+        <div class="feature-list">${offers}</div>
+      </section>`;
     }
 
     function renderHeroesFeature(page) {
@@ -1271,8 +1527,10 @@
     }
 
     function renderSkillsFeature(page) {
-      return `<section class="feature-section"><h2>Skill Tree · ${page.dashboard.skillPoints} Skill Point(s) · ${formatNumber(page.dashboard.crowns)} Crowns</h2>
-        <div class="feature-list">${(page.nodes || []).map(item => `<article class="feature-item">
+      const branch = skillTreeBranches.find(item => item.id === currentSkillBranch) || skillTreeBranches[0];
+      const nodes = (page.nodes || []).filter(item => branch.nodeIDs.includes(item.node.id));
+      return `<section class="feature-section"><h2>Skill Tree · ${page.dashboard.skillPoints} Skill Point(s) · ${formatNumber(page.dashboard.crowns)} Crowns · ${esc(branch.label)}</h2>
+        <div class="feature-list">${nodes.map(item => `<article class="feature-item">
           <h3>${esc(item.node.name)}${item.unlocked ? " · Unlocked" : ""}</h3>
           <p>${esc(item.node.description)}</p>
           ${item.node.prerequisite ? `<p>Requires: ${esc(item.node.prerequisite)}</p>` : ""}
@@ -1371,6 +1629,18 @@
     }
 
     async function handleFeatureClick(event) {
+      const shopTab = event.target.closest("[data-shop-tab]");
+      if (shopTab) {
+        currentShopTab = shopTab.dataset.shopTab;
+        render();
+        return;
+      }
+      const skillTab = event.target.closest("[data-skill-branch]");
+      if (skillTab) {
+        currentSkillBranch = skillTab.dataset.skillBranch;
+        render();
+        return;
+      }
       const button = event.target.closest("[data-feature-action]");
       if (!button || button.disabled || featureActionInProgress) return;
       const action = button.dataset.featureAction;
@@ -1392,9 +1662,10 @@
         case "buy-chroma":
         case "buy-bundle":
         case "buy-hero":
+        case "buy-box":
           if (!window.confirm(`Confirm ${button.textContent.trim()}?`)) return;
           path = "/api/shop";
-          body = { action, id: button.dataset.id };
+          body = { action, id: button.dataset.id, boxType: button.dataset.boxType };
           break;
         case "open-hero-box":
           if (!window.confirm(`Confirm ${button.textContent.trim()}?`)) return;
@@ -1421,6 +1692,17 @@
       button.disabled = true;
       try {
         featureData = await api(path, body);
+        if (action === "open-box") {
+          const result = featureData.boxResult || {};
+          const reward = result.chroma_id
+            ? `${result.chroma_rarity || ""} ${result.chroma_id} chroma`
+            : result.marks ? `${formatNumber(result.marks)} Marks`
+              : result.crowns ? `${formatNumber(result.crowns)} Crowns` : "No listed reward";
+          const boxName = result.box_type || button.dataset.boxType;
+          const message = `Opened ${boxName} box: ${reward}.`;
+          featureData = await api("/api/shop");
+          featureData.message = message;
+        }
         if (featureData.dashboard) state.dashboard = featureData.dashboard;
         if (currentFeature === "heroes" && featureData.defaultId) {
           state.defaultHeroId = featureData.defaultId;
@@ -1435,6 +1717,7 @@
     }
 
     function render() {
+      syncBattleAnimation();
       document.getElementById("dashboardScreen").classList.toggle("hidden", !showDashboard);
       document.getElementById("featureScreen").classList.toggle("hidden", !showFeature);
       document.getElementById("gameShell").classList.toggle("hidden", showDashboard || showFeature);
@@ -1559,6 +1842,7 @@
     document.getElementById("dashboardNavHeroes").addEventListener("click", () => openFeature("heroes"));
     document.getElementById("dashboardNavSkills").addEventListener("click", () => openFeature("skills"));
     document.getElementById("featureBack").addEventListener("click", openDashboard);
+    document.getElementById("featureTabs").addEventListener("click", handleFeatureClick);
     document.getElementById("featureContent").addEventListener("click", handleFeatureClick);
 
     initialize();

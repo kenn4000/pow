@@ -6,11 +6,15 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"io/fs"
+	"math"
 	"math/rand"
+	"mime"
 	"net"
 	"net/http"
 	"os"
 	"os/exec"
+	"path"
 	"runtime"
 	"strings"
 	"sync"
@@ -29,7 +33,7 @@ import (
 	"prisonersofwar/skills"
 )
 
-//go:embed web/index.html
+//go:embed web/index.html skins
 var webFiles embed.FS
 
 type webServer struct {
@@ -68,6 +72,22 @@ type webSession struct {
 	playerHeroID   string
 	opponentHeroID string
 	profileError   string
+	payout         *webMatchPayout
+}
+
+type webMatchPayout struct {
+	PlayerScore   int   `json:"playerScore"`
+	PlayerWon     bool  `json:"playerWon"`
+	BaseMarks     int64 `json:"baseMarks"`
+	WinMultiplier int   `json:"winMultiplier"`
+	SkillBonusPct int   `json:"skillBonusPercent"`
+	TotalMarks    int64 `json:"totalMarks"`
+}
+
+type webBattleOutcome struct {
+	AttackerValue int `json:"attackerValue"`
+	DefenderValue int `json:"defenderValue"`
+	Winner        int `json:"winner"`
 }
 
 type jailCell struct {
@@ -109,10 +129,12 @@ type webView struct {
 	JailSlots      []jailCell         `json:"jailSlots,omitempty"`
 	BattleAttack   *game.Card         `json:"battleAttack,omitempty"`
 	BattleDefend   *game.Card         `json:"battleDefend,omitempty"`
+	BattleOutcome  *webBattleOutcome  `json:"battleOutcome,omitempty"`
 	Message        string             `json:"message,omitempty"`
 	ScoreLine      string             `json:"scoreLine,omitempty"`
 	CanContinue    bool               `json:"canContinue"`
 	Winner         int                `json:"winner"`
+	Payout         *webMatchPayout    `json:"payout,omitempty"`
 	Tiebreak       string             `json:"tiebreak,omitempty"`
 	Modifiers      game.GameModifiers `json:"modifiers"`
 	PlayerHero     string             `json:"playerHero,omitempty"`
@@ -125,23 +147,23 @@ type webView struct {
 }
 
 type webDashboard struct {
-	Commander          string `json:"commander"`
-	Title              string `json:"title"`
-	Marks              int64  `json:"marks"`
-	Crowns             int64  `json:"crowns"`
-	Energy             int    `json:"energy"`
-	MaxEnergy          int    `json:"maxEnergy"`
-	EnergyNextSeconds  int    `json:"energyNextSeconds"`
-	AdsLeft            int    `json:"adsLeft"`
+	Commander          string                `json:"commander"`
+	Title              string                `json:"title"`
+	Marks              int64                 `json:"marks"`
+	Crowns             int64                 `json:"crowns"`
+	Energy             int                   `json:"energy"`
+	MaxEnergy          int                   `json:"maxEnergy"`
+	EnergyNextSeconds  int                   `json:"energyNextSeconds"`
+	AdsLeft            int                   `json:"adsLeft"`
 	DailyFeaturedItem  *webDailyFeaturedItem `json:"dailyFeaturedItem,omitempty"`
-	LoginStreakCurrent int    `json:"loginStreakCurrent"`
-	LoginStreakBest    int    `json:"loginStreakBest"`
-	WinsSinceCampDraw  int    `json:"winsSinceCampDraw"`
-	WinsPerCampDraw    int    `json:"winsPerCampDraw"`
-	DrawsAvailable     int    `json:"drawsAvailable"`
-	PendingBoxes       int    `json:"pendingBoxes"`
-	SkillPoints        int    `json:"skillPoints"`
-	UnseenAchievements int    `json:"unseenAchievements"`
+	LoginStreakCurrent int                   `json:"loginStreakCurrent"`
+	LoginStreakBest    int                   `json:"loginStreakBest"`
+	WinsSinceCampDraw  int                   `json:"winsSinceCampDraw"`
+	WinsPerCampDraw    int                   `json:"winsPerCampDraw"`
+	DrawsAvailable     int                   `json:"drawsAvailable"`
+	PendingBoxes       int                   `json:"pendingBoxes"`
+	SkillPoints        int                   `json:"skillPoints"`
+	UnseenAchievements int                   `json:"unseenAchievements"`
 }
 
 type webDailyFeaturedItem struct {
@@ -227,10 +249,24 @@ type webShopHero struct {
 	Wins   int           `json:"wins"`
 }
 
+type webShopBoxOffer struct {
+	Type      string `json:"type"`
+	Name      string `json:"name"`
+	Currency  string `json:"currency"`
+	Cost      int64  `json:"cost"`
+	Available int    `json:"available"`
+}
+
+const (
+	shopBoxMarksCost        int64 = 1000
+	shopGoldenBoxCrownsCost int64 = 1000
+)
+
 type webShopPage struct {
 	Chromas            []webShopChroma       `json:"chromas"`
 	Bundles            []webShopBundle       `json:"bundles"`
 	Heroes             []webShopHero         `json:"heroes"`
+	BoxOffers          []webShopBoxOffer     `json:"boxOffers"`
 	Dashboard          *webDashboard         `json:"dashboard"`
 	HeroBoxesAvailable int                   `json:"heroBoxesAvailable"`
 	HeroBoxCost        int64                 `json:"heroBoxCost"`
@@ -275,19 +311,19 @@ type webCampDrawPage struct {
 }
 
 type webCommanderPage struct {
-	Dashboard      *webDashboard `json:"dashboard"`
-	PlayerID       string        `json:"playerId"`
-	CreatedAt      time.Time     `json:"createdAt"`
-	TotalGames     int           `json:"totalGames"`
-	TotalWins      int           `json:"totalWins"`
-	TotalLosses    int           `json:"totalLosses"`
-	TotalDraws     int           `json:"totalDraws"`
-	CurrentStreak  int           `json:"currentStreak"`
-	BestStreak     int           `json:"bestStreak"`
-	TotalClashes   int           `json:"totalClashes"`
-	MatchTies      int           `json:"matchTies"`
-	WinsAsSeatX    int           `json:"winsAsSeatX"`
-	WinsAsSeatY    int           `json:"winsAsSeatY"`
+	Dashboard     *webDashboard `json:"dashboard"`
+	PlayerID      string        `json:"playerId"`
+	CreatedAt     time.Time     `json:"createdAt"`
+	TotalGames    int           `json:"totalGames"`
+	TotalWins     int           `json:"totalWins"`
+	TotalLosses   int           `json:"totalLosses"`
+	TotalDraws    int           `json:"totalDraws"`
+	CurrentStreak int           `json:"currentStreak"`
+	BestStreak    int           `json:"bestStreak"`
+	TotalClashes  int           `json:"totalClashes"`
+	MatchTies     int           `json:"matchTies"`
+	WinsAsSeatX   int           `json:"winsAsSeatX"`
+	WinsAsSeatY   int           `json:"winsAsSeatY"`
 }
 
 type webCampaignPage struct {
@@ -317,12 +353,12 @@ type webCampaignMission struct {
 }
 
 type webHistoryPage struct {
-	Dashboard   *webDashboard      `json:"dashboard"`
-	TotalGames  int                `json:"totalGames"`
-	TotalWins   int                `json:"totalWins"`
-	TotalLosses int                `json:"totalLosses"`
-	TotalDraws  int                `json:"totalDraws"`
-	Matches     []webHistoryMatch  `json:"matches"`
+	Dashboard   *webDashboard     `json:"dashboard"`
+	TotalGames  int               `json:"totalGames"`
+	TotalWins   int               `json:"totalWins"`
+	TotalLosses int               `json:"totalLosses"`
+	TotalDraws  int               `json:"totalDraws"`
+	Matches     []webHistoryMatch `json:"matches"`
 }
 
 type webHistoryMatch struct {
@@ -349,6 +385,7 @@ func startWebUI(listenAddress, defaultMode string) error {
 	}
 	mux := http.NewServeMux()
 	mux.HandleFunc("/", server.handlePage)
+	mux.HandleFunc("/skins/", server.handleSkinAsset)
 	mux.HandleFunc("/api/state", server.handleState)
 	mux.HandleFunc("/api/new", server.handleNewGame)
 	mux.HandleFunc("/api/action", server.handleAction)
@@ -399,6 +436,35 @@ func (s *webServer) handlePage(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Cache-Control", "no-store")
 	if _, err := w.Write(page); err != nil {
 		fmt.Fprintf(os.Stderr, "write game UI response: %v\n", err)
+	}
+}
+
+func (s *webServer) handleSkinAsset(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+	name := strings.TrimPrefix(r.URL.Path, "/")
+	if !strings.HasPrefix(name, "skins/") || !fs.ValidPath(name) {
+		http.NotFound(w, r)
+		return
+	}
+	asset, err := webFiles.ReadFile(name)
+	if errors.Is(err, fs.ErrNotExist) {
+		http.NotFound(w, r)
+		return
+	}
+	if err != nil {
+		http.Error(w, "skin asset unavailable", http.StatusInternalServerError)
+		return
+	}
+	if contentType := mime.TypeByExtension(path.Ext(name)); contentType != "" {
+		w.Header().Set("Content-Type", contentType)
+	}
+	w.Header().Set("Cache-Control", "public, max-age=3600")
+	w.Header().Set("X-Content-Type-Options", "nosniff")
+	if _, err := w.Write(asset); err != nil {
+		fmt.Fprintf(os.Stderr, "write skin asset response: %v\n", err)
 	}
 }
 
@@ -812,6 +878,12 @@ func (s *webServer) shopPage(p *profile.Profile) webShopPage {
 		Dashboard: dashboardFor(p), HeroBoxesAvailable: p.HeroBoxesAvailable,
 		HeroBoxCost: heroes.HeroBoxCost(p), DirectHeroCost: heroes.DirectHeroCrownsCost,
 		ChromaPickTokens: p.ChromaPickTokens,
+		BoxOffers: []webShopBoxOffer{
+			{Type: "wooden", Name: "Wooden Box", Currency: "marks", Cost: shopBoxMarksCost, Available: p.PendingBoxes["wooden"]},
+			{Type: "silver", Name: "Silver Box", Currency: "marks", Cost: shopBoxMarksCost, Available: p.PendingBoxes["silver"]},
+			{Type: "hero", Name: "Hero Box", Currency: "marks", Cost: shopBoxMarksCost, Available: p.HeroBoxesAvailable},
+			{Type: "gold", Name: "Golden Box", Currency: "crowns", Cost: shopGoldenBoxCrownsCost, Available: p.PendingBoxes["gold"]},
+		},
 	}
 	for _, chroma := range catalog.AllChromas() {
 		page.Chromas = append(page.Chromas, webShopChroma{Chroma: chroma, Owned: p.OwnedChromas[chroma.ID]})
@@ -848,6 +920,35 @@ func (s *webServer) applyShopAction(p *profile.Profile, request actionRequest) (
 		}
 		evaluateAchievementEvent(p, achievements.EventPurchase, "shop")
 		return "Purchased bundle " + request.ID + ".", nil
+	case "buy-box":
+		switch request.BoxType {
+		case "wooden", "silver":
+			if p.Marks < shopBoxMarksCost {
+				return "", fmt.Errorf("need %d Marks; you have %d", shopBoxMarksCost, p.Marks)
+			}
+			if err := p.GrantBox(request.BoxType, 1); err != nil {
+				return "", err
+			}
+			p.Marks -= shopBoxMarksCost
+		case "gold":
+			if p.Crowns < shopGoldenBoxCrownsCost {
+				return "", fmt.Errorf("need %d Crowns; you have %d", shopGoldenBoxCrownsCost, p.Crowns)
+			}
+			if err := p.GrantBox(request.BoxType, 1); err != nil {
+				return "", err
+			}
+			p.Crowns -= shopGoldenBoxCrownsCost
+		case "hero":
+			if p.Marks < shopBoxMarksCost {
+				return "", fmt.Errorf("need %d Marks; you have %d", shopBoxMarksCost, p.Marks)
+			}
+			p.Marks -= shopBoxMarksCost
+			p.HeroBoxesAvailable++
+		default:
+			return "", fmt.Errorf("unknown box type %q", request.BoxType)
+		}
+		evaluateAchievementEvent(p, achievements.EventPurchase, "shop")
+		return "Purchased " + request.BoxType + " box.", nil
 	case "open-hero-box":
 		var result heroes.HeroBoxResult
 		var err error
@@ -1048,7 +1149,7 @@ func (s *webServer) handleCampaigns(w http.ResponseWriter, r *http.Request) {
 		summary := webCampaignSummary{
 			ID: campaign.ID, Name: campaign.Name, Description: campaign.Description,
 			Requires: campaign.Requires, Unlocked: campaigns.IsUnlocked(p, campaign.ID),
-			Missions: make([]webCampaignMission, 0, len(campaign.Missions)),
+			Missions:      make([]webCampaignMission, 0, len(campaign.Missions)),
 			TotalMissions: len(campaign.Missions),
 		}
 		if progress != nil {
@@ -1439,6 +1540,8 @@ func (s *webServer) finishGame() {
 	session.winner, session.tiebreak = finalWinner(p1, p2, s.rng)
 	session.phase = "gameover"
 	session.message = "The three rounds are complete."
+	payout := awardWebMatchMarks(s.playerProfile, p1.Total, session.winner == 0)
+	session.payout = &payout
 	if s.playerProfile != nil {
 		if s.playerProfile.HeroPlayCounts == nil {
 			s.playerProfile.HeroPlayCounts = make(map[string]int)
@@ -1454,6 +1557,29 @@ func (s *webServer) finishGame() {
 			session.profileError = "Profile save failed: " + err.Error()
 		}
 	}
+}
+
+func awardWebMatchMarks(p *profile.Profile, score int, won bool) webMatchPayout {
+	if score < 0 {
+		score = 0
+	}
+	payout := webMatchPayout{
+		PlayerScore: score, PlayerWon: won,
+		BaseMarks: int64(50 + score), WinMultiplier: 1,
+	}
+	if won {
+		payout.WinMultiplier = 3
+	}
+	if p != nil {
+		payout.SkillBonusPct = skills.AggregateBonuses(p).MarksBasePercent
+	}
+	multiplier := float64(100+payout.SkillBonusPct) / 100
+	payout.TotalMarks = int64(math.Floor(float64(payout.BaseMarks) *
+		float64(payout.WinMultiplier) * multiplier))
+	if p != nil {
+		p.Marks += payout.TotalMarks
+	}
+	return payout
 }
 
 func (s *webServer) view() webView {
@@ -1482,6 +1608,7 @@ func (s *webServer) view() webView {
 		Message:        session.message,
 		CanContinue:    session.phase == "result",
 		Winner:         session.winner,
+		Payout:         session.payout,
 		Tiebreak:       session.tiebreak,
 		Modifiers:      session.state.Modifiers,
 		PlayerHero:     heroName(session.playerHeroID),
@@ -1500,6 +1627,11 @@ func (s *webServer) view() webView {
 	}
 	if session.phase == "result" && session.hasLastBattle {
 		result.BattleDefend = cardPointer(session.lastDefense)
+		result.BattleOutcome = &webBattleOutcome{
+			AttackerValue: session.lastOutcome.AttackerValue,
+			DefenderValue: session.lastOutcome.DefenderValue,
+			Winner:        session.lastOutcome.Winner,
+		}
 	}
 	scores := [2]game.ScoreBreakdown{
 		game.ScorePlayer(session.state.P1, session.state.Bounty.Suit, session.state.Modifiers),
