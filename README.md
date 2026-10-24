@@ -11,11 +11,13 @@ backend/                    Go module, server, game packages, tests, and artwork
 frontend/                   Vite/React app and frontend container
 deploy/helm/prisoner-of-war/ Helm chart for k3s
 docs/                       Game systems and feature guides
+compose.yaml                Local PostgreSQL container and persistent volume
 .gitlab-ci.yml              Test → build images → in-cluster Helm deployment
 ```
 
-Go module metadata and all Go packages live under `backend/`. The backend uses the Go
-standard library. Local development requires Go 1.21+ and Node 22.12+.
+Go module metadata and all Go packages live under `backend/`. HTTP routing uses
+chi, PostgreSQL access uses pgx, and passwords use bcrypt. Local development
+requires Go 1.21+, Node 22.12+, and Docker for PostgreSQL.
 See [deployment setup](deploy/README.md) for GitLab variables and cluster commands.
 
 The existing browser screens and renderer are preserved in
@@ -49,7 +51,14 @@ use the existing DOM renderer.
 
 ## Run the graphical UI
 
+Copy `.env.example` to `.env`, replace the database and admin passwords, then
+start PostgreSQL and the backend from the repository root:
+
 ```sh
+docker compose up -d --wait postgres
+set -a
+. ./.env
+set +a
 GOWORK=off go -C backend run .
 ```
 
@@ -61,7 +70,13 @@ npm --prefix frontend run dev
 ```
 
 Open `http://localhost:5173/prisoner-of-war/`. Vite proxies API and artwork
-requests to the Go server at `127.0.0.1:8080`. The UI draws the bounty and
+requests to the Go server at `127.0.0.1:8080`. Sign up or sign in with the
+bootstrap admin account configured in `.env`. Administrators have an **Admin**
+page for listing users and changing their roles. **Saved games** lists your
+active, completed, and abandoned matches with their state-transition history.
+An unfinished match resumes after refreshing or restarting the backend.
+
+The UI draws the bounty and
 nine battle cells, capture borders, live score, current battle, piles, and
 hands. Cards use configurable colors for Scissors, Paper, and Rock. Click a
 suit circle to select one of eight colors; each suit must use a different
@@ -140,6 +155,17 @@ Run the unit and integration tests with:
 ```sh
 GOWORK=off go -C backend test ./...
 ```
+
+The PostgreSQL integration test runs when `TEST_DATABASE_URL` is set. CI runs
+it against a PostgreSQL service; locally, point it at your Docker database:
+
+```sh
+TEST_DATABASE_URL="postgres://prisonersofwar:${POSTGRES_PASSWORD}@127.0.0.1:5432/prisonersofwar?sslmode=disable" GOWORK=off go -C backend test -race ./...
+```
+
+The test creates and removes its own database schema. Connection URLs must
+percent-encode special characters in passwords. See [storage and API](docs/storage.md)
+for the data model, authentication, router groups, and deployment bootstrap.
 
 Run a headless Hard-vs-Hard simulation and print summary statistics with:
 

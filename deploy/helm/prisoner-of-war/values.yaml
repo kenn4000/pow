@@ -25,9 +25,25 @@ frontend:
 imagePullSecrets:
   - name: gitlab-registry
 persistence:
-  enabled: true
+  enabled: false
   storageClass: local-path
   size: 1Gi
+postgres:
+  image: postgres:17-alpine
+  database: prisonersofwar
+  username: prisonersofwar
+  existingSecret: ""
+  storageClass: local-path
+  size: 5Gi
+  resources:
+    requests:
+      cpu: 100m
+      memory: 128Mi
+    limits:
+      cpu: "1"
+      memory: 512Mi
+bootstrapAdmin:
+  existingSecret: ""
 ingress:
   enabled: true
   className: traefik

@@ -6,6 +6,7 @@
 - [Economy](economy.md)
 - [Heroes](heroes.md)
 - [Hero acquisition](heroes-acquisition.md)
+- [Accounts, PostgreSQL storage, and API routing](storage.md)
 
 Run command examples from the repository root.
 See [local development](../README.md) and [deployment](../deploy/README.md)

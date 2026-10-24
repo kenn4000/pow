@@ -680,6 +680,7 @@
         body: JSON.stringify(body)
       } : {});
       const payload = await response.json();
+      if (response.status === 401) window.dispatchEvent(new Event("pow-session-expired"));
       if (!response.ok) throw new Error(payload.error || "Request failed");
       return payload;
     }
@@ -1814,8 +1815,8 @@
     async function initialize() {
       try {
         state = await api("/api/state");
-        activeMode = "";
-        showDashboard = true;
+        activeMode = state.mode || "";
+        showDashboard = !state.started || state.phase === "gameover";
         render();
       } catch (error) {
         setStatus(error.message, true);
@@ -1825,7 +1826,7 @@
     document.getElementById("dashboardPlay").addEventListener("click", () => {
       showDashboard = false;
       showFeature = false;
-      showModeSelection = true;
+      showModeSelection = !state || !state.started || state.phase === "gameover";
       render();
     });
 

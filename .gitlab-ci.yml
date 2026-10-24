@@ -14,10 +14,19 @@ variables:
   GOWORK: "off"
   DEPLOY_NAMESPACE: "prisoner-of-war"
   HELM_RELEASE: "prisoner-of-war"
+  BOOTSTRAP_ADMIN_SECRET: ""
 
 backend-test:
   image: golang:1.25-alpine
   stage: test
+  services:
+    - name: postgres:17-alpine
+      alias: postgres
+  variables:
+    POSTGRES_DB: pow_test
+    POSTGRES_USER: pow_test
+    POSTGRES_PASSWORD: test-only-password
+    TEST_DATABASE_URL: postgres://pow_test:test-only-password@postgres:5432/pow_test?sslmode=disable
   script:
     - go -C backend test -race ./...
     - go -C backend build ./...
@@ -84,11 +93,13 @@ deploy-production:
         --set-string frontend.image.repository="$CI_REGISTRY_IMAGE/frontend" \
         --set-string backend.image.tag="$CI_COMMIT_SHA" \
         --set-string frontend.image.tag="$CI_COMMIT_SHA" \
+        --set-string bootstrapAdmin.existingSecret="$BOOTSTRAP_ADMIN_SECRET" \
         --atomic --wait --timeout 5m
     - kubectl -n "$DEPLOY_NAMESPACE" rollout status "deployment/$HELM_RELEASE-backend" --timeout=120s
     - kubectl -n "$DEPLOY_NAMESPACE" rollout status "deployment/$HELM_RELEASE-frontend" --timeout=120s
     - curl --fail --retry 12 --retry-all-errors --retry-delay 10 https://games.markdownthing.com/prisoner-of-war/
     - curl --fail --location --max-redirs 3 https://games.markdownthing.com/prisoner-of-war
-    - curl --fail --retry 3 https://games.markdownthing.com/prisoner-of-war/api/state
+    - test "$(curl --silent --output /dev/null --write-out '%{http_code}' https://games.markdownthing.com/prisoner-of-war/api/state)" = 401
+    - test "$(curl --silent --output /dev/null --write-out '%{http_code}' https://games.markdownthing.com/prisoner-of-war/api/auth/me)" = 401
   rules:
     - if: '$CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH'

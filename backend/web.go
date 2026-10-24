@@ -1,6 +1,8 @@
 package main
 
 import (
+	"context"
+	"database/sql"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -11,11 +13,14 @@ import (
 	"mime"
 	"net"
 	"net/http"
+	"net/url"
 	"os"
 	"path"
 	"strings"
 	"sync"
 	"time"
+
+	"github.com/go-chi/chi/v5"
 
 	"prisonersofwar/achievements"
 	"prisonersofwar/ai"
@@ -29,11 +34,13 @@ import (
 	"prisonersofwar/profile"
 	"prisonersofwar/skills"
 	"prisonersofwar/skins"
+	"prisonersofwar/storage"
 )
 
 var webFiles = skins.Files
 
 type webServer struct {
+	db                  *sql.DB
 	mu                  sync.Mutex
 	rng                 *rand.Rand
 	defaultMode         string
@@ -364,21 +371,53 @@ type webHistoryMatch struct {
 }
 
 func startWebUI(listenAddress, defaultMode string) error {
-	playerProfile, err := profile.LoadProfile()
-	if err != nil {
-		return fmt.Errorf("load profile for web game: %w", err)
+	server := &webServer{rng: rand.New(rand.NewSource(time.Now().UnixNano())), defaultMode: defaultMode}
+	dsn := os.Getenv("DATABASE_URL")
+	if dsn == "" && os.Getenv("PGHOST") != "" {
+		port := os.Getenv("PGPORT")
+		if port == "" {
+			port = "5432"
+		}
+		password := os.Getenv("PGPASSWORD")
+		if password == "" {
+			password = os.Getenv("POSTGRES_PASSWORD")
+		}
+		address := net.JoinHostPort(os.Getenv("PGHOST"), port)
+		u := url.URL{Scheme: "postgres", Host: address, Path: os.Getenv("PGDATABASE"), User: url.UserPassword(os.Getenv("PGUSER"), password)}
+		u.RawQuery = "sslmode=disable"
+		dsn = u.String()
 	}
-	if err := (&app{}).initializeProgressionProfile(playerProfile); err != nil {
-		return fmt.Errorf("initialize profile for web game: %w", err)
+	if dsn != "" {
+		ctx, cancel := context.WithTimeout(context.Background(), time.Minute)
+		defer cancel()
+		var err error
+		for {
+			server.db, err = storage.Open(ctx, dsn)
+			if err == nil || ctx.Err() != nil {
+				break
+			}
+			time.Sleep(time.Second)
+		}
+		if err != nil {
+			return fmt.Errorf("connect to PostgreSQL: %w", err)
+		}
+		defer server.db.Close()
+		if err := server.bootstrapAdmin(ctx); err != nil {
+			return fmt.Errorf("bootstrap admin: %w", err)
+		}
+	} else {
+		playerProfile, err := profile.LoadProfile()
+		if err != nil {
+			return fmt.Errorf("load local profile: %w", err)
+		}
+		if err := (&app{}).initializeProgressionProfile(playerProfile); err != nil {
+			return err
+		}
+		server.playerProfile = playerProfile
 	}
 	listener, err := net.Listen("tcp", listenAddress)
 	if err != nil {
 		return fmt.Errorf("start local game server: %w", err)
-	}
-	server := &webServer{
-		rng:           rand.New(rand.NewSource(time.Now().UnixNano())),
-		defaultMode:   defaultMode,
-		playerProfile: playerProfile,
 	}
 	mux := server.routes()
 	address := "http://" + listener.Addr().String()
@@ -386,41 +425,21 @@ func startWebUI(listenAddress, defaultMode string) error {
 	return (&http.Server{Handler: mux, ReadHeaderTimeout: 5 * time.Second}).Serve(listener)
 }
 
-func (server *webServer) routes() http.Handler {
-	mux := http.NewServeMux()
-	mux.HandleFunc("/", server.handlePage)
-	mux.HandleFunc("/skins/", server.handleSkinAsset)
-	mux.HandleFunc("/api/state", server.handleState)
-	mux.HandleFunc("/api/new", server.handleNewGame)
-	mux.HandleFunc("/api/action", server.handleAction)
-	mux.HandleFunc("/api/camp-draw", server.handleCampDraw)
-	mux.HandleFunc("/api/achievements", server.handleAchievements)
-	mux.HandleFunc("/api/shop", server.handleShop)
-	mux.HandleFunc("/api/skills", server.handleSkills)
-	mux.HandleFunc("/api/heroes", server.handleHeroes)
-	mux.HandleFunc("/api/profile", server.handleProfile)
-	mux.HandleFunc("/api/campaigns", server.handleCampaigns)
-	mux.HandleFunc("/api/history", server.handleHistory)
-	mux.HandleFunc("/healthz", func(w http.ResponseWriter, r *http.Request) {
-		writeJSON(w, http.StatusOK, map[string]string{"status": "ok"})
-	})
-	basePath := strings.TrimRight(os.Getenv("BASE_PATH"), "/")
-	if basePath == "" {
-		return mux
+func (s *webServer) handleHealth(w http.ResponseWriter, r *http.Request) {
+	writeJSON(w, http.StatusOK, map[string]string{"status": "ok"})
+}
+
+func (s *webServer) handleReady(w http.ResponseWriter, r *http.Request) {
+	ctx, cancel := context.WithTimeout(r.Context(), 2*time.Second)
+	defer cancel()
+	if s.db != nil && s.db.PingContext(ctx) != nil {
+		writeError(w, http.StatusServiceUnavailable, errors.New("database unavailable"))
+		return
 	}
-	root := http.NewServeMux()
-	root.HandleFunc("/healthz", func(w http.ResponseWriter, r *http.Request) {
-		writeJSON(w, http.StatusOK, map[string]string{"status": "ok"})
-	})
-	root.Handle(basePath+"/", http.StripPrefix(basePath, mux))
-	return root
+	s.handleHealth(w, r)
 }
 
 func (s *webServer) handlePage(w http.ResponseWriter, r *http.Request) {
-	if r.URL.Path != "/" {
-		http.NotFound(w, r)
-		return
-	}
 	if r.Method != http.MethodGet {
 		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
 		return
@@ -433,7 +452,10 @@ func (s *webServer) handleSkinAsset(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
 		return
 	}
-	name := strings.TrimPrefix(r.URL.Path, "/")
+	name := "skins/" + chi.URLParam(r, "*")
+	if chi.URLParam(r, "*") == "" {
+		name = strings.TrimPrefix(r.URL.Path, "/")
+	}
 	if !strings.HasPrefix(name, "skins/") || !fs.ValidPath(name) {
 		http.NotFound(w, r)
 		return
@@ -1532,6 +1554,33 @@ func (s *webServer) finishGame() {
 	payout := awardWebMatchMarks(s.playerProfile, p1.Total, session.winner == 0)
 	session.payout = &payout
 	if s.playerProfile != nil {
+		p := s.playerProfile
+		won := session.winner == 0
+		p.TotalGames++
+		p.TotalClashes += session.state.Clashes
+		if won {
+			p.TotalWins++
+			p.CurrentStreak++
+			p.WinsSinceCampDraw++
+			if p.WinsSinceCampDraw >= lootbox.WinsPerCampDraw {
+				if p.DrawsAvailable < lootbox.MaxDrawsStored {
+					p.DrawsAvailable++
+				}
+				p.WinsSinceCampDraw -= lootbox.WinsPerCampDraw
+			}
+			if p.CurrentStreak > p.BestStreak {
+				p.BestStreak = p.CurrentStreak
+			}
+		} else {
+			p.TotalLosses++
+			p.CurrentStreak = 0
+		}
+		mode := map[string]int{"hvh": economy.ModeIDFriendCasual, "easy": economy.ModeIDCPUEasy, "normal": economy.ModeIDCPUNormal, "hard": economy.ModeIDCPUHard}[session.mode]
+		suits := map[string]int{}
+		for _, card := range session.state.P1.Jail {
+			suits[achievements.SuitRoleID(card.Suit)]++
+		}
+		p.RecordMatch(profile.MatchRecord{At: time.Now().UTC(), Mode: mode, PlayerSeat: session.state.P1.Seat.String(), PlayerScore: p1.Total, OppScore: p2.Total, Won: won, BountySuit: achievements.SuitRoleID(session.state.Bounty.Suit), PlayerPrisoners: len(session.state.P1.Jail), OppPrisoners: len(session.state.P2.Jail), PlayerPrisonerSuits: suits, Clashes: session.state.Clashes, MarksEarned: payout.TotalMarks})
 		if s.playerProfile.HeroPlayCounts == nil {
 			s.playerProfile.HeroPlayCounts = make(map[string]int)
 		}
@@ -1858,6 +1907,9 @@ func decodeJSON(r *http.Request, value any) error {
 	decoder := json.NewDecoder(io.LimitReader(r.Body, 1<<20))
 	if err := decoder.Decode(value); err != nil {
 		return fmt.Errorf("invalid request: %w", err)
+	}
+	if err := decoder.Decode(new(any)); err != io.EOF {
+		return errors.New("request must contain one JSON object")
 	}
 	return nil
 }

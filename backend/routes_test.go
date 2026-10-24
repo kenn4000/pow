@@ -1,6 +1,7 @@
 package main
 
 import (
+	"database/sql"
 	"math/rand"
 	"net/http"
 	"net/http/httptest"
@@ -26,6 +27,35 @@ func TestPrefixedDeploymentRoutes(t *testing.T) {
 			handler.ServeHTTP(response, httptest.NewRequest(http.MethodGet, test.path, nil))
 			if response.Code != test.code {
 				t.Fatalf("status = %d, want %d: %s", response.Code, test.code, response.Body.String())
+			}
+		})
+	}
+}
+
+func TestNestedChiRouteScopes(t *testing.T) {
+	t.Setenv("BASE_PATH", "/games/cards")
+	router := (&webServer{db: new(sql.DB)}).routes()
+	for _, test := range []struct {
+		method, path, origin string
+		status               int
+	}{
+		{"GET", "/healthz", "", 200},
+		{"GET", "/games/cards/", "", 200},
+		{"GET", "/games/cards/skins/tribal_red/small_idle.png", "", 200},
+		{"GET", "/games/cards/api/state", "", 401},
+		{"GET", "/games/cards/api/admin/users", "", 401},
+		{"GET", "/games/cards/api/auth/me", "", 401},
+		{"POST", "/games/cards/api/auth/logout", "https://attacker.example", 403},
+		{"GET", "/api/state", "", 404},
+		{"GET", "/games/cards/missing", "", 404},
+	} {
+		t.Run(test.method+test.path, func(t *testing.T) {
+			r := httptest.NewRequest(test.method, test.path, nil)
+			r.Header.Set("Origin", test.origin)
+			w := httptest.NewRecorder()
+			router.ServeHTTP(w, r)
+			if w.Code != test.status {
+				t.Fatalf("status %d, want %d: %s", w.Code, test.status, w.Body.String())
 			}
 		})
 	}

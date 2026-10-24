@@ -54,9 +54,38 @@ spec:
               value: /data
             - name: BASE_PATH
               value: /prisoner-of-war
+            - name: PGHOST
+              value: {{ $.Release.Name }}-postgres
+            - name: PGDATABASE
+              value: {{ $.Values.postgres.database | quote }}
+            - name: PGUSER
+              value: {{ $.Values.postgres.username | quote }}
+            - name: PGPASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: {{ $.Values.postgres.existingSecret | default (printf "%s-postgres" $.Release.Name) }}
+                  key: password
+            - name: PUBLIC_URL
+              value: {{ printf "https://%s" $.Values.ingress.host | quote }}
+            - name: COOKIE_SECURE
+              value: "true"
+            {{- with $.Values.bootstrapAdmin.existingSecret }}
+            - name: BOOTSTRAP_ADMIN_EMAIL
+              valueFrom:
+                secretKeyRef:
+                  name: {{ . }}
+                  key: email
+            - name: BOOTSTRAP_ADMIN_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: {{ . }}
+                  key: password
+            {{- end }}
+          {{- if $.Values.persistence.enabled }}
           volumeMounts:
             - name: profile
               mountPath: /data
+          {{- end }}
           {{- end }}
           securityContext:
             allowPrivilegeEscalation: false
@@ -64,8 +93,14 @@ spec:
               drop: [ALL]
           readinessProbe:
             httpGet:
+              path: {{ if eq $component "backend" }}/readyz{{ else }}/healthz{{ end }}
+              port: http
+          startupProbe:
+            httpGet:
               path: /healthz
               port: http
+            failureThreshold: 30
+            periodSeconds: 5
           livenessProbe:
             httpGet:
               path: /healthz
@@ -73,7 +108,7 @@ spec:
             initialDelaySeconds: 10
           resources:
             {{- toYaml $config.resources | nindent 12 }}
-      {{- if eq $component "backend" }}
+      {{- if and (eq $component "backend") $.Values.persistence.enabled }}
       volumes:
         - name: profile
           {{- if $.Values.persistence.enabled }}

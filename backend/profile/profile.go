@@ -22,6 +22,7 @@ const (
 )
 
 type Profile struct {
+	saveHandler               func(*Profile) error
 	SchemaVersion             int                          `json:"schema_version"`
 	PlayerID                  string                       `json:"player_id"`
 	CreatedAt                 time.Time                    `json:"created_at"`
@@ -239,11 +240,20 @@ func LoadProfileFrom(path string) (*Profile, error) {
 }
 
 func (p *Profile) Save() error {
+	if p != nil && p.saveHandler != nil {
+		p.SchemaVersion = SchemaVersion
+		p.UpdatedAt = time.Now().UTC()
+		return p.saveHandler(p)
+	}
 	path, err := ProfileFilePath()
 	if err != nil {
 		return err
 	}
 	return p.SaveTo(path)
+}
+
+func (p *Profile) SetSaveHandler(handler func(*Profile) error) {
+	p.saveHandler = handler
 }
 
 func (p *Profile) SaveTo(path string) error {

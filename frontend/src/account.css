@@ -1,0 +1,20 @@
+.account-bar { position: relative; z-index: 5; display: flex; flex-wrap: wrap; justify-content: space-between; align-items: center; gap: .6rem; max-width: 1100px; margin: 0 auto; padding: .65rem 1rem; background: #101624; border-bottom: 1px solid #344159; }
+.account-bar nav { display: flex; flex-wrap: wrap; gap: .4rem; }
+.account-bar button, .account-page button { padding: .6rem .9rem; border: 1px solid #62718b; border-radius: 6px; color: #f3f4ef; background: #263047; cursor: pointer; }
+.account-bar button[aria-current], .account-page button[type=submit] { color: #101624; background: #f0c75e; }
+.account-page { max-width: 1000px; padding: 1.5rem; margin: 1rem auto 6rem; }
+.auth-page { max-width: 440px; }
+.account-page form, .account-page label { display: grid; gap: .65rem; }
+.account-page form { margin: 1.5rem 0; }
+.account-page input, .account-page select { padding: .75rem; border: 1px solid #62718b; border-radius: 5px; color: #f3f4ef; background: #101624; font: inherit; }
+.account-page [role=alert], .account-bar [role=alert] { color: #ffb3b3; }
+.account-page button:disabled { opacity: .5; cursor: wait; }
+.table-scroll { overflow-x: auto; }
+.account-page table { width: 100%; border-collapse: collapse; margin: 1rem 0; }
+.account-page th, .account-page td { padding: .75rem; text-align: left; border-bottom: 1px solid #344159; }
+.saved-games { list-style: none; padding: 0; display: grid; gap: 1rem; }
+.saved-games li { padding: 1rem; background: #101624; border: 1px solid #344159; border-radius: 8px; }
+.saved-games time { display: block; margin: .5rem 0; color: #aeb9cb; }
+.account-page pre { max-height: 32rem; overflow: auto; padding: 1rem; background: #101624; font-size: .8rem; }
+.account-page details { margin: .75rem 0; }
+.account-page summary { cursor: pointer; }
