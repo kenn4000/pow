@@ -82,7 +82,7 @@ Marks: 4,000.
 ## Adding a campaign
 
 1. Define the campaign and its missions in a campaign-specific file such as
-   `campaigns/new_campaign.go`.
+   `backend/campaigns/new_campaign.go`.
 2. Set each mission's sequential `Index`, type, briefing and hint, AI level,
    allowed hero IDs, and mission Marks.
 3. For scripted missions, ensure each physical card appears only once across
@@ -92,4 +92,4 @@ Marks: 4,000.
 4. Set `Requires` to the preceding campaign ID, or leave it empty for an
    introductory campaign. Add completion rewards to the campaign definition.
 5. Add mission-runner and progression tests, update this document, then run
-   `go test ./...` and `go build ./...`.
+   `GOWORK=off go -C backend test ./...` and `GOWORK=off go -C backend build ./...` from the repository root.

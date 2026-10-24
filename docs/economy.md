@@ -67,7 +67,7 @@ at local midnight.
 
 ## Camp Draw
 
-See [README-campdraw.md](./README-campdraw.md) for the minigame, box tables,
+See [campdraw.md](./campdraw.md) for the minigame, box tables,
 pending seasonal boxes, simulation flag, and tuning details.
 
 ## Skills, shop, and chromas
@@ -86,7 +86,7 @@ yellow, and blue.
 ## CLI
 
 ```powershell
-go run . --ui terminal
+GOWORK=off go -C backend run . --ui terminal
 ```
 
 The terminal opens on a dashboard with balances, energy and recharge timing,
@@ -119,11 +119,11 @@ To inspect the current economy values, skill tree, catalog, and bundles as
 JSON:
 
 ```powershell
-go run . --dump-economy
+GOWORK=off go -C backend run . --dump-economy
 ```
 
 For development, set the profile directory through `HOME`/`USERPROFILE`, or
 call `profile.LoadProfileFrom` and `Profile.SaveTo` with an explicit test path.
 
 For the complete achievement catalog, set rewards, match history, and gallery
-behavior, see [README-achievements.md](./README-achievements.md).
+behavior, see [achievements.md](./achievements.md).

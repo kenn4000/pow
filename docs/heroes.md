@@ -22,7 +22,7 @@ for every game, including each game in a best-of-three match.
 
 The Hater flips the other hero's Bounty contribution only; it never changes
 Shift or Favored. The Hero Box acquisition rules and Campaign missions are
-documented in [README-heroes-acquisition.md](./README-heroes-acquisition.md).
+documented in [heroes-acquisition.md](./heroes-acquisition.md).
 
 ## Combining heroes
 
@@ -83,7 +83,7 @@ Run every unordered hero pair (including mirror matches) with greedy-vs-greedy
 and greedy-vs-random games. The 11-hero roster has 66 pairings:
 
 ```powershell
-go run . --sim-heroes 100
+GOWORK=off go -C backend run . --sim-heroes 100
 ```
 
 The report flags pairings against these targets:

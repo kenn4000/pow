@@ -674,7 +674,7 @@
       const requestPath = dashboardPreview
         ? `${path}${path.includes("?") ? "&" : "?"}preview=dashboard`
         : path;
-      const response = await fetch(requestPath, body ? {
+      const response = await fetch(`${import.meta.env.BASE_URL}${requestPath.replace(/^\//, "")}`, body ? {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(body)
@@ -700,7 +700,7 @@
       const faceColor = options.faceColor || colorVars[color] || "var(--paper)";
       const ariaLabel = options.hideFace ? `${color} card` : `${color} ${face}`;
       return `<${tag} class="card skin-card${chosen ? " chosen" : ""}${mirrored}" style="--card-suit-color:${faceColor}" ${attrs} aria-label="${esc(ariaLabel)}">
-        <img class="card-art" src="/skins/${skin}/${tier}_${pose}.png?v=3" alt="" aria-hidden="true">
+        <img class="card-art" src="${import.meta.env.BASE_URL}skins/${skin}/${tier}_${pose}.png?v=3" alt="" aria-hidden="true">
         ${faceMarkup}
       </${tag}>`;
     }
@@ -780,7 +780,7 @@
               style="--suit-node-color:${colorVars[suitColors[suit]]}"
               aria-label="${suitColors[suit]} suit color, open color menu" aria-haspopup="menu"
               aria-expanded="${openSuitMenu === suit}">
-              <img src="/skins/${skinFolders[suitColors[suit]]}/large_attack.png?v=3" alt="" aria-hidden="true">
+              <img src="${import.meta.env.BASE_URL}skins/${skinFolders[suitColors[suit]]}/large_attack.png?v=3" alt="" aria-hidden="true">
             </button>
             ${menu}
           </div>`;

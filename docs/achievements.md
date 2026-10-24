@@ -2,7 +2,7 @@
 
 Achievements are stored with the local player profile and evaluated by the
 terminal progression flow. They do not change card resolution, scoring, the
-deck, or AI decisions. See [README-economy.md](./README-economy.md) for the
+deck, or AI decisions. See [economy.md](./economy.md) for the
 broader progression economy.
 
 ## Progress and rewards
@@ -107,5 +107,5 @@ progression data adapters; they do not change game rules. Achievement and set
 definitions are also included in the JSON output from:
 
 ```powershell
-go run . --dump-economy
+GOWORK=off go -C backend run . --dump-economy
 ```

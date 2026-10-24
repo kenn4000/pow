@@ -1,7 +1,6 @@
 package main
 
 import (
-	"embed"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -13,9 +12,7 @@ import (
 	"net"
 	"net/http"
 	"os"
-	"os/exec"
 	"path"
-	"runtime"
 	"strings"
 	"sync"
 	"time"
@@ -31,10 +28,10 @@ import (
 	"prisonersofwar/lootbox"
 	"prisonersofwar/profile"
 	"prisonersofwar/skills"
+	"prisonersofwar/skins"
 )
 
-//go:embed web/index.html skins
-var webFiles embed.FS
+var webFiles = skins.Files
 
 type webServer struct {
 	mu                  sync.Mutex
@@ -383,6 +380,13 @@ func startWebUI(listenAddress, defaultMode string) error {
 		defaultMode:   defaultMode,
 		playerProfile: playerProfile,
 	}
+	mux := server.routes()
+	address := "http://" + listener.Addr().String()
+	fmt.Printf("Prisoners of War API running at %s\n", address)
+	return (&http.Server{Handler: mux, ReadHeaderTimeout: 5 * time.Second}).Serve(listener)
+}
+
+func (server *webServer) routes() http.Handler {
 	mux := http.NewServeMux()
 	mux.HandleFunc("/", server.handlePage)
 	mux.HandleFunc("/skins/", server.handleSkinAsset)
@@ -397,25 +401,19 @@ func startWebUI(listenAddress, defaultMode string) error {
 	mux.HandleFunc("/api/profile", server.handleProfile)
 	mux.HandleFunc("/api/campaigns", server.handleCampaigns)
 	mux.HandleFunc("/api/history", server.handleHistory)
-	address := "http://" + listener.Addr().String()
-	fmt.Printf("Prisoners of War UI running at %s\n", address)
-	openLocalBrowser(address)
-	return http.Serve(listener, mux)
-}
-
-func openLocalBrowser(address string) {
-	var command *exec.Cmd
-	switch runtime.GOOS {
-	case "windows":
-		command = exec.Command("rundll32", "url.dll,FileProtocolHandler", address)
-	case "darwin":
-		command = exec.Command("open", address)
-	default:
-		command = exec.Command("xdg-open", address)
+	mux.HandleFunc("/healthz", func(w http.ResponseWriter, r *http.Request) {
+		writeJSON(w, http.StatusOK, map[string]string{"status": "ok"})
+	})
+	basePath := strings.TrimRight(os.Getenv("BASE_PATH"), "/")
+	if basePath == "" {
+		return mux
 	}
-	if err := command.Start(); err != nil {
-		fmt.Fprintf(os.Stderr, "Could not open a browser automatically: %v\nOpen %s manually.\n", err, address)
-	}
+	root := http.NewServeMux()
+	root.HandleFunc("/healthz", func(w http.ResponseWriter, r *http.Request) {
+		writeJSON(w, http.StatusOK, map[string]string{"status": "ok"})
+	})
+	root.Handle(basePath+"/", http.StripPrefix(basePath, mux))
+	return root
 }
 
 func (s *webServer) handlePage(w http.ResponseWriter, r *http.Request) {
@@ -427,16 +425,7 @@ func (s *webServer) handlePage(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
 		return
 	}
-	page, err := webFiles.ReadFile("web/index.html")
-	if err != nil {
-		http.Error(w, "UI asset unavailable", http.StatusInternalServerError)
-		return
-	}
-	w.Header().Set("Content-Type", "text/html; charset=utf-8")
-	w.Header().Set("Cache-Control", "no-store")
-	if _, err := w.Write(page); err != nil {
-		fmt.Fprintf(os.Stderr, "write game UI response: %v\n", err)
-	}
+	writeJSON(w, http.StatusOK, map[string]string{"service": "prisoners-of-war", "frontend": "Run the Vite frontend or deploy the Helm chart"})
 }
 
 func (s *webServer) handleSkinAsset(w http.ResponseWriter, r *http.Request) {
@@ -449,7 +438,7 @@ func (s *webServer) handleSkinAsset(w http.ResponseWriter, r *http.Request) {
 		http.NotFound(w, r)
 		return
 	}
-	asset, err := webFiles.ReadFile(name)
+	asset, err := webFiles.ReadFile(strings.TrimPrefix(name, "skins/"))
 	if errors.Is(err, fs.ErrNotExist) {
 		http.NotFound(w, r)
 		return

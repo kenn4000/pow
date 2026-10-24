@@ -1,0 +1,36 @@
+backend:
+  image:
+    repository: registry.markdownthing.com/kenn/prisoners-of-war/backend
+    tag: latest
+    pullPolicy: IfNotPresent
+  resources:
+    requests:
+      cpu: 50m
+      memory: 64Mi
+    limits:
+      cpu: "1"
+      memory: 256Mi
+frontend:
+  image:
+    repository: registry.markdownthing.com/kenn/prisoners-of-war/frontend
+    tag: latest
+    pullPolicy: IfNotPresent
+  resources:
+    requests:
+      cpu: 25m
+      memory: 32Mi
+    limits:
+      cpu: 250m
+      memory: 128Mi
+imagePullSecrets:
+  - name: gitlab-registry
+persistence:
+  enabled: true
+  storageClass: local-path
+  size: 1Gi
+ingress:
+  enabled: true
+  className: traefik
+  host: games.markdownthing.com
+  issuer: letsencrypt-prod
+  tlsSecretName: games-markdownthing-com-tls

@@ -1,7 +1,28 @@
 # Prisoners of War
 
-A two-player, three-round card game with a local browser UI and a terminal
-fallback. It uses only the Go standard library and targets Go 1.21 or newer.
+A two-player, three-round card game with a Go backend, Vite/React frontend,
+terminal interface, and Helm deployment to
+`https://games.markdownthing.com/prisoner-of-war/`.
+
+## Repository layout
+
+```text
+backend/                    Go module, server, game packages, tests, and artwork
+frontend/                   Vite/React app and frontend container
+deploy/helm/prisoner-of-war/ Helm chart for k3s
+docs/                       Game systems and feature guides
+.gitlab-ci.yml              Test → build images → in-cluster Helm deployment
+```
+
+Go module metadata and all Go packages live under `backend/`. The backend uses the Go
+standard library. Local development requires Go 1.21+ and Node 22.12+.
+See [deployment setup](deploy/README.md) for GitLab variables and cluster commands.
+
+The existing browser screens and renderer are preserved in
+`frontend/src/game.html`. Vite extracts its CSS, static shell, and controller
+into compiled modules; the React `App` mounts and manages the renderer's
+lifecycle. This is an incremental React integration; the game screens still
+use the existing DOM renderer.
 
 ## Rules summary
 
@@ -28,11 +49,19 @@ fallback. It uses only the Go standard library and targets Go 1.21 or newer.
 
 ## Run the graphical UI
 
-```powershell
-go run .
+```sh
+GOWORK=off go -C backend run .
 ```
 
-The local browser UI opens at `http://127.0.0.1:8080`. It draws the bounty and
+In another terminal, start Vite:
+
+```sh
+npm --prefix frontend ci
+npm --prefix frontend run dev
+```
+
+Open `http://localhost:5173/prisoner-of-war/`. Vite proxies API and artwork
+requests to the Go server at `127.0.0.1:8080`. The UI draws the bounty and
 nine battle cells, capture borders, live score, current battle, piles, and
 hands. Cards use configurable colors for Scissors, Paper, and Rock. Click a
 suit circle to select one of eight colors; each suit must use a different
@@ -46,19 +75,19 @@ White.
 The UI offers Human vs Human and Human vs AI at Easy, Normal, or Hard. A mode
 can be preselected:
 
-```powershell
-go run . --mode hvh
-go run . --mode easy
-go run . --mode normal
-go run . --mode hard
+```sh
+GOWORK=off go -C backend run . --mode hvh
+GOWORK=off go -C backend run . --mode easy
+GOWORK=off go -C backend run . --mode normal
+GOWORK=off go -C backend run . --mode hard
 ```
 
 Each match selects heroes before play. The browser offers hero choices when
 starting a match; Human-vs-AI uses your saved default and lets the AI counter
 your last opponent. The terminal [8] Heroes screen lets you set a default and
 view hero records. The active modifiers and round weights are shown throughout
-the game. See [README-heroes.md](./README-heroes.md) for the roster, rules, and
-simulator details, and [README-heroes-acquisition.md](./README-heroes-acquisition.md)
+the game. See [heroes](docs/heroes.md) for the roster, rules, and
+simulator details, and [hero acquisition](docs/heroes-acquisition.md)
 for hero acquisition, campaigns, achievements, and skill tree additions.
 
 The browser dashboard also provides quick access to the Skill Tree, hero
@@ -71,14 +100,14 @@ To choose a different local address, use `--listen 127.0.0.1:8081`.
 
 ## Terminal fallback
 
-```powershell
-go run . --ui terminal
-go run . --ui terminal --mode hard
+```sh
+GOWORK=off go -C backend run . --ui terminal
+GOWORK=off go -C backend run . --ui terminal --mode hard
 ```
 
 The terminal starts with a progression menu for CPU games, local Ranked and
 friend matches, profile, heroes, campaigns, shop, skills, Camp Draws, and
-energy actions. See [README-campaigns.md](./README-campaigns.md) for the full
+energy actions. See [campaigns](docs/campaigns.md) for the full
 mission list, scripted setups, progression rules, and rewards. The Shop offers
 chromas, Hero Boxes, and direct hero purchases.
 At commit, enter exactly three distinct hand numbers separated by spaces or
@@ -86,13 +115,13 @@ commas. During a battle, enter the number of a pile card. At the start of
 Round 3, the eligible player enters `X` or `Y`. Invalid entries are rejected.
 ANSI suit colors can be disabled with `--no-color` or the `NO_COLOR`
 environment variable. Progression details and payout rules are in
-[README-economy.md](./README-economy.md).
+[economy](docs/economy.md).
 
 Print the economy configuration, including payouts, skills, chromas and
 bundles, as JSON:
 
-```powershell
-go run . --dump-economy
+```sh
+GOWORK=off go -C backend run . --dump-economy
 ```
 
 ## AI
@@ -108,18 +137,18 @@ go run . --dump-economy
 
 Run the unit and integration tests with:
 
-```powershell
-go test ./...
+```sh
+GOWORK=off go -C backend test ./...
 ```
 
 Run a headless Hard-vs-Hard simulation and print summary statistics with:
 
-```powershell
-go run . --sim 10000
+```sh
+GOWORK=off go -C backend run . --sim 10000
 ```
 
 Run all 66 hero pairings with greedy-vs-greedy and greedy-vs-random samples:
 
-```powershell
-go run . --sim-heroes 100
+```sh
+GOWORK=off go -C backend run . --sim-heroes 100
 ```

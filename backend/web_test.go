@@ -125,7 +125,7 @@ func TestWebSkinAssetsAreServedWithImageHeaders(t *testing.T) {
 	if response.Body.Len() == 0 {
 		t.Fatal("skin image response is empty")
 	}
-	original, err := webFiles.ReadFile("skins/tribal_red/small_idle.png")
+	original, err := webFiles.ReadFile("tribal_red/small_idle.png")
 	if err != nil {
 		t.Fatalf("read source skin image: %v", err)
 	}

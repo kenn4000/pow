@@ -51,7 +51,7 @@ func main() {
 	simCampDraws := flag.Int("sim-campdraw", 0, "run N headless Camp Draws and report reward statistics")
 	ui := flag.String("ui", "web", "user interface: web or terminal")
 	modeFlag := flag.String("mode", "", "game mode: hvh, easy, normal, or hard")
-	listen := flag.String("listen", "127.0.0.1:8080", "local web UI address")
+	listen := flag.String("listen", "127.0.0.1:8080", "HTTP listen address")
 	noColor := flag.Bool("no-color", false, "disable ANSI suit colors")
 	dumpEconomy := flag.Bool("dump-economy", false, "print economy, skill, chroma, and Camp Draw configuration as JSON")
 	flag.Parse()

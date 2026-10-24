@@ -1,0 +1,4 @@
+Game: https://{{ .Values.ingress.host }}/prisoner-of-war/
+
+Profile data is stored on {{ .Release.Name }}-profile.
+The backend runs one shared game/profile with one replica.
