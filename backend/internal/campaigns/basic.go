@@ -89,7 +89,7 @@ func basicCampaign() Campaign {
 			{
 				Index: 5, Name: "Standard",
 				Flavor: "No tricks, no bounties, no heroes. Just a straight match. Let's see if Basic Training stuck.",
-				Hint:   "This is a standard 3-round match. Seat X receives 6 cards and Seat Y receives 5. Commit 3 per round; hands refill between rounds. Best score after 3 rounds wins.",
+				Hint:   "This is a standard 3-round match. Both players begin with five cards. Commit 3 per round; hands refill between rounds. Best score after 3 rounds wins.",
 				Type:   ThreeRound, BountyOverride: intValue(0), ShiftOverride: intValue(0),
 				FavoredOverride: intValue(0), ReckoningOverride: weightsValue(standardWeights),
 				CPUMirrorIndex: -1, AILevel: AIEasy, AIHero: "recruit",

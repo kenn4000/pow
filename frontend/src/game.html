@@ -62,7 +62,8 @@
     .bounty-column { display: grid; grid-column: span 1; grid-template-columns: minmax(0, 1fr); gap: 5px; min-width: 0; }
     .track-cell { min-width: 0; height: clamp(96px, 11vw, 130px); display: flex; align-items: center; justify-content: center; position: relative; border: 2px solid #3d4b63; border-radius: 9px; background: #182133; }
     .track-cell.bounty { border: 3px solid var(--bounty-border-color, var(--gold)); background: #2b2614; }
-    .bounty-value { color: #ffe18a; font-size: clamp(8px, 1vw, 12px); font-weight: 800; line-height: 1.2; text-align: center; white-space: nowrap; }
+    .bounty-value { font-size: clamp(8px, 1vw, 12px); font-weight: 800; line-height: 1.2; text-align: center; white-space: nowrap; }
+    .shop-hero-icon { display: block; width: min(100%, 180px); height: 150px; margin: 8px auto; object-fit: contain; }
     .track-cell.white-capture { border-color: #fff; }
     .track-cell.black-capture { border-color: #000; box-shadow: 0 0 0 2px #8d99ad; }
     .track-cell .card { width: min(64px, calc(100% - 10px)); height: calc(100% - 10px); min-height: 0; }
@@ -123,7 +124,7 @@
     .match-info[hidden] { display: none; }
     .match-side { min-width: 0; }
     .match-hero { display: grid; justify-items: center; gap: 6px; min-width: 0; text-align: center; }
-    .hero-portrait { width: clamp(64px, 9vw, 112px); aspect-ratio: 1; display: grid; place-items: center; overflow: hidden; border: 3px solid #e7ebe8; border-radius: 10px; background: #353b37; box-shadow: 0 5px 13px #0005; }
+    .hero-portrait { width: clamp(102px, 14.4vw, 179px); aspect-ratio: 1; display: grid; place-items: center; overflow: hidden; border: 3px solid #e7ebe8; border-radius: 10px; background: #353b37; box-shadow: 0 5px 13px #0005; }
     .hero-portrait.black { border-color: #171b1a; }
     .hero-portrait img { width: 100%; height: 100%; object-fit: cover; }
     .hero-portrait { position: relative; }
@@ -167,7 +168,9 @@
     @keyframes battle-flash { from { opacity: 1; transform: translate(-50%, -50%) scale(.1) rotate(0); } to { opacity: 0; transform: translate(-50%, -50%) scale(1.8) rotate(70deg); } }
     @keyframes battle-ring { from { opacity: .9; transform: translate(-50%, -50%) scale(.1); } to { opacity: 0; transform: translate(-50%, -50%) scale(2.8); } }
     .battle .card { width: clamp(62px, 9vw, 93px); height: clamp(84px, 12vw, 119px); }
-    .battle .card.skin-card .face { top: -23px; font-size: clamp(20px, 3vw, 30px); }
+    .battle .card.skin-card .face, .card-row .card.skin-card .face {
+      top: -23px; font-size: clamp(20px, 3vw, 30px);
+    }
     .battle-empty { width: clamp(62px, 9vw, 93px); height: clamp(84px, 12vw, 119px); border: 2px dashed #4a5873; border-radius: 8px; }
     .players { display: grid; grid-template-columns: minmax(0, 1fr); margin-top: 16px; }
     .player-panel { min-width: 0; padding: 13px clamp(10px, 2vw, 18px) 16px; border: 1px solid #2a354a; border-radius: 12px; background: linear-gradient(145deg, #141b2aef, #101521ee); }
@@ -179,7 +182,7 @@
     .row-label { margin: 11px 0 6px; color: #e1e5e1; font-size: 10px; font-weight: 700; letter-spacing: .14em; text-align: center; text-transform: uppercase; }
     .player-card-rows { display: block; }
     .card-group { min-width: 0; }
-    .card-row { min-height: 74px; display: flex; align-items: center; gap: clamp(5px, 1vw, 11px); overflow-x: auto; padding: 4px 3px 8px; }
+    .card-row { min-height: 74px; display: flex; align-items: center; gap: clamp(5px, 1vw, 11px); overflow-x: auto; padding: 30px 3px 8px; }
     .pile-row, .hand-row { justify-content: center; }
     .card-row .card { width: clamp(44px, 5.5vw, 62px); height: clamp(60px, 7vw, 80px); }
     .card-row .card .face { font-size: clamp(21px, 3vw, 31px); }
@@ -316,6 +319,7 @@
       display: grid; place-items: center; width: 23px; height: 23px; flex: 0 0 auto;
       border: 1px solid #59677e; border-radius: 50%; color: #f2d170; font-size: 12px;
     }
+    .dashboard-resource-icon img { width: 17px; height: 17px; object-fit: contain; }
     .dashboard-resource:nth-child(2) .dashboard-resource-icon { border-color: #a27418; color: #ffc94d; }
     .dashboard-resource:nth-child(3) .dashboard-resource-icon { border-color: #255c9f; color: #60a5fa; }
     .dashboard-resource-copy { min-width: 0; }
@@ -384,6 +388,7 @@
     #dashboardAchievements::before { content: "★"; }
     #dashboardCampaigns::before { content: "⚑"; }
     #dashboardHistory::before { content: "◷"; }
+    #dashboardSkills::before { content: "⌘"; }
     .dashboard-action:hover { transform: translateY(-1px); border-color: #68758b; filter: brightness(1.12); }
     .dashboard-action:focus-visible, .dashboard-footer button:focus-visible { outline: 2px solid #facc15; outline-offset: 2px; }
     .dashboard-action.play, .dashboard-action.wide { grid-column: 1 / -1; }
@@ -469,6 +474,18 @@
     .feature-tab[aria-selected="true"] {
       border-color: #b89136; background: #463717; color: #ffe28a;
     }
+    .currency-icon { display: inline-block; width: 1.1em; height: 1.1em; object-fit: contain; vertical-align: -.2em; }
+    .inline-currency-icon { margin-inline: .12em; }
+    .currency-amount { display: inline-flex; align-items: center; gap: .28em; white-space: nowrap; }
+    .feature-balance-list { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 14px; }
+    .feature-balance { display: inline-flex; align-items: center; gap: 4px; white-space: nowrap; }
+    .chest-icon { display: inline-block; width: 40px; height: 40px; flex: 0 0 auto; object-fit: contain; vertical-align: middle; }
+    .camp-tiers { display: inline-flex; flex-wrap: wrap; align-items: center; gap: 5px 10px; }
+    .camp-tiers > span { display: inline-flex; align-items: center; gap: 3px; white-space: nowrap; }
+    .camp-tiers .chest-icon { width: 22px; height: 22px; }
+    .camp-reward-icon .chest-icon { width: 58px; height: 58px; }
+    .camp-reward-art .chroma-preview-frame { margin-top: 6px; }
+    .shop-box-icon { width: 42px; height: 42px; }
     .feature-section { padding: 13px; border: 1px solid #2a354a; border-radius: 12px; background: linear-gradient(145deg, #141b2a, #101521); }
     .feature-section h2 { margin: 0 0 10px; color: #e7c55e; font: 700 11px Georgia, "Times New Roman", serif; letter-spacing: .12em; text-transform: uppercase; }
     .feature-list { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 210px), 1fr)); gap: 8px; }
@@ -499,7 +516,7 @@
       .round-brace { height: 10px; }
       .round-weight { font-size: 9px; }
       .match-info { grid-template-columns: minmax(0, 1fr) minmax(118px, 1.4fr) minmax(0, 1fr); gap: 5px; margin: 12px 0; }
-      .hero-portrait { width: clamp(46px, 14vw, 68px); border-width: 2px; }
+      .hero-portrait { width: clamp(74px, 22.4vw, 109px); border-width: 2px; }
       .match-hero h2 { font-size: 10px; }
       .hero-score { font-size: 11px; }
       .match-rules { font-size: 9px; }
@@ -532,9 +549,9 @@
         </div>
       </div>
       <div class="dashboard-resources" aria-label="Player resources">
-        <div class="dashboard-resource"><span class="dashboard-resource-icon" aria-hidden="true">◈</span><div class="dashboard-resource-copy"><span>Marks</span><strong id="dashboardMarks">—</strong></div></div>
-        <div class="dashboard-resource"><span class="dashboard-resource-icon" aria-hidden="true">✦</span><div class="dashboard-resource-copy"><span>Crowns</span><strong id="dashboardCrowns">—</strong></div></div>
-        <div class="dashboard-resource"><span class="dashboard-resource-icon" aria-hidden="true">⚡</span><div class="dashboard-resource-copy"><span>Energy</span><strong id="dashboardEnergy">—</strong><small id="dashboardEnergyNext" hidden></small></div></div>
+        <div class="dashboard-resource"><span id="dashboardMarksIcon" class="dashboard-resource-icon" aria-hidden="true"></span><div class="dashboard-resource-copy"><span>Marks</span><strong id="dashboardMarks">—</strong></div></div>
+        <div class="dashboard-resource"><span id="dashboardCrownsIcon" class="dashboard-resource-icon" aria-hidden="true"></span><div class="dashboard-resource-copy"><span>Crowns</span><strong id="dashboardCrowns">—</strong></div></div>
+        <div class="dashboard-resource"><span id="dashboardEnergyIcon" class="dashboard-resource-icon" aria-hidden="true"></span><div class="dashboard-resource-copy"><span>Energy</span><strong id="dashboardEnergy">—</strong><small id="dashboardEnergyNext" hidden></small></div></div>
       </div>
     </header>
     <p id="routeNotice" class="route-notice" role="status" hidden></p>
@@ -576,6 +593,7 @@
           <button id="dashboardAchievements" class="dashboard-action half" type="button">Achievements</button>
           <button id="dashboardCampaigns" class="dashboard-action half" type="button">Campaigns</button>
           <button id="dashboardHistory" class="dashboard-action half" type="button">Match History</button>
+          <button id="dashboardSkills" class="dashboard-action half" type="button">Skills</button>
         </div>
       </section>
       <button id="dashboardShop" class="shop-preview" type="button" aria-label="Open shop and see today's featured item">
@@ -605,7 +623,7 @@
     <button id="dashboardNavShop" type="button" data-nav="shop"><span aria-hidden="true">▣</span><span>Shop</span></button>
     <button id="dashboardNavBattle" class="nav-battle" type="button" data-nav="battle"><span aria-hidden="true">⚔</span><span>Battle</span></button>
     <button id="dashboardNavHeroes" type="button" data-nav="heroes"><span aria-hidden="true">♜</span><span>Heroes</span></button>
-    <button id="dashboardNavSkills" type="button" data-nav="skills"><span aria-hidden="true">⌘</span><span>Skills</span></button>
+    <button id="dashboardNavSocial" type="button" data-nav="social"><span aria-hidden="true">☻</span><span>Social</span></button>
   </nav>
   <main id="gameShell" class="shell hidden">
     <header class="topline">
@@ -714,6 +732,8 @@
     let showModeSelection = false;
     let battleAnimation = null;
     let battleAnimationTimer = null;
+    let aiDraftTimer = null;
+    let aiDraftPendingKey = "";
     const skillTreeBranches = [
       { id: "battle-rewards", label: "Battle Rewards", icon: "BattleRewards.png", nodeIDs: ["quartermaster", "field-warden", "first-blood"] },
       { id: "camp-draw", label: "Camp Draw", icon: "CampDraw.png", nodeIDs: ["camp-lore", "fortune", "chroma-curator"] },
@@ -782,7 +802,6 @@
       return `<${tag} class="card skin-card${chosen ? " chosen" : ""}${mirrored}" style="--card-suit-color:${faceColor}" ${attrs} aria-label="${esc(ariaLabel)}">
         <img class="card-art" style="${appearance?.filter ? `filter:${appearance.filter}` : ''}" src="${import.meta.env.BASE_URL}skins/${skin}/${tier}_${pose}.png?thumb=160" alt="" aria-hidden="true">
         ${faceMarkup}
-        <span class="card-suit" aria-hidden="true">${['✂', '▤', '◆'][card.suit]} ${suits[card.suit]}</span>
       </${tag}>`;
     }
 
@@ -871,7 +890,6 @@
               aria-expanded="${openSuitMenu === suit}">
               <img src="${import.meta.env.BASE_URL}skins/${skinFolders[suitColors[suit]]}/large_attack.png?v=3" alt="" aria-hidden="true">
             </button>
-            <span class="suit-name">${suits[suit]}</span>
             ${menu}
           </div>`;
         }).join("")}<button type="button" class="rotate-colors" data-rotate-colors
@@ -946,7 +964,7 @@
         <div class="track-cell bounty" style="--bounty-border-color:${colorVars[suitColors[state.bounty.suit]]}">
           ${cardMarkup(state.bounty, { pose: "win", hideFace: true })}
         </div>
-        <span class="bounty-value">${suits[state.bounty.suit]} ${formatModifier(state.modifiers.bounty)}</span>
+        <span class="bounty-value" style="color:${colorVars[suitColors[state.bounty.suit]]}">Bounty: ${formatModifier(state.modifiers.bounty)}</span>
       </div>`;
       const rounds = [0, 1, 2].map(roundIndex => {
         const slots = state.jailSlots.slice(roundIndex * 3, roundIndex * 3 + 3)
@@ -981,8 +999,10 @@
 
     function heroPanelMarkup(player, heroName, heroID) {
       const color = player.color.toLowerCase();
-      const title = heroName || "Commander";
       const playerIndex = state.players.indexOf(player);
+      const title = !state.campaign && state.mode !== "hvh" && playerIndex !== 0
+        ? ({easy:"Easy CPU",normal:"Medium CPU",hard:"Hard CPU"}[state.mode] || "Easy CPU")
+        : heroName || "Commander";
       const icon = state.campaign && playerIndex !== 0 ? "coach"
         : state.mode !== "hvh" && playerIndex !== 0
           ? ({easy:"cpu_easy",normal:"cpu_med",hard:"cpu_hard"}[state.mode] || "cpu_easy")
@@ -1040,6 +1060,25 @@
         container.innerHTML = "";
         return;
       }
+      if (state.phase === "draft") {
+        const playerIndex = state.mode === "hvh" ? state.actor : 0;
+        const player = state.players[playerIndex];
+        const colorClass = player.color.toLowerCase();
+        const privateHand = state.draftHand || [];
+        const privatePicks = state.draftPicked || [];
+        const draftedHand = privateHand.map(card => cardMarkup({card})).join("");
+        const draftedPicks = privatePicks.map(card => cardMarkup({card})).join("");
+        container.innerHTML = `<article class="player-panel ${colorClass} draft-player-panel">
+          <div class="player-heading"><h2>${esc(playerLabel(player))}</h2>
+            <span>Draft pick ${state.draftPickNumber} of ${state.draftPickTotal}</span></div>
+          <div class="player-card-rows">
+            <section class="card-group"><div class="row-label">Your private dealt cards</div><div class="card-row hand-row">${draftedHand || '<span class="empty-row">No dealt cards</span>'}</div></section>
+            <section class="card-group"><div class="row-label">Your draft picks · ${privatePicks.length} selected</div><div class="card-row pile-row">${draftedPicks || '<span class="empty-row">No picks yet</span>'}</div></section>
+          </div>
+          <p class="draft-opponent-count">Opponent picks: ${state.draftOpponentCount || 0} · Only your private cards are shown here.</p>
+        </article>`;
+        return;
+      }
       const playerIndex = state.mode === "hvh" ? state.actor : 0;
       const player = state.players[playerIndex];
       const committing = state.phase === "commit" && player.canSelectHand;
@@ -1052,7 +1091,7 @@
       container.innerHTML = `<article class="player-panel ${colorClass}${committing ? " committing" : ""}">
         <div class="player-heading">
           <h2>${esc(playerTitle)} · ${esc(player.color)}</h2>
-          <span>Seat ${esc(player.seat)} · ${player.score} ${player.score === 1 ? 'pt' : 'pts'}</span>
+          <span>${player.score} ${player.score === 1 ? 'pt' : 'pts'}</span>
         </div>
         <div class="player-instructions"></div>
         <div class="player-card-rows">
@@ -1087,6 +1126,25 @@
     }
 
     function renderBattle() {
+      const battle = document.querySelector(".battle");
+      battle.classList.toggle("drafting", state?.phase === "draft");
+      if (state?.phase === "draft") {
+        const cards = (state.draftPool || []).map(item => cardMarkup(item)).join("");
+        document.getElementById("battleLeft").innerHTML = `<div class="draft-battlefield">
+          <span class="battle-player-name">Public battlefield · ${state.draftPool.length} cards remain</span>
+          <div class="draft-card-pool">${cards}</div>
+        </div>`;
+        document.getElementById("battleRight").innerHTML = "";
+        const versus = document.getElementById("battleVs");
+        versus.classList.remove("exploding", "clash");
+        versus.textContent = `PICK ${state.draftPickNumber}/${state.draftPickTotal}`;
+        document.getElementById("battleLeft").querySelectorAll(".card[data-index]").forEach(button => {
+          button.addEventListener("click", () => {
+            if (state.phase === "draft") act("draft-pick", {index: Number(button.dataset.index)});
+          });
+        });
+        return;
+      }
       const animation = battleAnimation && battleAnimation.key === battleAnimationKey()
         ? battleAnimation : null;
       const resolved = state && state.battleOutcome;
@@ -1146,9 +1204,6 @@
         const commit = makeButton(`Lock in pile · ${selected.size}/3 selected`, () => act("commit", { cards: [...selected] }), "primary");
         commit.disabled = selected.size !== 3 || actionInProgress;
         actions.append(commit);
-      } else if (state.phase === "seat" && (state.mode === "hvh" || state.actor === 0)) {
-        actions.append(makeButton("Take seat X", () => act("seat", { seat: "X" }), "primary"));
-        actions.append(makeButton("Take seat Y", () => act("seat", { seat: "Y" }), "primary"));
       }
       if (state.phase !== "gameover" && state.phase !== "handoff" && activeMode) {
         const divider = document.createElement("span");
@@ -1267,7 +1322,7 @@
                 ? ` ×${(1 + payout.skillBonusPercent / 100).toFixed(2).replace(/0+$/, "").replace(/\.$/, "")} (Quartermaster +${payout.skillBonusPercent}%)`
                 : "";
               return `<section class="payout-breakdown" aria-label="Match Marks earnings">
-                <p class="payout-total">+${formatNumber(payout.totalMarks)} Marks</p>
+                <p class="payout-total">${currencyAmountMarkup(payout.totalMarks, "Marks", "+")}</p>
                 <p class="payout-formula">50 base + ${formatNumber(payout.playerScore)} score${winBonus}${skillMultiplier}</p>
               </section>`;
             })()
@@ -1280,7 +1335,7 @@
           ${tiebreakDetails}
           ${state.campaign ? `<p>${esc(state.campaign.result || '')}</p><a href="#/campaigns">Return to Campaigns</a>` : payoutDetails}
           ${state.dashboard ? `<dl class="result-summary">
-            <div><dt>Balance</dt><dd>${formatNumber(state.dashboard.marks)} Marks · ${formatNumber(state.dashboard.crowns)} Crowns</dd></div>
+            <div><dt>Balance</dt><dd>${currencyAmountMarkup(state.dashboard.marks, "Marks")} · ${currencyAmountMarkup(state.dashboard.crowns, "Crowns")}</dd></div>
             <div><dt>Camp Draw</dt><dd>${state.dashboard.winsSinceCampDraw} / ${state.dashboard.winsPerCampDraw} wins</dd></div>
             <div><dt>Achievements</dt><dd>${state.dashboard.unseenAchievements > 0 ? `<a href="#/achievements">${state.dashboard.unseenAchievements} new ${state.dashboard.unseenAchievements === 1 ? "update" : "updates"}</a>` : "No new updates"}</dd></div>
           </dl>` : ''}
@@ -1290,7 +1345,7 @@
             <button type="button" class="action secondary" id="chooseModeButton">Choose mode</button>
           </div>
           <a href="#/saved-games${state.gameId ? `/${state.gameId}` : ''}">Review saved match</a>
-          <details class="score-details"><summary>Achievement changes since match start</summary>${state.achievementUpdates?.length ? `<ul>${state.achievementUpdates.map(update => `<li>${esc(update)}</li>`).join('')}</ul>` : '<p>No new achievement tiers were awarded during this match.</p>'}</details>
+          <details class="score-details"><summary>Achievement changes since match start</summary>${state.achievementUpdates?.length ? `<ul>${state.achievementUpdates.map(update => `<li>${currencyTextMarkup(update)}</li>`).join('')}</ul>` : '<p>No new achievement tiers were awarded during this match.</p>'}</details>
           ${scoreBreakdownMarkup()}
         </section>`;
         modal.querySelector("#homeButton").addEventListener("click", openDashboard);
@@ -1315,6 +1370,35 @@
       return Number(value || 0).toLocaleString();
     }
 
+    function currencyIconMarkup(currency, className = "currency-icon", alt = "") {
+      const file = { marks: "marks.png", crowns: "crowns.png", energy: "energy.png" }[String(currency).toLowerCase()];
+      if (!file) return "";
+      return `<img class="${className}" src="${import.meta.env.BASE_URL}skins/icons/${file}" alt="${esc(alt)}"${alt ? "" : ' aria-hidden="true"'}>`;
+    }
+
+    function currencyAmountMarkup(value, currency, prefix = "") {
+      const formatted = formatNumber(value);
+      return `<span class="currency-amount" aria-label="${esc(`${prefix}${formatted} ${currency}`)}">${prefix}${formatted}${currencyIconMarkup(currency)}</span>`;
+    }
+
+    function currencyTextMarkup(value) {
+      return esc(value).replace(/\b(Marks|Crowns)\b/g, currency =>
+        currencyIconMarkup(currency, "currency-icon inline-currency-icon", currency));
+    }
+
+    function chestIconMarkup(type, alt = "", className = "chest-icon") {
+      const file = {
+        wooden: "wooden_chest.png",
+        silver: "silver_chest.png",
+        gold: "golden_chest.png",
+        diamond: "prismatic_chest.png",
+        prismatic: "prismatic_chest.png",
+        hero: "hero_chest.png"
+      }[String(type).toLowerCase()];
+      if (!file) return "";
+      return `<img class="${className}" src="${import.meta.env.BASE_URL}skins/icons/${file}" alt="${esc(alt)}"${alt ? "" : ' aria-hidden="true"'}>`;
+    }
+
     function renderDashboard() {
       const dashboard = state && state.dashboard;
       if (!dashboard) return;
@@ -1331,6 +1415,9 @@
         `<img src="${import.meta.env.BASE_URL}skins/hero_icons/${esc(heroIcon)}.png" alt="" aria-hidden="true">`;
       document.getElementById("dashboardAvatar").innerHTML =
         `<img src="${import.meta.env.BASE_URL}skins/hero_icons/${esc(heroIcon)}.png" alt="" aria-hidden="true">`;
+      document.getElementById("dashboardMarksIcon").innerHTML = currencyIconMarkup("marks");
+      document.getElementById("dashboardCrownsIcon").innerHTML = currencyIconMarkup("crowns");
+      document.getElementById("dashboardEnergyIcon").innerHTML = currencyIconMarkup("energy");
       document.getElementById("dashboardMarks").textContent = formatNumber(dashboard.marks);
       document.getElementById("dashboardCrowns").textContent = formatNumber(dashboard.crowns);
       const energy = `${dashboard.energy}/${dashboard.maxEnergy}`;
@@ -1399,7 +1486,8 @@
         skills: "/api/skills",
         profile: "/api/profile",
         campaigns: "/api/campaigns",
-        history: "/api/history"
+        history: "/api/history",
+        social: "/api/social"
       };
       const version = ++navigationVersion;
       currentFeature = feature;
@@ -1453,13 +1541,21 @@
         skills: "Skill Tree",
         profile: "Commander Record",
         campaigns: "Campaigns",
-        history: "Match History"
+        history: "Match History",
+        social: "Social"
       };
       document.getElementById("featureTitle").textContent = titles[currentFeature] || "Progression";
       const resources = featureData?.dashboard || state?.dashboard;
-      document.getElementById('featureBalances').textContent = resources ? `${formatNumber(resources.marks)} Marks · ${formatNumber(resources.crowns)} Crowns · ${resources.energy}/${resources.maxEnergy} Energy · ${resources.skillPoints} Skill ${resources.skillPoints === 1 ? 'Point' : 'Points'}` : '';
+      document.getElementById('featureBalances').innerHTML = resources
+        ? `<div class="feature-balance-list">
+            <span class="feature-balance">${currencyAmountMarkup(resources.marks, "Marks")}</span>
+            <span class="feature-balance">${currencyAmountMarkup(resources.crowns, "Crowns")}</span>
+            <span class="feature-balance" aria-label="${esc(`${resources.energy} of ${resources.maxEnergy} Energy`)}">${resources.energy}/${resources.maxEnergy}${currencyIconMarkup("energy")}</span>
+            <span class="feature-balance">${resources.skillPoints} Skill ${resources.skillPoints === 1 ? "Point" : "Points"}</span>
+          </div>`
+        : "";
       const message = document.getElementById("featureMessage");
-      message.textContent = featureError || (featureData && featureData.message) || "";
+      message.innerHTML = currencyTextMarkup(featureError || (featureData && featureData.message) || "");
       const tabs = document.getElementById("featureTabs");
       if (currentFeature === "shop") {
         const shopTabs = [
@@ -1520,6 +1616,9 @@
         case "history":
           content.innerHTML = renderHistoryFeature(featureData);
           break;
+        case "social":
+          content.innerHTML = renderSocialFeature(featureData);
+          break;
         default:
           content.innerHTML = "";
       }
@@ -1527,24 +1626,25 @@
 
     function renderCampDrawFeature(page) {
       const pending = Object.entries(page.pendingBoxes || {}).filter(([, count]) => count > 0);
-      const boxName = type => ({ wooden: "Wooden", silver: "Silver", gold: "Gold", diamond: "Diamond" })[type] || String(type || "");
+      const boxName = type => ({ wooden: "Wooden", silver: "Silver", gold: "Gold", diamond: "Diamond", prismatic: "Prismatic" })[type] || String(type || "");
       const outcomeName = outcome => outcome === 2 ? "Win" : outcome === 1 ? "Clash" : "Loss";
       const winsToNext = Math.max(0, (page.dashboard?.winsPerCampDraw || 10) - (page.dashboard?.winsSinceCampDraw || 0));
       const prizeText = (reward, chroma) => reward.chroma_id
-        ? `${chroma?.name || reward.chroma_id} chroma${reward.chroma_rarity ? ` · ${reward.chroma_rarity}` : ""}`
-        : reward.marks ? `${formatNumber(reward.marks)} Marks`
-          : reward.crowns ? `${formatNumber(reward.crowns)} Crowns` : "No listed reward";
-      const rewardPanel = (title, reward, chroma) => `<div class="camp-reward">
-          ${chroma ? `<div class="camp-reward-art">${chromaPreview(chroma)}</div>` : `<div class="camp-reward-icon" aria-hidden="true">${reward.crowns ? "✦" : "◈"}</div>`}
+        ? esc(`${chroma?.name || reward.chroma_id} chroma${reward.chroma_rarity ? ` · ${reward.chroma_rarity}` : ""}`)
+        : reward.marks ? currencyAmountMarkup(reward.marks, "Marks")
+          : reward.crowns ? currencyAmountMarkup(reward.crowns, "Crowns") : "No listed reward";
+      const rewardPanel = (title, reward, chroma, boxType) => `<div class="camp-reward">
+          <div class="camp-reward-icon">${chestIconMarkup(boxType, `${boxName(boxType)} chest`)}</div>
           <div><p class="camp-reward-eyebrow">${esc(title)}</p>
-            <p class="camp-reward-prize">${esc(prizeText(reward, chroma))}</p>
+            ${chroma ? `<div class="camp-reward-art">${chromaPreview(chroma)}</div>` : ""}
+            <p class="camp-reward-prize">${prizeText(reward, chroma)}</p>
             <p>${reward.chroma_id ? 'Added to your collection. <a href="#/shop/skins">Apply it to a suit in the Shop</a>.' : "Added to your balance."}</p>
             ${reward.fallback_reason ? `<p class="camp-note">${esc(reward.fallback_reason)}</p>` : ""}
           </div></div>`;
       let html = `<section class="feature-section">
         <h2>Available Draws</h2>
         <p>You have ${page.drawsAvailable} Camp Draw${page.drawsAvailable === 1 ? "" : "s"} available · ${winsToNext} more ${winsToNext === 1 ? "win" : "wins"} until the next one.</p>
-        <p>Play three exchanges against the camp. Each win upgrades the reward box: <span class="camp-tiers"><span>0 · Wooden</span><span>1 · Silver</span><span>2 · Gold</span><span>3 · Diamond</span></span></p>
+        <p>Play three exchanges against the camp. Each win upgrades the reward box: <span class="camp-tiers"><span>0 ${chestIconMarkup("wooden")} Wooden</span><span>1 ${chestIconMarkup("silver")} Silver</span><span>2 ${chestIconMarkup("gold")} Gold</span><span>3 ${chestIconMarkup("diamond")} Diamond</span></span></p>
         ${!page.started ? (page.drawsAvailable > 0
           ? featureActionButton(page.result ? "Start another Camp Draw" : "Start Camp Draw", "start-draw")
           : '<p class="camp-note">No draws left. <a href="#/match/new">Play a match</a> to earn progress toward the next one.</p>') : ""}`;
@@ -1581,7 +1681,7 @@
       if (pending.length) {
         html += `<section class="feature-section"><h2>Pending Boxes</h2><div class="feature-list">${
           pending.map(([boxType, count]) => `<article class="feature-item">
-            <h3>${esc(boxName(boxType))} Box × ${count}</h3>
+            <h3>${chestIconMarkup(boxType)} ${esc(boxName(boxType))} Box × ${count}</h3>
             ${featureActionButton(`Open ${boxName(boxType)} Box`, "open-box", `data-box-type="${esc(boxType)}"`)}
           </article>`).join("")
         }</div></section>`;
@@ -1590,13 +1690,13 @@
         const wins = page.result.player_wins;
         html += `<section class="feature-section camp-result">
           <h2>Draw Result · ${wins} ${wins === 1 ? "win" : "wins"} · ${esc(boxName(page.result.box_type))} Box</h2>
-          ${rewardPanel(`${boxName(page.result.box_type)} Box reward`, page.result.reward || {}, page.rewardChroma)}
+          ${rewardPanel(`${boxName(page.result.box_type)} Box reward`, page.result.reward || {}, page.rewardChroma, page.result.box_type)}
           <div class="feature-list">${(page.result.exchanges || []).map((exchange, index) => `<article class="feature-item camp-battle ${outcomeName(exchange.outcome).toLowerCase()}"><h3>Battle ${index + 1}: ${outcomeName(exchange.outcome)}</h3>
               <p>You: ${esc(campCardLabel(exchange.player_card))} · Camp: ${esc(campCardLabel(exchange.cpu_card))}</p></article>`).join("")}</div>
         </section>`;
       }
       if (page.boxResult) {
-        html += `<section class="feature-section"><h2>Box Opened</h2>${rewardPanel(`${boxName(page.boxResult.box_type)} Box reward`, page.boxResult, page.boxChroma)}</section>`;
+        html += `<section class="feature-section"><h2>Box Opened</h2>${rewardPanel(`${boxName(page.boxResult.box_type)} Box reward`, page.boxResult, page.boxChroma, page.boxResult.box_type)}</section>`;
       }
       return html;
     }
@@ -1621,13 +1721,13 @@
         <div class="feature-list">${items.map(item => {
           const percent = item.unlocked ? 100 : item.goal > 0 ? Math.min(100, item.progress * 100 / item.goal) : 0;
           const tiers = (item.tiers || []).map(tier =>
-            `<p>Tier ${esc(tier.name)} · Target: ${tier.goal} · Reward: ${esc(tier.rewards || 'Collection milestone')}</p>`
+            `<p>Tier ${esc(tier.name)} · Target: ${tier.goal} · Reward: ${currencyTextMarkup(tier.rewards || 'Collection milestone')}</p>`
           ).join("");
           return `<article class="feature-item achievement-card${item.unlocked ? " achievement-earned" : ""}">
             <h3>${esc(item.name)}${item.new ? ' <span class="feature-status">NEW</span>' : ""}</h3>
             <p>${esc(item.category)} · ${item.unlocked ? '<span class="achievement-chip">Earned</span>' : "In progress"}</p>
             <p>${esc(item.details)}</p>
-            ${item.rewards ? `<p>Reward: ${esc(item.rewards)}</p>` : ''}
+            ${item.rewards ? `<p>Reward: ${currencyTextMarkup(item.rewards)}</p>` : ''}
             <p>${item.progressUnit ? `${Math.min(item.progress,item.goal)} / ${item.goal} ${esc(item.progressUnit)}` : item.goal === 1 && !(item.tiers || []).length ? (item.unlocked ? 'Objective completed' : 'Objective not yet completed — see the requirement above') : `Progress toward next tier: ${item.progress}${item.goal > 0 ? ` / ${item.goal}` : ' · exact modifier targets listed below'}`}</p>
             <div class="feature-progress" role="progressbar" aria-label="${esc(item.name)} progress" aria-valuemin="0" aria-valuemax="100" aria-valuenow="${Math.round(percent)}"><span style="width:${percent}%"></span></div>${tiers ? `<details><summary>Tier requirements and rewards</summary>${tiers}</details>` : ''}
           </article>`;
@@ -1691,6 +1791,7 @@
     function renderShopHeroes(page) {
       const heroesForSale = (page.heroes || []).filter(item => item.hero.id !== "recruit").map(item => `<article class="feature-item${item.owned ? " is-owned" : ""}">
          <h3>${esc(item.hero.name)}${item.owned ? ' <span class="owned-chip">Owned</span>' : ""}</h3>
+         <img class="shop-hero-icon" src="${import.meta.env.BASE_URL}skins/hero_icons/${esc(heroIconNames[item.hero.id] || item.hero.id)}${item.owned ? "" : "_black"}.png?v=1" alt="${esc(item.hero.name)}${item.owned ? "" : " locked"}">
          ${heroDetails(item.hero)}
          <p>${item.plays} plays · ${item.wins} wins</p>
          ${!item.owned ? affordability(page.directHeroCost, page.dashboard.crowns, 'Crowns') : '<a href="#/heroes">Choose your default hero</a>'}
@@ -1711,10 +1812,10 @@
             : featureActionButton(`Open ${offer.name}`, "open-box", `data-box-type="${esc(offer.type)}"`)
           : "";
         return `<article class="feature-item">
-          <h3>${esc(offer.name)}</h3>
+          <h3>${chestIconMarkup(offer.type, "", "chest-icon shop-box-icon")} ${esc(offer.name)}</h3>
           <p>${formatNumber(offer.available)} available</p>
           <p>${esc(boxDescription(offer.type))}</p>
-          <details><summary>Reward amounts and first-roll chances</summary><p>These chances include your current loot-table skill adjustments. Duplicate conversion and any owned-chroma reroll are applied after this roll.</p><ul>${(page.rewardTables?.[offer.type] || []).map(prize => `<li>${esc(prize.label)} · ${prize.chance.toFixed(2)}%</li>`).join('')}</ul></details>
+          <details><summary>Reward amounts and first-roll chances</summary><p>These chances include your current loot-table skill adjustments. Duplicate conversion and any owned-chroma reroll are applied after this roll.</p><ul>${(page.rewardTables?.[offer.type] || []).map(prize => `<li>${currencyTextMarkup(prize.label)} · ${prize.chance.toFixed(2)}%</li>`).join('')}</ul></details>
           <p>${formatNumber(offer.cost)} ${currency}</p>
           ${affordability(offer.cost, balance, currency)}
           ${featureActionButton(`Buy for ${formatNumber(offer.cost)} ${currency}`, "buy-box",
@@ -1725,6 +1826,11 @@
       return `<section class="feature-section"><h2>Box Shop</h2>
         <p>Purchase boxes with Marks or Crowns. Open them here when available.</p>
         <div class="feature-list">${offers}</div>
+        <article class="feature-item">
+          <h3>${chestIconMarkup("prismatic")} Diamond Box</h3>
+          <p>Earn this prismatic chest through Camp Draw; it is not sold in the Shop.</p>
+          <a href="#/camp-draw">Go to Camp Draw</a>
+        </article>
       </section>`;
     }
 
@@ -1733,8 +1839,9 @@
       const owned = heroes.filter(hero => hero.unlocked).length;
       const initials = name => String(name || "").replace(/^The\s+/i, "").split(/\s+/).map(word => word.charAt(0)).join("").slice(0, 2).toUpperCase();
       const modifiers = hero => {
-        const chips = [["Bounty", hero.bounty], ["Shift", hero.shift], ["Favored", hero.favored]]
+        const chips = [["Bounty", hero.bounty], ["Shift", hero.shift], ["Favored", hero.favored], ["Draft", hero.draft]]
           .filter(([, value]) => value).map(([label, value]) => `<span class="hero-mod">${label} ${formatModifier(value)}</span>`);
+        if (hero.draftFlip) chips.push('<span class="hero-mod special">Negates the opponent’s Draft modifier</span>');
         if (hero.flip) chips.push('<span class="hero-mod special">Flips the opponent’s Bounty</span>');
         return chips.length ? chips.join("") : '<span class="hero-mod none">No modifiers · plays the base rules</span>';
       };
@@ -1833,7 +1940,7 @@
           return `<details class="feature-item mission mission-${state[0]}"${mission.canPlay && !mission.completed ? ' open' : ''}>
           <summary><span class="mission-title">${esc(mission.index)}. ${esc(mission.name)}</span><span class="mission-chip ${state[0]}">${state[1]}</span></summary>
           <p>${esc(mission.description)}</p>
-          <p>${mission.completed ? "Completed · free practice replay, no repeat rewards" : `Reward on first completion: ${formatNumber(mission.rewardMarks)} Marks · Energy cost: ${mission.energyCost}`}</p>
+          <p>${mission.completed ? "Completed · free practice replay, no repeat rewards" : `Reward on first completion: ${currencyAmountMarkup(mission.rewardMarks, "Marks")} · Energy cost: ${mission.energyCost}`}</p>
           ${(mission.heroes || []).length ? `<label class="mission-hero">Mission hero<select data-mission-hero="${esc(campaign.id)}-${mission.index}">${mission.heroes.map(hero => `<option value="${esc(hero.id)}">${esc(hero.name)}</option>`).join('')}</select></label>` : ''}
           ${featureActionButton(mission.completed ? 'Practice mission' : `Start ${mission.name}`, 'start-mission', `data-campaign="${esc(campaign.id)}" data-index="${mission.index}"`, !mission.canPlay || !mission.completed && page.dashboard.energy < mission.energyCost)}
           ${!mission.canPlay ? '<p>Complete the previous mission and unlock this campaign to play.</p>' : ''}
@@ -1866,7 +1973,7 @@
           <div class="match-card-head"><h3>${esc(result)}</h3><span class="match-score">${esc(record.player_score)}–${esc(record.opp_score)}</span></div>
           <p class="match-mode">${campaign ? `Campaign · ${esc(campaign)}` : esc(item.modeName)}</p>
           <p class="match-date">${esc(date)}</p>
-          <p>${plural(record.player_prisoners, "prisoner", "prisoners")} · ${plural(record.clashes, "clash", "clashes")} · ${formatNumber(record.marks_earned)} Marks earned</p>
+          <p>${plural(record.player_prisoners, "prisoner", "prisoners")} · ${plural(record.clashes, "clash", "clashes")} · ${currencyAmountMarkup(record.marks_earned, "Marks")} earned</p>
            <p>Bounty suit: ${esc({B:'Scissors',F:'Paper',S:'Rock'}[record.bounty_suit] || record.bounty_suit || "Unknown")}</p>
            <details><summary>Match details</summary><p>Your seat: ${esc(record.player_seat || 'Unknown')} · Opponent prisoners: ${record.opp_prisoners || 0}</p><a href="#/saved-games${record.game_id ? `/${esc(record.game_id)}` : ''}">Review saved match timeline</a>${!record.game_id ? '<p>This older record has no saved-match link. Choose its date from Saved games.</p>' : ''}</details>
         </article>`;
@@ -1880,6 +1987,71 @@
       </section>
       <section class="feature-section"><h2>Recent Matches</h2>
          ${matches ? `<div class="feature-list">${matches}</div>` : '<p>No matches yet. <a href="#/match/new">Play your first match</a>.</p>'}
+      </section>`;
+    }
+
+    function renderSocialFeature(data) {
+      const user = data.user || {};
+      const friends = (data.friends || []).map(friend => `
+        <article class="feature-item">
+          <h3>${esc(friend.handle)} <small>· ${formatNumber(friend.elo)} ELO</small></h3>
+          <div class="product-actions">${featureActionButton("Block player", "block-player", `data-handle="${esc(friend.handle)}"`)}</div>
+        </article>`).join("");
+      const incoming = (data.incomingRequests || []).map(request => `
+        <article class="feature-item">
+          <h3>${esc(request.handle)}</h3><p>${esc(request.message || "No note attached.")}</p>
+          <div class="product-actions">${featureActionButton("Accept", "accept-friend-request", `data-request-id="${esc(request.id)}"`)}
+          ${featureActionButton("Reject", "reject-friend-request", `data-request-id="${esc(request.id)}"`)}
+          ${featureActionButton("Block", "block-player", `data-handle="${esc(request.handle)}"`)}</div>
+        </article>`).join("");
+      const outgoing = (data.outgoingRequests || []).map(request => `
+        <article class="feature-item"><h3>${esc(request.handle)}</h3><p>Request pending${request.message ? ` · ${esc(request.message)}` : ""}</p></article>`).join("");
+      const blocks = (data.blocks || []).map(player => `
+        <article class="feature-item"><h3>${esc(player.handle)}</h3>
+          <div class="product-actions">${featureActionButton("Unblock", "unblock-player", `data-handle="${esc(player.handle)}"`)}</div>
+        </article>`).join("");
+      const messages = (data.messages || []).map(message => `
+        <article class="feature-item">
+          <h3>${esc(message.senderHandle)} → ${esc(message.recipientHandle)}</h3>
+          <p>${esc(message.body)}</p><small>${esc(new Date(message.createdAt).toLocaleString())}</small>
+        </article>`).join("");
+      const leaderboard = (data.leaderboard || []).map(player => `
+        <article class="feature-item"><h3>#${formatNumber(player.rank)} ${esc(player.handle)}</h3><p>${formatNumber(player.elo)} ELO</p></article>`).join("");
+      return `<section class="feature-section">
+        <h2>Player profile</h2>
+        <p><strong>${esc(user.handle || "")}</strong> · ${formatNumber(user.elo)} ELO · Rank #${formatNumber(user.rank)}</p>
+        <label>Change handle <input id="socialHandleInput" maxlength="20" value="${esc(user.handle || "")}" autocomplete="username"></label>
+        ${featureActionButton("Save handle", "save-social-handle")}
+      </section>
+      <section class="feature-section"><h2>Rankings</h2>
+        <div class="feature-list">${leaderboard || "<p>No rankings available.</p>"}</div>
+      </section>
+      <section class="feature-section">
+        <h2>Friend requests</h2>
+        <label>Player handle <input id="socialRequestHandle" maxlength="20" autocomplete="off"></label>
+        <label>Optional note (140 characters) <input id="socialRequestMessage" maxlength="140" autocomplete="off"></label>
+        ${featureActionButton("Send friend request", "send-friend-request")}
+        <h3>Incoming</h3><div class="feature-list">${incoming || "<p>No incoming requests.</p>"}</div>
+        <h3>Outgoing</h3><div class="feature-list">${outgoing || "<p>No pending requests.</p>"}</div>
+      </section>
+      <section class="feature-section"><h2>Friends</h2>
+        <div class="feature-list">${friends || "<p>Your friends list is empty.</p>"}
+          <label>Message a friend <input id="socialMessageHandle" maxlength="20" autocomplete="off"></label>
+          <label>Message <input id="socialMessageBody" maxlength="1000" autocomplete="off"></label>
+          ${featureActionButton("Send message", "send-social-message")}
+        </div>
+      </section>
+      <section class="feature-section"><h2>Recent messages</h2>
+        <div class="feature-list">${messages || "<p>No messages yet.</p>"}</div>
+      </section>
+      <section class="feature-section"><h2>Blocked players</h2>
+        <div class="feature-list">${blocks || "<p>You have not blocked anyone.</p>"}
+          <label>Player handle <input id="socialBlockHandle" maxlength="20" autocomplete="off"></label>
+          ${featureActionButton("Block player", "block-player-input")}
+        </div>
+      </section>
+      <section class="feature-section"><h2>Friendly wager limits</h2>
+        <p>Up to ${formatNumber(data.wagerLimits?.perGame)} Marks per game and ${formatNumber(data.wagerLimits?.per24Hours)} Marks total per 24 hours.</p>
       </section>`;
     }
 
@@ -1956,6 +2128,35 @@
           body = { action: "unlock", id: button.dataset.id, payment: button.dataset.payment };
           break;
         }
+        case "save-social-handle":
+          path = "/api/social/handle";
+          body = { handle: document.getElementById("socialHandleInput").value };
+          break;
+        case "send-friend-request":
+          path = "/api/social/requests";
+          body = { handle: document.getElementById("socialRequestHandle").value, message: document.getElementById("socialRequestMessage").value };
+          break;
+        case "accept-friend-request":
+        case "reject-friend-request":
+          path = `/api/social/requests/${encodeURIComponent(button.dataset.requestId)}/${action === "accept-friend-request" ? "accept" : "reject"}`;
+          body = {};
+          break;
+        case "block-player":
+          path = "/api/social/blocks";
+          body = { handle: button.dataset.handle };
+          break;
+        case "block-player-input":
+          path = "/api/social/blocks";
+          body = { handle: document.getElementById("socialBlockHandle").value };
+          break;
+        case "unblock-player":
+          path = "/api/social/unblock";
+          body = { handle: button.dataset.handle };
+          break;
+        case "send-social-message":
+          path = "/api/social/messages";
+          body = { handle: document.getElementById("socialMessageHandle").value, body: document.getElementById("socialMessageBody").value };
+          break;
         default:
           return;
       }
@@ -1966,6 +2167,20 @@
       try {
         let data = await api(path, body);
         if (version !== navigationVersion || lifecycle.signal.aborted) return;
+        if (currentFeature === "social") {
+          const notice = {
+            "save-social-handle": "Handle updated.",
+            "send-friend-request": "Friend request sent.",
+            "accept-friend-request": "Friend request accepted.",
+            "reject-friend-request": "Friend request rejected.",
+            "block-player": "Player blocked.",
+            "block-player-input": "Player blocked.",
+            "unblock-player": "Player unblocked.",
+            "send-social-message": "Message sent."
+          }[action];
+          data = await api("/api/social");
+          if (notice) data.message = notice;
+        }
         featureData = data;
         if (action === "open-box") {
           const result = featureData.boxResult || {};
@@ -2009,7 +2224,7 @@
       renderDashboard();
       if (showFeature) renderFeatureScreen();
       document.getElementById("roundLabel").textContent = state && state.started
-        ? `Round ${state.round} · ${state.phase === 'commit' ? 'Choose your pile' : state.phase === 'seat' ? 'Choose your seat' : state.phase === 'handoff' ? 'Pass the screen' : state.phase === 'gameover' ? 'Match complete' : `Battle ${Math.min(state.exchange, 3)} of 3`}`
+        ? `Round ${state.round} · ${state.phase === 'draft' ? `Opening draft · mode ${state.draftMode} · pick ${state.draftPickNumber} of ${state.draftPickTotal}` : state.phase === 'commit' ? 'Choose your pile' : state.phase === 'handoff' ? 'Pass the screen' : state.phase === 'gameover' ? 'Match complete' : `Battle ${Math.min(state.exchange, 3)} of 3`}`
         : "Card battle";
       setStatus(state && state.started ? playerMessage(state.message) : "Choose a game mode to begin.");
       const topScore = document.getElementById("topScore");
@@ -2024,6 +2239,7 @@
       renderSuitCycle();
       renderPlayers();
       renderActions();
+      scheduleAIDraftPick();
       renderModal();
       document.getElementById('battleExplanation').innerHTML = battleExplanationMarkup();
       document.getElementById('gameShell').dataset.phase = state?.phase || '';
@@ -2081,23 +2297,6 @@
         activeMode = state.mode;
         render();
       } catch (error) {
-        if (action === "seat") {
-          const previousPhase = state && state.phase;
-          const previousActor = state && state.actor;
-          try {
-            state = await api("/api/state");
-            activeMode = state.mode || "";
-            selected.clear();
-            render();
-            if (!state.started || state.phase !== previousPhase || state.actor !== previousActor) {
-              setStatus(state.started ? `Game state updated. ${playerMessage(state.message)}` : "The game is no longer active.");
-              return;
-            }
-          } catch (refreshError) {
-            setStatus(`${connectionError(error)}; failed to refresh the game state: ${connectionError(refreshError)}`, true);
-            return;
-          }
-        }
         setStatus(connectionError(error), true);
       } finally {
         actionInProgress = false;
@@ -2147,7 +2346,8 @@
 
     function playerLabel(player) {
       if (state?.mode === 'hvh') return `Player ${state.players.indexOf(player) + 1}`;
-      return player.you ? 'You' : 'Opponent';
+      if (player.you) return 'You';
+      return { easy: 'Easy CPU', normal: 'Medium CPU', hard: 'Hard CPU' }[state?.mode] || 'Opponent';
     }
 
     function playerMessage(message) {
@@ -2160,7 +2360,33 @@
         return name === 'You' ? 'You win this battle and capture the opposing card.' : `${name} wins this battle and captures the opposing card.`;
       });
       if (state?.mode === 'hvh') return text;
-      return text.replaceAll('Player 1 attacks','You attack').replaceAll('Player 1','You').replaceAll('Player 2','Opponent');
+      const opponent = state?.players?.find(player => !player.you);
+      const opponentName = opponent ? playerLabel(opponent) : 'Opponent';
+      return text.replaceAll('Player 1 attacks','You attack').replaceAll('Player 1','You').replaceAll('Player 2', opponentName);
+    }
+
+    function scheduleAIDraftPick() {
+      const isAIDraftTurn = state?.phase === 'draft' && state.mode !== 'hvh' && state.actor !== 0;
+      if (!isAIDraftTurn) {
+        if (aiDraftTimer !== null) window.clearTimeout(aiDraftTimer);
+        aiDraftTimer = null;
+        aiDraftPendingKey = '';
+        return;
+      }
+      const key = `${state.gameId}:${state.draftPickNumber}:${state.actor}`;
+      if (aiDraftPendingKey === key) return;
+      if (aiDraftTimer !== null) window.clearTimeout(aiDraftTimer);
+      aiDraftPendingKey = key;
+      aiDraftTimer = window.setTimeout(() => {
+        aiDraftTimer = null;
+        if (state?.phase !== 'draft' || state.actor === 0 ||
+            `${state.gameId}:${state.draftPickNumber}:${state.actor}` !== key) {
+          aiDraftPendingKey = '';
+          return;
+        }
+        aiDraftPendingKey = '';
+        act('draft-ai-pick');
+      }, 1500);
     }
 
     function modeDescription(mode) {
@@ -2192,7 +2418,7 @@
       }
       const [feature, tab, node] = route.split('/');
       if (feature === 'skills' && node) featureFocusTarget = `skill-node-${node}`;
-      if (['shop', 'skills', 'profile', 'heroes', 'campaigns', 'camp-draw', 'achievements', 'history'].includes(feature)) {
+      if (['shop', 'skills', 'profile', 'heroes', 'campaigns', 'camp-draw', 'achievements', 'history', 'social'].includes(feature)) {
         if (showFeature && currentFeature === feature && featureData) {
           if (feature === 'shop') currentShopTab = tab || 'skins';
           if (feature === 'skills') currentSkillBranch = tab || 'battle-rewards';
@@ -2214,7 +2440,8 @@
 
     function heroDetails(hero) {
       if (!hero) return '<p>Choose a hero to inspect their abilities.</p>';
-      return `<p>${esc(hero.flavor || '')}</p><p><strong>${esc(hero.name)}:</strong> Bounty ${formatModifier(hero.bounty || 0)} · Shift ${formatModifier(hero.shift || 0)} · Favored ${formatModifier(hero.favored || 0)}${hero.flip ? ' · Flips the opponent’s Bounty contribution' : ''}</p>`;
+      const draft = hero.draftFlip ? "negates the opponent’s Draft modifier" : formatModifier(hero.draft || 0);
+      return `<p>${esc(hero.flavor || '')}</p><p><strong>${esc(hero.name)}:</strong> Bounty ${formatModifier(hero.bounty || 0)} · Shift ${formatModifier(hero.shift || 0)} · Favored ${formatModifier(hero.favored || 0)} · Draft ${draft}${hero.flip ? ' · Flips the opponent’s Bounty contribution' : ''}</p>`;
     }
 
     function affordability(cost, balance, currency) {
@@ -2392,12 +2619,13 @@
     document.getElementById("dashboardShop").addEventListener("click", () => navigateGame("shop"));
     document.getElementById("dashboardCampaigns").addEventListener("click", () => navigateGame("campaigns"));
     document.getElementById("dashboardHistory").addEventListener("click", () => navigateGame("history"));
+    document.getElementById("dashboardSkills").addEventListener("click", () => navigateGame("skills"));
     document.getElementById("dashboardNavHome").addEventListener("click", () => navigateGame('home'));
     document.getElementById("dashboardNavShop").addEventListener("click", () => navigateGame("shop"));
     document.getElementById("dashboardNavBattle").addEventListener("click", () =>
       document.getElementById("dashboardPlay").click());
     document.getElementById("dashboardNavHeroes").addEventListener("click", () => navigateGame("heroes"));
-    document.getElementById("dashboardNavSkills").addEventListener("click", () => navigateGame("skills"));
+    document.getElementById("dashboardNavSocial").addEventListener("click", () => navigateGame("social"));
     document.getElementById("featureBack").addEventListener("click", () => navigateGame('home'));
     document.getElementById("featureTabs").addEventListener("click", handleFeatureClick);
     document.getElementById('featureTabs').addEventListener('keydown', event => {

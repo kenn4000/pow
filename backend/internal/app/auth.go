@@ -25,10 +25,11 @@ import (
 )
 
 type account struct {
-	ID        string    `json:"id"`
-	Email     string    `json:"email"`
-	Role      string    `json:"role"`
-	CreatedAt time.Time `json:"createdAt"`
+	ID           string    `json:"id"`
+	Email        string    `json:"email"`
+	Role         string    `json:"role"`
+	PublicHandle string    `json:"publicHandle"`
+	CreatedAt    time.Time `json:"createdAt"`
 }
 
 type credentials struct {
@@ -66,7 +67,7 @@ func (s *webServer) currentAccount(r *http.Request) (account, error) {
 		return user, sql.ErrNoRows
 	}
 	hash := sha256.Sum256([]byte(cookie.Value))
-	err = s.db.QueryRowContext(r.Context(), `SELECT u.id,u.email,u.role,u.created_at FROM auth_sessions s JOIN users u ON u.id=s.user_id WHERE s.token_hash=$1 AND s.expires_at>now()`, hash[:]).Scan(&user.ID, &user.Email, &user.Role, &user.CreatedAt)
+	err = s.db.QueryRowContext(r.Context(), `SELECT u.id,u.email,u.role,u.public_handle,u.created_at FROM auth_sessions s JOIN users u ON u.id=s.user_id WHERE s.token_hash=$1 AND s.expires_at>now()`, hash[:]).Scan(&user.ID, &user.Email, &user.Role, &user.PublicHandle, &user.CreatedAt)
 	return user, err
 }
 
@@ -225,7 +226,7 @@ func accountForCredentials(ctx context.Context, tx *sql.Tx, email, password stri
 	}
 	var u account
 	var hash []byte
-	err := tx.QueryRowContext(ctx, "SELECT id,email,role,created_at,password_hash FROM users WHERE email=$1 FOR UPDATE", email).Scan(&u.ID, &u.Email, &u.Role, &u.CreatedAt, &hash)
+	err := tx.QueryRowContext(ctx, "SELECT id,email,role,public_handle,created_at,password_hash FROM users WHERE email=$1 FOR UPDATE", email).Scan(&u.ID, &u.Email, &u.Role, &u.PublicHandle, &u.CreatedAt, &hash)
 	if errors.Is(err, sql.ErrNoRows) {
 		bcrypt.CompareHashAndPassword(dummyPasswordHash, []byte(password))
 		return u, &requestError{http.StatusUnauthorized, "invalid email or password"}
@@ -250,7 +251,8 @@ func finishAuthentication(ctx context.Context, tx *sql.Tx, u account) (string, e
 
 func insertAccount(ctx context.Context, tx *sql.Tx, email string, hash []byte, role string) (account, error) {
 	u := account{ID: randomID(), Email: email, Role: role}
-	if err := tx.QueryRowContext(ctx, "INSERT INTO users(id,email,password_hash,role) VALUES($1,$2,$3,$4) RETURNING created_at", u.ID, email, hash, role).Scan(&u.CreatedAt); err != nil {
+	u.PublicHandle = "player_" + u.ID[:12]
+	if err := tx.QueryRowContext(ctx, "INSERT INTO users(id,email,password_hash,role,public_handle) VALUES($1,$2,$3,$4,$5) RETURNING created_at", u.ID, email, hash, role, u.PublicHandle).Scan(&u.CreatedAt); err != nil {
 		return u, err
 	}
 	p, err := profile.New(time.Now())
@@ -388,7 +390,7 @@ func ensureAnotherAdmin(ctx context.Context, tx *sql.Tx) error {
 }
 
 func (s *webServer) listUsers(w http.ResponseWriter, r *http.Request) {
-	rows, err := s.db.QueryContext(r.Context(), "SELECT id,email,role,created_at FROM users WHERE id>$1 AND email ILIKE '%' || $2 || '%' AND ($3='' OR role=$3) ORDER BY id LIMIT 101", r.URL.Query().Get("after"), r.URL.Query().Get("q"), r.URL.Query().Get("role"))
+	rows, err := s.db.QueryContext(r.Context(), "SELECT id,email,role,public_handle,created_at FROM users WHERE id>$1 AND email ILIKE '%' || $2 || '%' AND ($3='' OR role=$3) ORDER BY id LIMIT 101", r.URL.Query().Get("after"), r.URL.Query().Get("q"), r.URL.Query().Get("role"))
 	if err != nil {
 		databaseError(w, err)
 		return
@@ -397,7 +399,7 @@ func (s *webServer) listUsers(w http.ResponseWriter, r *http.Request) {
 	users := []account{}
 	for rows.Next() {
 		var user account
-		if err := rows.Scan(&user.ID, &user.Email, &user.Role, &user.CreatedAt); err != nil {
+		if err := rows.Scan(&user.ID, &user.Email, &user.Role, &user.PublicHandle, &user.CreatedAt); err != nil {
 			databaseError(w, err)
 			return
 		}

@@ -197,7 +197,7 @@ export function SavedGames({ onResume }) {
     {!busy && !games.length && <p>No saved games yet. <a href="#/match/new">Play your first match</a>.</p>}
     <ul className="saved-games">{games.map(game => <li key={game.id} className={game.id === selected?.id ? 'selected' : ''}>
       <strong>{gameLabel(game)} · {statusLabel(game.status)}</strong> <time dateTime={game.startedAt}>{new Date(game.startedAt).toLocaleString()}</time>
-      {game.record && <p>{game.record.won ? 'Won' : 'Lost'} · {game.record.player_score}–{game.record.opp_score} · +{game.record.marks_earned} Marks</p>}
+      {game.record && <p>{game.record.won ? 'Won' : 'Lost'} · {game.record.player_score}–{game.record.opp_score} · <span className="currency-amount" aria-label={`+${game.record.marks_earned} Marks`}>+{game.record.marks_earned}<img className="currency-icon" src={`${import.meta.env.BASE_URL}skins/icons/marks.png`} alt="" aria-hidden="true" /></span></p>}
       {game.status === 'active' && <button disabled={busy} onClick={onResume}>Resume match</button>}{' '}
       <button aria-pressed={game.id === selected?.id} disabled={busy} onClick={() => { if (window.location.hash === `#/saved-games/${game.id}`) inspect(game); else window.location.hash = `/saved-games/${game.id}`; }}>Review match timeline</button>
     </li>)}</ul>

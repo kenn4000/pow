@@ -30,7 +30,7 @@ func (s *webServer) handleDevelopmentLogin(w http.ResponseWriter, r *http.Reques
 	}
 	defer tx.Rollback()
 	var user account
-	err = tx.QueryRowContext(r.Context(), "SELECT id,email,role,created_at FROM users WHERE id=$1", input.UserID).Scan(&user.ID, &user.Email, &user.Role, &user.CreatedAt)
+	err = tx.QueryRowContext(r.Context(), "SELECT id,email,role,public_handle,created_at FROM users WHERE id=$1", input.UserID).Scan(&user.ID, &user.Email, &user.Role, &user.PublicHandle, &user.CreatedAt)
 	if errors.Is(err, sql.ErrNoRows) {
 		writeError(w, http.StatusNotFound, errors.New("account no longer exists; refresh the account list"))
 		return

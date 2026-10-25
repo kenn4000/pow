@@ -1,0 +1,36 @@
+{
+	"version": "2.0.0",
+	"tasks": [
+		{
+			"label": "Run draft-enabled backend",
+			"type": "shell",
+			"command": "C:\\Program Files\\Go\\bin\\go.exe",
+			"args": [
+				"-C",
+				"backend",
+				"run",
+				"./cmd/prisoners-of-war",
+				"--ui=web",
+				"--listen=127.0.0.1:8080"
+			],
+			"isBackground": true,
+			"problemMatcher": []
+		},
+		{
+			"label": "Run draft frontend",
+			"type": "shell",
+			"command": "npm",
+			"args": [
+				"--prefix",
+				"frontend",
+				"run",
+				"dev",
+				"--",
+				"--host",
+				"127.0.0.1"
+			],
+			"isBackground": true,
+			"problemMatcher": []
+		}
+	]
+}

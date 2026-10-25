@@ -48,6 +48,7 @@ type app struct {
 func Run() {
 	simGames := flag.Int("sim", 0, "run N AI-vs-AI games without the terminal UI")
 	simHeroGames := flag.Int("sim-heroes", 0, "run N games for all 66 hero pairings")
+	simDraftGames := flag.Int("sim-draft", 0, "run N opening-draft balance tests")
 	simCampDraws := flag.Int("sim-campdraw", 0, "run N headless Camp Draws and report reward statistics")
 	ui := flag.String("ui", "web", "user interface: web or terminal")
 	modeFlag := flag.String("mode", "", "game mode: hvh, easy, normal, or hard")
@@ -62,6 +63,10 @@ func Run() {
 	}
 	if *simHeroGames < 0 {
 		fmt.Fprintln(os.Stderr, "--sim-heroes must be zero or greater")
+		os.Exit(2)
+	}
+	if *simDraftGames < 0 {
+		fmt.Fprintln(os.Stderr, "--sim-draft must be zero or greater")
 		os.Exit(2)
 	}
 	if *simCampDraws < 0 {
@@ -89,6 +94,13 @@ func Run() {
 	}
 	if *simHeroGames > 0 {
 		if err := simulateHeroes(*simHeroGames, rng); err != nil {
+			fmt.Fprintln(os.Stderr, err)
+			os.Exit(1)
+		}
+		return
+	}
+	if *simDraftGames > 0 {
+		if err := simulateDraft(*simDraftGames, rng); err != nil {
 			fmt.Fprintln(os.Stderr, err)
 			os.Exit(1)
 		}
@@ -207,6 +219,9 @@ func (a *app) playGame() (game.GameState, error) {
 	if err != nil {
 		return game.GameState{}, err
 	}
+	if err := a.runOpeningDraft(&state); err != nil {
+		return game.GameState{}, err
+	}
 	return a.playGameState(state)
 }
 
@@ -230,7 +245,7 @@ func (a *app) newHeroGame() (game.GameState, error) {
 	if err != nil {
 		return game.GameState{}, err
 	}
-	state, err := game.NewGameWithModifiers(a.rng, gameModifiers)
+	state, err := game.NewDraftGameWithDraftMode(a.rng, gameModifiers, heroes.DraftMode(playerHero, opponentHero))
 	if err != nil {
 		return game.GameState{}, err
 	}
@@ -239,6 +254,114 @@ func (a *app) newHeroGame() (game.GameState, error) {
 		return game.GameState{}, err
 	}
 	return state, nil
+}
+
+type terminalDraftUI struct {
+	app   *app
+	state *game.GameState
+	err   error
+}
+
+func (a *app) runOpeningDraft(state *game.GameState) error {
+	if state == nil {
+		return errors.New("game state is required")
+	}
+	if state.Draft == nil {
+		return nil
+	}
+	ui := terminalDraftUI{app: a, state: state}
+	if _, err := state.Draft.Run(&ui); err != nil {
+		if ui.err != nil {
+			return ui.err
+		}
+		return err
+	}
+	if err := state.CompleteDraft(); err != nil {
+		return err
+	}
+	if a.playerProfile != nil {
+		a.playerProfile.DraftStats.TotalDraftsCompleted++
+		if err := a.playerProfile.Save(); err != nil {
+			return fmt.Errorf("save opening draft statistics: %w", err)
+		}
+	}
+	return nil
+}
+
+func (ui *terminalDraftUI) ShowDraftStart(dealtX, dealtY, pool []game.Card, viewingSeat game.Seat) {
+	fmt.Println("\n========== BATTLEFIELD · OPENING DRAFT ==========")
+	fmt.Printf("Deal complete. %d face-up cards are available; Seat %s picks first.\n",
+		len(pool), viewingSeat)
+	if ui.app.mode == humanVsHuman {
+		fmt.Println("Each picker sees only their private dealt and drafted cards.")
+	}
+}
+
+func (ui *terminalDraftUI) ChooseDraftPick(
+	viewingSeat game.Seat,
+	pool, myHand, myDrafted []game.Card,
+	opponentDraftedCount, pickNumber, totalPicks int,
+) int {
+	playerIndex, err := ui.state.PlayerAtSeat(viewingSeat)
+	if err != nil {
+		ui.err = err
+		return -1
+	}
+	playerHand := append(append([]game.Card(nil), myHand...), myDrafted...)
+	if !ui.app.isHuman(playerIndex) {
+		card, err := ai.AIDraftPick(pool, playerHand, ui.state.Bounty.Suit, ui.app.aiDifficulty(), ui.app.rng)
+		if err != nil {
+			ui.err = err
+			return -1
+		}
+		for index, option := range pool {
+			if option == card {
+				fmt.Printf("Seat %s drafts %s.\n", viewingSeat, ui.app.card(card))
+				return index
+			}
+		}
+		ui.err = errors.New("AI draft pick is missing from the public pool")
+		return -1
+	}
+	if ui.app.mode == humanVsHuman {
+		fmt.Printf("\nPass the keyboard to Player %d.\n", playerIndex+1)
+		ui.app.clearScreen()
+		if _, err := ui.app.ask(fmt.Sprintf("Player %d, press Enter to view your draft: ", playerIndex+1)); err != nil {
+			ui.err = err
+			return -1
+		}
+	}
+	fmt.Printf("\nSeat %s · draft pick %d of %d\n", viewingSeat, pickNumber, totalPicks)
+	fmt.Print("Your private dealt cards: ")
+	ui.app.showCards(myHand)
+	fmt.Print("Your drafted cards: ")
+	ui.app.showCards(myDrafted)
+	fmt.Printf("Opponent drafted: %d card(s)\n", opponentDraftedCount)
+	fmt.Println("Public battlefield pool:")
+	ui.app.showCards(pool)
+	for {
+		answer, err := ui.app.ask("Choose one card from the pool: ")
+		if err != nil {
+			ui.err = err
+			return -1
+		}
+		indices, err := parseIndices(answer, len(pool), 1)
+		if err != nil {
+			fmt.Println(err)
+			continue
+		}
+		return indices[0]
+	}
+}
+
+func (ui *terminalDraftUI) ShowDraftPickResult(picker game.Seat, card game.Card, remainingPool []game.Card) {
+	fmt.Printf("Seat %s drafts %s. %d cards remain in the battlefield pool.\n",
+		picker, ui.app.card(card), len(remainingPool))
+}
+
+func (ui *terminalDraftUI) ShowDraftComplete(xHand, yHand []game.Card) {
+	fmt.Printf("Draft complete. Seat X has %d cards; Seat Y has %d cards. Round 1 begins.\n",
+		len(xHand), len(yHand))
 }
 
 func (a *app) playGameState(state game.GameState) (game.GameState, error) {
@@ -253,9 +376,11 @@ func (a *app) playGameState(state game.GameState) (game.GameState, error) {
 
 	for state.Round <= 3 {
 		if state.Round == 3 {
-			if err := a.assignRoundThreeSeats(&state); err != nil {
-				return game.GameState{}, err
-			}
+			seatYPlayer := assignRoundThreeSeats(&state)
+			score1 := game.ScorePlayer(state.P1, state.Bounty.Suit, state.Modifiers).Total
+			score2 := game.ScorePlayer(state.P2, state.Bounty.Suit, state.Modifiers).Total
+			fmt.Printf("\nAfter Round 2: P1 %d, P2 %d. P%d takes the second-player position for Round 3.\n",
+				score1, score2, seatYPlayer+1)
 		}
 		if err := a.playRound(&state); err != nil {
 			return game.GameState{}, err
@@ -414,43 +539,25 @@ func (a *app) playTerminalExchange(state *game.GameState, attackerIndex, defende
 	return attackCard, defendCard, outcome, err
 }
 
-func (a *app) assignRoundThreeSeats(state *game.GameState) error {
+func assignRoundThreeSeats(state *game.GameState) int {
 	score1 := game.ScorePlayer(state.P1, state.Bounty.Suit, state.Modifiers).Total
 	score2 := game.ScorePlayer(state.P2, state.Bounty.Suit, state.Modifiers).Total
-	chooser := 0
-	if score2 < score1 {
-		chooser = 1
-	} else if score1 == score2 {
-		chooser = a.rng.Intn(2)
+	seatYPlayer := 0
+	switch {
+	case score1 < score2:
+		seatYPlayer = 0
+	case score2 < score1:
+		seatYPlayer = 1
+	case state.P1.Seat == game.SeatX:
+		// Round 1 swaps the seats, so the original Seat Y player is in Seat X on a tie.
+		seatYPlayer = 0
+	default:
+		seatYPlayer = 1
 	}
-	fmt.Printf("\nAfter Round 2: P1 %d, P2 %d. P%d chooses a seat for Round 3.\n", score1, score2, chooser+1)
-	var seat game.Seat
-	if a.isHuman(chooser) {
-		for {
-			answer, err := a.ask("Choose X or Y: ")
-			if err != nil {
-				return err
-			}
-			switch strings.ToUpper(strings.TrimSpace(answer)) {
-			case "X":
-				seat = game.SeatX
-			case "Y":
-				seat = game.SeatY
-			default:
-				fmt.Println("Enter X or Y.")
-				continue
-			}
-			break
-		}
-	} else {
-		difficulty := a.aiDifficulty()
-		seat, _ = ai.ChooseSeat(*state, chooser, difficulty, a.rng)
-		fmt.Printf("AI chooses seat %s.\n", seat)
-	}
-	player, _ := state.Player(chooser)
-	opponent, _ := state.Player(1 - chooser)
-	player.Seat, opponent.Seat = seat, otherSeat(seat)
-	return nil
+	player, _ := state.Player(seatYPlayer)
+	opponent, _ := state.Player(1 - seatYPlayer)
+	player.Seat, opponent.Seat = game.SeatY, game.SeatX
+	return seatYPlayer
 }
 
 func (a *app) chooseCommit(state game.GameState, playerIndex int) ([]int, error) {
@@ -733,16 +840,17 @@ func simulate(count int, rng *rand.Rand) error {
 		if err != nil {
 			return err
 		}
-		state, err := game.NewGameWithModifiers(rng, game.GameModifiers{Reckoning: reckoning.Weights})
+		state, err := game.NewDraftGameWithDraftMode(rng, game.GameModifiers{Reckoning: reckoning.Weights}, 3)
 		if err != nil {
+			return err
+		}
+		if err := completeSimulationDraft(&state, [2]ai.Difficulty{ai.Hard, ai.Hard}, rng); err != nil {
 			return err
 		}
 		for state.Round <= 3 {
 			roundPlayed := state.Round
 			if state.Round == 3 {
-				if err := assignSimulationSeat(&state, [2]ai.Difficulty{ai.Hard, ai.Hard}, rng); err != nil {
-					return err
-				}
+				assignRoundThreeSeats(&state)
 			}
 			if err := commitSimulationPlayers(&state, [2]ai.Difficulty{ai.Hard, ai.Hard}, rng); err != nil {
 				return err
@@ -797,6 +905,50 @@ func simulate(count int, rng *rand.Rand) error {
 		percentage(totalClashes, count*9))
 	fmt.Printf("Bounty contribution: %d points total (%.1f%% of points)\n", bountyPoints,
 		percentage(bountyPoints, scoreSum[0]+scoreSum[1]))
+	return nil
+}
+
+func simulateDraft(count int, rng *rand.Rand) error {
+	if count < 1 || rng == nil {
+		return errors.New("draft simulator requires a positive game count and random source")
+	}
+	first := heroes.Hero{ID: "draft-simulator", Name: "Draft simulator"}
+	var xWins, yWins, ties, scoreTotal, scoreDiff, stalls, clashes, depleted int
+	for index := 0; index < count; index++ {
+		result, err := simulateHeroGame(first, first, ai.Greedy, ai.Greedy, rng)
+		if err != nil {
+			return err
+		}
+		scoreTotal += result.xScore + result.yScore
+		diff := result.xScore - result.yScore
+		if diff < 0 {
+			diff = -diff
+		}
+		scoreDiff += diff
+		stalls += result.stalls
+		clashes += result.clashes
+		if result.xScore > result.yScore {
+			xWins++
+		} else if result.yScore > result.xScore {
+			yWins++
+		} else {
+			ties++
+		}
+		if result.depleted {
+			depleted++
+		}
+	}
+	xRate := percentage(xWins, count)
+	fmt.Printf("Simulated %d greedy-vs-greedy matches with the neutral Draft 3 baseline\n", count)
+	fmt.Printf("Original Seat X / Original Seat Y / tie: %.1f%% / %.1f%% / %.1f%%\n",
+		xRate, percentage(yWins, count), percentage(ties, count))
+	fmt.Printf("Mean score: %.2f; mean score difference: %.2f\n",
+		float64(scoreTotal)/float64(count*2), float64(scoreDiff)/float64(count))
+	fmt.Printf("Stall rate: %.1f%%; clash rate: %.1f%%; draw-pile depletion: %d/%d\n",
+		percentage(stalls, count*3), percentage(clashes, count*9), depleted, count)
+	if xRate < 46 || xRate > 54 {
+		return fmt.Errorf("draft seat-balance regression: Seat X win rate %.1f%% is outside 46%%-54%%", xRate)
+	}
 	return nil
 }
 
@@ -884,11 +1036,14 @@ func simulateHeroMatchups(writer io.Writer, gamesPerPair int, rng *rand.Rand) (i
 }
 
 type heroSimulationGameResult struct {
-	winner  int
-	p1Score int
-	p2Score int
-	clashes int
-	stalls  int
+	winner   int
+	p1Score  int
+	p2Score  int
+	xScore   int
+	yScore   int
+	clashes  int
+	stalls   int
+	depleted bool
 }
 
 func simulateHeroGame(first, second heroes.Hero, p1Difficulty, p2Difficulty ai.Difficulty, rng *rand.Rand) (heroSimulationGameResult, error) {
@@ -896,18 +1051,24 @@ func simulateHeroGame(first, second heroes.Hero, p1Difficulty, p2Difficulty ai.D
 	if err != nil {
 		return heroSimulationGameResult{}, err
 	}
-	state, err := game.NewGameWithModifiers(rng, gameModifiers)
+	state, err := game.NewDraftGameWithDraftMode(rng, gameModifiers, heroes.DraftMode(first, second))
+	if err != nil {
+		return heroSimulationGameResult{}, err
+	}
+	initialXPlayer, err := state.PlayerAtSeat(game.SeatX)
 	if err != nil {
 		return heroSimulationGameResult{}, err
 	}
 	difficulties := [2]ai.Difficulty{p1Difficulty, p2Difficulty}
+	if err := completeSimulationDraft(&state, difficulties, rng); err != nil {
+		return heroSimulationGameResult{}, err
+	}
 	stalls := 0
+	depleted := false
 	for state.Round <= 3 {
 		roundPlayed := state.Round
 		if roundPlayed == 3 {
-			if err := assignSimulationSeat(&state, difficulties, rng); err != nil {
-				return heroSimulationGameResult{}, err
-			}
+			assignRoundThreeSeats(&state)
 		}
 		if err := commitSimulationPlayers(&state, difficulties, rng); err != nil {
 			return heroSimulationGameResult{}, err
@@ -948,6 +1109,9 @@ func simulateHeroGame(first, second heroes.Hero, p1Difficulty, p2Difficulty ai.D
 		if roundWins <= 1 {
 			stalls++
 		}
+		if roundPlayed < 3 && len(state.Deck) < 6 {
+			depleted = true
+		}
 		if err := finishSimulationRound(&state, roundPlayed); err != nil {
 			return heroSimulationGameResult{}, err
 		}
@@ -958,31 +1122,74 @@ func simulateHeroGame(first, second heroes.Hero, p1Difficulty, p2Difficulty ai.D
 	p1 := game.ScorePlayer(state.P1, state.Bounty.Suit, state.Modifiers)
 	p2 := game.ScorePlayer(state.P2, state.Bounty.Suit, state.Modifiers)
 	winner, _ := finalWinner(p1, p2, rng)
-	return heroSimulationGameResult{winner: winner, p1Score: p1.Total, p2Score: p2.Total, clashes: state.Clashes, stalls: stalls}, nil
+	yIndex := 1 - initialXPlayer
+	scores := [2]int{p1.Total, p2.Total}
+	return heroSimulationGameResult{
+		winner: winner, p1Score: p1.Total, p2Score: p2.Total,
+		xScore: scores[initialXPlayer], yScore: scores[yIndex],
+		clashes: state.Clashes, stalls: stalls, depleted: depleted,
+	}, nil
 }
+
+func completeSimulationDraft(state *game.GameState, difficulties [2]ai.Difficulty, rng *rand.Rand) error {
+	if state == nil {
+		return errors.New("simulation game state is required")
+	}
+	if state.Draft == nil {
+		return nil
+	}
+	ui := headlessDraftUI{state: state, difficulties: difficulties, rng: rng}
+	if _, err := state.Draft.Run(&ui); err != nil {
+		if ui.err != nil {
+			return ui.err
+		}
+		return err
+	}
+	return state.CompleteDraft()
+}
+
+type headlessDraftUI struct {
+	state        *game.GameState
+	difficulties [2]ai.Difficulty
+	rng          *rand.Rand
+	err          error
+}
+
+func (ui *headlessDraftUI) ShowDraftStart(_, _, _ []game.Card, _ game.Seat) {}
+
+func (ui *headlessDraftUI) ChooseDraftPick(
+	seat game.Seat,
+	pool, hand, drafted []game.Card,
+	_, _, _ int,
+) int {
+	playerIndex, err := ui.state.PlayerAtSeat(seat)
+	if err != nil {
+		ui.err = err
+		return -1
+	}
+	aiHand := append(append([]game.Card(nil), hand...), drafted...)
+	chosen, err := ai.AIDraftPick(pool, aiHand, ui.state.Bounty.Suit, ui.difficulties[playerIndex], ui.rng)
+	if err != nil {
+		ui.err = err
+		return -1
+	}
+	for index, card := range pool {
+		if card == chosen {
+			return index
+		}
+	}
+	ui.err = errors.New("simulation AI selected a card outside the draft pool")
+	return -1
+}
+
+func (ui *headlessDraftUI) ShowDraftPickResult(_ game.Seat, _ game.Card, _ []game.Card) {}
+func (ui *headlessDraftUI) ShowDraftComplete(_, _ []game.Card)                          {}
 
 func percentage(part, total int) float64 {
 	if total == 0 {
 		return 0
 	}
 	return 100 * float64(part) / float64(total)
-}
-
-func assignSimulationSeat(state *game.GameState, difficulties [2]ai.Difficulty, rng *rand.Rand) error {
-	s1 := game.ScorePlayer(state.P1, state.Bounty.Suit, state.Modifiers).Total
-	s2 := game.ScorePlayer(state.P2, state.Bounty.Suit, state.Modifiers).Total
-	chooser := 0
-	if s2 < s1 || (s1 == s2 && rng.Intn(2) == 1) {
-		chooser = 1
-	}
-	seat, err := ai.ChooseSeat(*state, chooser, difficulties[chooser], rng)
-	if err != nil {
-		return err
-	}
-	player, _ := state.Player(chooser)
-	opponent, _ := state.Player(1 - chooser)
-	player.Seat, opponent.Seat = seat, otherSeat(seat)
-	return nil
 }
 
 func commitSimulationPlayers(state *game.GameState, difficulties [2]ai.Difficulty, rng *rand.Rand) error {

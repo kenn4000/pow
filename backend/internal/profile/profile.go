@@ -11,7 +11,7 @@ import (
 	"time"
 )
 
-const SchemaVersion = 8
+const SchemaVersion = 10
 
 const DefaultHeroID = "recruit"
 
@@ -91,15 +91,22 @@ type Profile struct {
 	HeroWinCounts             map[string]int               `json:"hero_win_counts"`
 	Campaigns                 map[string]*CampaignProgress `json:"campaigns"`
 	HeroBoxesAvailable        int                          `json:"hero_boxes_available"`
+	DraftStats                DraftStats                   `json:"draft_stats"`
+}
+
+type DraftStats struct {
+	TotalDraftsCompleted int `json:"total_drafts_completed"`
 }
 
 type CampaignProgress struct {
-	CampaignID          string `json:"campaign_id"`
-	MissionsCompleted   int    `json:"missions_completed"`
-	TotalMissions       int    `json:"total_missions"`
-	Completed           bool   `json:"completed"`
-	Started             bool   `json:"started"`
-	CompletedMissionIDs []int  `json:"completed_mission_ids"`
+	CampaignID                  string `json:"campaign_id"`
+	MissionsCompleted           int    `json:"missions_completed"`
+	TotalMissions               int    `json:"total_missions"`
+	Completed                   bool   `json:"completed"`
+	Started                     bool   `json:"started"`
+	CompletedMissionIDs         []int  `json:"completed_mission_ids"`
+	CompletionSkillPointAwarded bool   `json:"completion_skill_point_awarded"`
+	CompletionRewardsAwarded    bool   `json:"completion_rewards_awarded"`
 }
 
 func New(now time.Time) (*Profile, error) {
@@ -233,7 +240,7 @@ func migrateProfile(p *Profile, previousSchema int) {
 			p.LastOpponentHeroIDs = []string{p.OpponentLastHeroID}
 		}
 	}
-	if previousSchema < 7 {
+	if previousSchema < SchemaVersion {
 		migrateCampaignProgress(p)
 	}
 	if !containsHero(p.UnlockedHeroes, "recruit") {
@@ -451,7 +458,7 @@ func defaultUnlockedHeroes() []string {
 func defaultCampaignProgress() map[string]*CampaignProgress {
 	return map[string]*CampaignProgress{
 		"basic":    {CampaignID: "basic", TotalMissions: 10, CompletedMissionIDs: []int{}},
-		"advanced": {CampaignID: "advanced", TotalMissions: 5, CompletedMissionIDs: []int{}},
+		"advanced": {CampaignID: "advanced", TotalMissions: 10, CompletedMissionIDs: []int{}},
 	}
 }
 
@@ -471,8 +478,12 @@ func migrateCampaignProgress(p *Profile) {
 		if len(progress.CompletedMissionIDs) > 0 {
 			completedCount = len(progress.CompletedMissionIDs)
 		}
-		if progress.Completed {
-			completedCount = defaultProgress.TotalMissions
+		wasCompleted := progress.Completed
+		if wasCompleted && progress.TotalMissions > completedCount {
+			completedCount = progress.TotalMissions
+		}
+		if wasCompleted {
+			progress.CompletionRewardsAwarded = true
 		}
 		if completedCount > defaultProgress.TotalMissions {
 			completedCount = defaultProgress.TotalMissions
@@ -487,6 +498,7 @@ func migrateCampaignProgress(p *Profile) {
 		progress.CampaignID = campaignID
 		progress.MissionsCompleted = completedCount
 		progress.TotalMissions = defaultProgress.TotalMissions
+		progress.Completed = wasCompleted && completedCount >= defaultProgress.TotalMissions
 	}
 }
 

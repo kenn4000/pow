@@ -10,35 +10,38 @@ import (
 )
 
 type Hero struct {
-	ID      string
-	Name    string
-	Flavor  string
-	Bounty  int
-	Shift   int
-	Favored int
-	Flip    bool
-	Unlock  string
-	SkinIDs []string
+	ID        string
+	Name      string
+	Flavor    string
+	Bounty    int
+	Shift     int
+	Favored   int
+	Draft     int
+	DraftFlip bool
+	Flip      bool
+	Unlock    string
+	SkinIDs   []string
 }
 
 type CombinedModifiers struct {
 	Bounty  int
 	Shift   int
 	Favored int
+	Draft   int
 }
 
 var roster = []Hero{
-	{ID: "recruit", Name: "The Recruit", Flavor: "Fresh off the boat. Nothing special. Yet.", Unlock: "default"},
+	{ID: "recruit", Name: "The Recruit", Flavor: "Fresh off the boat. Nothing special. Yet.", Draft: -1, Unlock: "default"},
 	{ID: "warden", Name: "The Warden", Flavor: "Order is the first wall against chaos.", Bounty: 1, Favored: 1, Unlock: "campaign:basic"},
 	{ID: "hunter", Name: "The Hunter", Flavor: "Every weakness leaves a trail.", Bounty: 2, Unlock: "campaign:basic"},
 	{ID: "treasurer", Name: "The Treasurer", Flavor: "A careful count can turn any battle.", Bounty: -2, Favored: 1, Unlock: "hero_lootbox"},
-	{ID: "ascendant", Name: "The Gorilla", Flavor: "Rise above the limits of the hand.", Shift: 2, Unlock: "hero_lootbox"},
-	{ID: "anchor", Name: "The Turtle", Flavor: "Hold fast when the tide turns.", Bounty: -1, Favored: -1, Unlock: "campaign:basic"},
-	{ID: "gambler", Name: "The Gambler", Flavor: "Fortune favors the bold wager.", Bounty: 2, Shift: 1, Unlock: "hero_lootbox"},
-	{ID: "diplomat", Name: "The Diplomat", Flavor: "A quiet bargain changes the odds.", Bounty: -2, Shift: 1, Favored: 1, Unlock: "hero_lootbox"},
+	{ID: "ascendant", Name: "The Gorilla", Flavor: "Rise above the limits of the hand.", Shift: 2, Draft: -1, Unlock: "hero_lootbox"},
+	{ID: "anchor", Name: "The Turtle", Flavor: "Hold fast when the tide turns.", Bounty: -1, Favored: -1, Draft: 1, Unlock: "campaign:basic"},
+	{ID: "gambler", Name: "The Gambler", Flavor: "Fortune favors the bold wager.", Bounty: 2, Shift: 1, Draft: 1, Unlock: "hero_lootbox"},
+	{ID: "diplomat", Name: "The Diplomat", Flavor: "A quiet bargain changes the odds.", Bounty: -2, Shift: 1, Favored: 1, Draft: 1, Unlock: "hero_lootbox"},
 	{ID: "ascetic", Name: "The Bureaucrat", Flavor: "Want less, and endure more.", Bounty: -1, Shift: 1, Favored: -1, Unlock: "hero_lootbox"},
 	{ID: "herald", Name: "The Bodybuilder", Flavor: "A new reckoning is always at hand.", Bounty: 3, Favored: -1, Unlock: "hero_lootbox"},
-	{ID: "hater", Name: "The Hater", Flavor: "Your advantage belongs to me now.", Bounty: 1, Favored: 1, Flip: true, Unlock: "hero_lootbox"},
+	{ID: "hater", Name: "The Hater", Flavor: "Your advantage belongs to me now.", Bounty: 1, Favored: 1, DraftFlip: true, Flip: true, Unlock: "hero_lootbox"},
 }
 
 func All() []Hero {
@@ -118,7 +121,23 @@ func CombineWithTuning(h1, h2 Hero, tuning1, tuning2 Tuning) (CombinedModifiers,
 		Bounty:  clamp(bounty, -3, 3),
 		Shift:   clamp(h1.Shift+h2.Shift+tuningShift, 0, 3),
 		Favored: clamp(h1.Favored+h2.Favored+tuningFavored, -1, 2),
+		Draft:   combinedDraftMode(h1, h2),
 	}, nil
+}
+
+func DraftMode(first, second Hero) int {
+	return combinedDraftMode(first, second)
+}
+
+func combinedDraftMode(first, second Hero) int {
+	firstDraft, secondDraft := first.Draft, second.Draft
+	if first.DraftFlip {
+		secondDraft = -secondDraft
+	}
+	if second.DraftFlip {
+		firstDraft = -firstDraft
+	}
+	return clamp(3+firstDraft+secondDraft, 1, 5)
 }
 
 func tuningValue(tuning Tuning, modifier string) (int, error) {
@@ -233,7 +252,7 @@ func Validate(hero Hero) error {
 		return fmt.Errorf("hero ID and name are required")
 	}
 	if hero.Bounty < -3 || hero.Bounty > 3 || hero.Shift < 0 || hero.Shift > 3 ||
-		hero.Favored < -1 || hero.Favored > 2 {
+		hero.Favored < -1 || hero.Favored > 2 || hero.Draft < -2 || hero.Draft > 2 {
 		return fmt.Errorf("hero %q has modifiers outside the allowed envelope", hero.ID)
 	}
 	switch hero.Unlock {

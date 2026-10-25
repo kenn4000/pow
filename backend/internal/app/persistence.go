@@ -206,6 +206,20 @@ func (s *webServer) restorePlayer(profileJSON, stateJSON []byte) (*webServer, pl
 	if snapshot.Schema > 1 || p.SchemaVersion > profile.SchemaVersion {
 		return nil, snapshot, errors.New("saved data is newer than this server")
 	}
+	if snapshot.Session != nil && snapshot.Session.State.Draft != nil {
+		draft := snapshot.Session.State.Draft
+		if draft.Mode == 0 {
+			draft.Mode = 3
+			snapshot.Session.State.DraftMode = 3
+		}
+		if draft.Mode >= 1 && draft.Mode <= 3 &&
+			len(draft.DealtX) == 6-draft.Mode && len(draft.DealtY) == 5-draft.Mode &&
+			len(draft.DrawPile) == 13 {
+			card := draft.DealtX[len(draft.DealtX)-1]
+			draft.DealtX = draft.DealtX[:len(draft.DealtX)-1]
+			draft.DrawPile = append([]game.Card{card}, draft.DrawPile...)
+		}
+	}
 	p.SetSaveHandler(func(*profile.Profile) error { return nil })
 	rng, err := secureRand()
 	if err != nil {

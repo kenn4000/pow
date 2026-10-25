@@ -172,6 +172,8 @@ func TestRefillDrawsAndDiscardsLowest(t *testing.T) {
 		t.Fatal(err)
 	}
 	player, _ := state.Player(playerIndex)
+	player.Hand = append(player.Hand, state.Deck[len(state.Deck)-1])
+	state.Deck = state.Deck[:len(state.Deck)-1]
 	player.Hand = append(player.Hand, state.Deck[len(state.Deck)-1], state.Deck[len(state.Deck)-2])
 	state.Deck = state.Deck[:len(state.Deck)-2]
 	beforeDeck := len(state.Deck)
@@ -197,6 +199,16 @@ func TestRefillDrawsAndDiscardsLowest(t *testing.T) {
 	}
 	if err := state.Validate(); err != nil {
 		t.Fatal(err)
+	}
+}
+
+func TestNewGameStartsWithEqualSmallerHands(t *testing.T) {
+	state, err := NewGame(rand.New(rand.NewSource(20)))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(state.P1.Hand) != 5 || len(state.P2.Hand) != 5 {
+		t.Fatalf("initial hands = %d/%d, want 5/5", len(state.P1.Hand), len(state.P2.Hand))
 	}
 }
 

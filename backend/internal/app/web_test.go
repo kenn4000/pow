@@ -15,7 +15,13 @@ import (
 )
 
 func TestWebGameFlowRedactsHandsAndAutoPlaysThirdBattle(t *testing.T) {
-	web := &webServer{rng: rand.New(rand.NewSource(51))}
+	playerProfile, err := profile.New(time.Now())
+	if err != nil {
+		t.Fatal(err)
+	}
+	playerProfile.UnlockedHeroes = []string{"recruit", "warden", "hunter"}
+	playerProfile.SetSaveHandler(func(*profile.Profile) error { return nil })
+	web := &webServer{rng: rand.New(rand.NewSource(51)), playerProfile: playerProfile}
 	mux := http.NewServeMux()
 	mux.HandleFunc("/api/state", web.handleState)
 	mux.HandleFunc("/api/new", web.handleNewGame)
@@ -23,34 +29,47 @@ func TestWebGameFlowRedactsHandsAndAutoPlaysThirdBattle(t *testing.T) {
 	server := httptest.NewServer(mux)
 	defer server.Close()
 
-	view := sendWebRequest(t, server.Client(), server.URL+"/api/new", map[string]any{"mode": "hvh"})
-	if !view.Started || view.Phase != "commit" {
+	view := sendWebRequest(t, server.Client(), server.URL+"/api/new", map[string]any{
+		"mode": "hvh", "playerHeroId": "warden", "opponentHeroId": "hunter",
+	})
+	if !view.Started || view.Phase != "handoff" {
 		t.Fatalf("new game state = started:%t phase:%q", view.Started, view.Phase)
 	}
 	if view.Modifiers.Reckoning == [3]int{} || view.PlayerHero == "" || view.OpponentHero == "" {
 		t.Fatalf("game start omitted hero modifiers: %+v", view)
 	}
-	if len(view.Players[0].Hand) == 0 || len(view.Players[1].Hand) != 0 || view.Players[1].HiddenHand == 0 {
-		t.Fatal("initial view did not reveal only Player 1's hand")
-	}
-	for _, player := range view.Players {
-		want := 5
-		if player.Color == "White" {
-			want = 6
-		}
-		handCount := len(player.Hand)
-		if handCount == 0 {
-			handCount = player.HiddenHand
-		}
-		if handCount != want {
-			t.Fatalf("%s player has %d cards at setup, want %d", player.Color, handCount, want)
-		}
+	if len(view.Players[0].Hand) != 0 || len(view.Players[1].Hand) != 0 {
+		t.Fatal("draft handoff exposed private dealt cards")
 	}
 
-	attacks, defenses := 0, 0
-	for step := 0; step < 80 && view.Phase != "gameover"; step++ {
+	attacks, defenses, draftPicks := 0, 0, 0
+	draftCompletionChecked := false
+	for step := 0; step < 100 && view.Phase != "gameover"; step++ {
 		switch view.Phase {
+		case "draft":
+			if len(view.DraftPool) != 8-draftPicks || len(view.DraftHand) == 0 {
+				t.Fatalf("draft view pick %d has pool=%d hand=%d", draftPicks+1, len(view.DraftPool), len(view.DraftHand))
+			}
+			action := map[string]any{"action": "draft-pick", "index": 0}
+			if view.Mode != "hvh" && view.Actor != 0 {
+				action = map[string]any{"action": "draft-ai-pick"}
+			}
+			view = sendWebRequest(t, server.Client(), server.URL+"/api/action", action)
+			draftPicks++
 		case "commit":
+			if draftPicks == 6 && !draftCompletionChecked {
+				x, _ := web.session.state.PlayerAtSeat(game.SeatX)
+				y, _ := web.session.state.PlayerAtSeat(game.SeatY)
+				xPlayer, _ := web.session.state.Player(x)
+				yPlayer, _ := web.session.state.Player(y)
+				if len(xPlayer.Hand) != 5 || len(yPlayer.Hand) != 5 ||
+					len(web.session.state.Deck) != 14 || len(web.session.state.Discard) != 2 {
+					t.Fatalf("draft completed with X=%d Y=%d draw pile=%d removed=%d, want 5/5/14/2",
+						len(xPlayer.Hand), len(yPlayer.Hand), len(web.session.state.Deck),
+						len(web.session.state.Discard))
+				}
+				draftCompletionChecked = true
+			}
 			view = sendWebRequest(t, server.Client(), server.URL+"/api/action", map[string]any{
 				"action": "commit", "cards": []int{0, 1, 2},
 			})
@@ -80,8 +99,6 @@ func TestWebGameFlowRedactsHandsAndAutoPlaysThirdBattle(t *testing.T) {
 				t.Fatalf("battle outcome = %+v, want %+v", view.BattleOutcome, outcome)
 			}
 			view = sendWebRequest(t, server.Client(), server.URL+"/api/action", map[string]any{"action": "continue"})
-		case "seat":
-			view = sendWebRequest(t, server.Client(), server.URL+"/api/action", map[string]any{"action": "seat", "seat": "X"})
 		default:
 			t.Fatalf("unexpected UI phase %q", view.Phase)
 		}
@@ -95,6 +112,9 @@ func TestWebGameFlowRedactsHandsAndAutoPlaysThirdBattle(t *testing.T) {
 	if attacks != 6 || defenses != 6 {
 		t.Fatalf("manual attack/defense actions = %d/%d; third battles should be automatic", attacks, defenses)
 	}
+	if draftPicks != 6 || playerProfile.DraftStats.TotalDraftsCompleted != 1 {
+		t.Fatalf("draft picks=%d profile stats=%d, want 6/1", draftPicks, playerProfile.DraftStats.TotalDraftsCompleted)
+	}
 	if got := len(web.session.state.P1.Jail) + len(web.session.state.P2.Jail) + web.session.state.Clashes; got != 9 {
 		t.Fatalf("resolved %d of 9 battles", got)
 	}
@@ -103,8 +123,10 @@ func TestWebGameFlowRedactsHandsAndAutoPlaysThirdBattle(t *testing.T) {
 	}
 
 	view = sendWebRequest(t, server.Client(), server.URL+"/api/new", map[string]any{"mode": "hard"})
-	if view.Phase != "commit" || view.Mode != "hard" || len(view.Players[1].Hand) != 0 || view.Players[1].HiddenHand == 0 {
-		t.Fatal("new AI game did not reset or exposed the AI hand")
+	if view.Phase != "draft" || view.DraftMode < 1 || view.DraftMode > 3 ||
+		len(view.DraftPool) != 2+2*view.DraftMode || view.Mode != "hard" ||
+		len(view.Players[1].Hand) != 0 || view.Players[1].HiddenHand == 0 {
+		t.Fatal("Recruit AI game did not start a valid draft or exposed the AI hand")
 	}
 }
 
@@ -138,6 +160,14 @@ func TestWebSkinAssetsAreServedWithImageHeaders(t *testing.T) {
 		"/skins/hero_icons/gorilla.png",
 		"/skins/hero_icons/coach.png",
 		"/skins/hero_icons/cpu_easy.png",
+		"/skins/icons/marks.png",
+		"/skins/icons/crowns.png",
+		"/skins/icons/energy.png",
+		"/skins/icons/wooden_chest.png",
+		"/skins/icons/silver_chest.png",
+		"/skins/icons/golden_chest.png",
+		"/skins/icons/prismatic_chest.png",
+		"/skins/icons/hero_chest.png",
 	} {
 		request = httptest.NewRequest(http.MethodGet, assetPath, nil)
 		response = httptest.NewRecorder()
@@ -555,6 +585,43 @@ func TestWebProfileCampaignAndHistoryPagesUseProfileData(t *testing.T) {
 	}
 }
 
+func TestAIDraftPickWaitsForSeparateAction(t *testing.T) {
+	state, err := game.NewDraftGameWithModifiers(
+		rand.New(rand.NewSource(57)), game.GameModifiers{Reckoning: [3]int{1, 1, 1}},
+	)
+	if err != nil {
+		t.Fatal(err)
+	}
+	state.P1.Seat, state.P2.Seat = game.SeatX, game.SeatY
+	web := &webServer{
+		rng: rand.New(rand.NewSource(58)),
+		session: &webSession{
+			state: state, mode: "hard", phase: "draft", actor: 1,
+		},
+	}
+	web.session.message = web.draftTurnMessage(web.session.actor)
+	poolSize := len(web.session.state.Draft.Pool)
+
+	if err := web.advanceAI(); err != nil {
+		t.Fatal(err)
+	}
+	if got := len(web.session.state.Draft.Pool); got != poolSize {
+		t.Fatalf("AI draft pool changed before its delayed action: got %d, want %d", got, poolSize)
+	}
+	if got, want := web.session.message, "Hard CPU is choosing a card from the public pool."; got != want {
+		t.Fatalf("AI draft prompt = %q, want %q", got, want)
+	}
+	if err := web.applyAction(actionRequest{Action: "draft-ai-pick"}); err != nil {
+		t.Fatal(err)
+	}
+	if got := len(web.session.state.Draft.Pool); got != poolSize-1 {
+		t.Fatalf("AI draft pool after pick = %d, want %d", got, poolSize-1)
+	}
+	if web.session.actor != 0 {
+		t.Fatalf("next draft actor = %d, want human player 0", web.session.actor)
+	}
+}
+
 func TestHardAICompletesGameAndContinueActionsAdvance(t *testing.T) {
 	web := &webServer{rng: rand.New(rand.NewSource(53))}
 	mux := http.NewServeMux()
@@ -567,6 +634,12 @@ func TestHardAICompletesGameAndContinueActionsAdvance(t *testing.T) {
 	continues := 0
 	for step := 0; step < 60 && view.Phase != "gameover"; step++ {
 		switch view.Phase {
+		case "draft":
+			action := map[string]any{"action": "draft-pick", "index": 0}
+			if view.Actor != 0 {
+				action = map[string]any{"action": "draft-ai-pick"}
+			}
+			view = sendWebRequest(t, server.Client(), server.URL+"/api/action", action)
 		case "commit":
 			view = sendWebRequest(t, server.Client(), server.URL+"/api/action", map[string]any{
 				"action": "commit", "cards": []int{0, 1, 2},
@@ -582,8 +655,6 @@ func TestHardAICompletesGameAndContinueActionsAdvance(t *testing.T) {
 		case "result":
 			continues++
 			view = sendWebRequest(t, server.Client(), server.URL+"/api/action", map[string]any{"action": "continue"})
-		case "seat":
-			view = sendWebRequest(t, server.Client(), server.URL+"/api/action", map[string]any{"action": "seat", "seat": "X"})
 		default:
 			t.Fatalf("unexpected Human-vs-AI phase %q", view.Phase)
 		}
@@ -605,48 +676,40 @@ func TestHardAICompletesGameAndContinueActionsAdvance(t *testing.T) {
 	}
 }
 
-func TestHumanCanChooseRoundThreeSeat(t *testing.T) {
-	for seed := int64(1); seed <= 32; seed++ {
-		web := &webServer{rng: rand.New(rand.NewSource(seed))}
-		mux := http.NewServeMux()
-		mux.HandleFunc("/api/new", web.handleNewGame)
-		mux.HandleFunc("/api/action", web.handleAction)
-		server := httptest.NewServer(mux)
-
-		view := sendWebRequest(t, server.Client(), server.URL+"/api/new", map[string]any{"mode": "hard"})
-		for step := 0; step < 60 && view.Phase != "gameover"; step++ {
-			switch view.Phase {
-			case "commit":
-				view = sendWebRequest(t, server.Client(), server.URL+"/api/action", map[string]any{
-					"action": "commit", "cards": []int{0, 1, 2},
-				})
-			case "attack":
-				view = sendWebRequest(t, server.Client(), server.URL+"/api/action", map[string]any{
-					"action": "attack", "index": 0,
-				})
-			case "defend":
-				view = sendWebRequest(t, server.Client(), server.URL+"/api/action", map[string]any{
-					"action": "defend", "index": 0,
-				})
-			case "result":
-				view = sendWebRequest(t, server.Client(), server.URL+"/api/action", map[string]any{"action": "continue"})
-			case "seat":
-				if view.Actor != 0 {
-					t.Fatalf("AI seat choice was exposed to the player at seed %d", seed)
-				}
-				view = sendWebRequest(t, server.Client(), server.URL+"/api/action", map[string]any{
-					"action": "seat", "seat": "Y",
-				})
-				server.Close()
-				if view.Phase != "commit" || view.Players[0].Seat != "Y" || view.Players[1].Seat != "X" {
-					t.Fatalf("seat choice state = phase %q, seats %q/%q", view.Phase, view.Players[0].Seat, view.Players[1].Seat)
-				}
-				return
-			default:
-				t.Fatalf("unexpected Human-vs-AI phase %q at seed %d", view.Phase, seed)
-			}
-		}
-		server.Close()
+func TestRoundThreeSeatAssignmentIsDeterministic(t *testing.T) {
+	tests := []struct {
+		name      string
+		p1Jail    []game.Card
+		p2Jail    []game.Card
+		wantSeatY int
+	}{
+		{name: "P1 lower scorer takes second position", p1Jail: []game.Card{{Suit: game.Blade, Face: 1}}, p2Jail: []game.Card{{Suit: game.Blade, Face: 9}}, wantSeatY: 0},
+		{name: "P2 lower scorer takes second position", p1Jail: []game.Card{{Suit: game.Blade, Face: 9}}, p2Jail: []game.Card{{Suit: game.Blade, Face: 1}}, wantSeatY: 1},
+		{name: "original second player takes second position on tie", wantSeatY: 1},
 	}
-	t.Fatal("no test game presented the human with the Round 3 seat choice")
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			state, err := game.NewGame(rand.New(rand.NewSource(1)))
+			if err != nil {
+				t.Fatal(err)
+			}
+			state.Bounty.Suit = game.Shield
+			state.P1.Seat, state.P2.Seat = game.SeatY, game.SeatX
+			state.P1.Jail, state.P2.Jail = test.p1Jail, test.p2Jail
+
+			if got := assignRoundThreeSeats(&state); got != test.wantSeatY {
+				t.Fatalf("player assigned to second position = %d, want %d", got, test.wantSeatY)
+			}
+			wantP1 := game.SeatX
+			wantP2 := game.SeatX
+			if test.wantSeatY == 0 {
+				wantP1 = game.SeatY
+			} else {
+				wantP2 = game.SeatY
+			}
+			if state.P1.Seat != wantP1 || state.P2.Seat != wantP2 {
+				t.Fatalf("seat assignment = %v/%v, want %v/%v", state.P1.Seat, state.P2.Seat, wantP1, wantP2)
+			}
+		})
+	}
 }

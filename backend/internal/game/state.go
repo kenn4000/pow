@@ -38,8 +38,10 @@ type GameModifiers = modifiers.GameModifiers
 type GameState struct {
 	Deck      []Card        `json:"deck"`
 	Discard   []Card        `json:"discard"`
+	Draft     *DraftState   `json:"draft,omitempty"`
 	Bounty    Card          `json:"bounty"`
 	Modifiers GameModifiers `json:"modifiers"`
+	DraftMode int           `json:"draft_mode"`
 	P1        Player        `json:"p1"`
 	P2        Player        `json:"p2"`
 	Round     int           `json:"round"`
@@ -72,12 +74,86 @@ func NewGameWithModifiers(rng *rand.Rand, gameModifiers GameModifiers) (GameStat
 	} else {
 		state.P1.Seat, state.P2.Seat = SeatY, SeatX
 	}
-	draw(&state, &state.P1.Hand, targetForSeat(state.P1.Seat))
-	draw(&state, &state.P2.Hand, targetForSeat(state.P2.Seat))
+	draw(&state, &state.P1.Hand, 5)
+	draw(&state, &state.P2.Hand, 5)
 	if err := state.Validate(); err != nil {
 		return GameState{}, err
 	}
 	return state, nil
+}
+
+func NewDraftGameWithModifiers(rng *rand.Rand, gameModifiers GameModifiers) (GameState, error) {
+	return NewDraftGameWithDraftMode(rng, gameModifiers, 3)
+}
+
+func NewDraftGameWithDraftMode(rng *rand.Rand, gameModifiers GameModifiers, draftMode int) (GameState, error) {
+	if rng == nil {
+		return GameState{}, errors.New("random source is required")
+	}
+	if err := gameModifiers.Validate(); err != nil {
+		return GameState{}, fmt.Errorf("invalid game modifiers: %w", err)
+	}
+	if draftMode < 1 || draftMode > 5 {
+		return GameState{}, fmt.Errorf("draft mode must be between 1 and 5, got %d", draftMode)
+	}
+	deck := NewDeck()
+	Shuffle(deck, rng)
+	state := GameState{
+		Bounty: deck[0], Deck: append([]Card(nil), deck[1:]...),
+		Round: 1, Modifiers: gameModifiers, DraftMode: draftMode,
+	}
+	if rng.Intn(2) == 0 {
+		state.P1.Seat, state.P2.Seat = SeatX, SeatY
+	} else {
+		state.P1.Seat, state.P2.Seat = SeatY, SeatX
+	}
+	draft, err := NewDraftWithMode(deck[1:], draftMode)
+	if err != nil {
+		return GameState{}, err
+	}
+	state.Draft = draft
+	state.Deck = nil
+	if err := state.Validate(); err != nil {
+		return GameState{}, err
+	}
+	return state, nil
+}
+
+func (s *GameState) CompleteDraft() error {
+	if s == nil || s.Draft == nil {
+		return errors.New("game has no active draft")
+	}
+	var result DraftResult
+	if s.Draft.Finished {
+		result = DraftResult{
+			XHand:    append(append([]Card(nil), s.Draft.DealtX...), s.Draft.PickedX...),
+			YHand:    append(append([]Card(nil), s.Draft.DealtY...), s.Draft.PickedY...),
+			DrawPile: append([]Card(nil), s.Draft.DrawPile...),
+			Removed:  append([]Card(nil), s.Draft.Removed...),
+		}
+	} else {
+		var err error
+		result, err = s.Draft.Finish()
+		if err != nil {
+			return err
+		}
+	}
+	x, err := s.PlayerAtSeat(SeatX)
+	if err != nil {
+		return err
+	}
+	y, err := s.PlayerAtSeat(SeatY)
+	if err != nil {
+		return err
+	}
+	xPlayer, _ := s.Player(x)
+	yPlayer, _ := s.Player(y)
+	xPlayer.Hand = result.XHand
+	yPlayer.Hand = result.YHand
+	s.Deck = result.DrawPile
+	s.Discard = append(s.Discard, result.Removed...)
+	s.Draft = nil
+	return s.Validate()
 }
 
 func (s *GameState) Player(index int) (*Player, error) {
@@ -106,6 +182,12 @@ func (s GameState) PlayerAtSeat(seat Seat) (int, error) {
 func (s GameState) Validate() error {
 	if !s.Bounty.Valid() {
 		return fmt.Errorf("invalid bounty card %v", s.Bounty)
+	}
+	if s.DraftMode < 0 || s.DraftMode > 5 {
+		return fmt.Errorf("invalid draft mode %d", s.DraftMode)
+	}
+	if s.Draft != nil && (s.DraftMode == 0 || s.Draft.Mode != s.DraftMode) {
+		return errors.New("draft state mode does not match game draft mode")
 	}
 	if err := s.Modifiers.Validate(); err != nil {
 		return fmt.Errorf("invalid game modifiers: %w", err)
@@ -137,6 +219,19 @@ func (s GameState) Validate() error {
 		for _, card := range cards {
 			if err := add(card); err != nil {
 				return err
+			}
+		}
+	}
+	if s.Draft != nil {
+		if err := s.Draft.validate(); err != nil {
+			return fmt.Errorf("opening draft: %w", err)
+		}
+		for _, cards := range [][]Card{s.Draft.Pool, s.Draft.PickedX, s.Draft.PickedY,
+			s.Draft.DealtX, s.Draft.DealtY, s.Draft.DrawPile, s.Draft.Removed} {
+			for _, card := range cards {
+				if err := add(card); err != nil {
+					return err
+				}
 			}
 		}
 	}

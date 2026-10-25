@@ -29,7 +29,8 @@ type webCampaignContext struct {
 
 func heroOption(hero heroes.Hero, unlocked bool) webHeroOption {
 	return webHeroOption{ID: hero.ID, Name: hero.Name, Unlocked: unlocked, Flavor: hero.Flavor,
-		Bounty: hero.Bounty, Shift: hero.Shift, Favored: hero.Favored, Flip: hero.Flip, Unlock: hero.Unlock}
+		Bounty: hero.Bounty, Shift: hero.Shift, Favored: hero.Favored, Draft: hero.Draft,
+		DraftFlip: hero.DraftFlip, Flip: hero.Flip, Unlock: hero.Unlock}
 }
 
 func achievementRewardDescription(marks, crowns int64, badge string, chromaPicks, heroBoxes int) string {
@@ -149,12 +150,29 @@ func (s *webServer) prepareWebMission(input actionRequest) error {
 		return err
 	}
 	white, _ := state.PlayerAtSeat(game.SeatX)
+	actor, phase := 0, "commit"
+	message := "Choose three cards for your round pile. " + mission.Hint
+	if state.Draft != nil {
+		seat, ok := state.Draft.CurrentSeat()
+		if !ok {
+			return errors.New("campaign draft has no pending first pick")
+		}
+		actor, err = state.PlayerAtSeat(seat)
+		if err != nil {
+			return err
+		}
+		phase = "draft"
+		message = "Choose one card from the public pool."
+	}
 	s.session = &webSession{
 		initialAchievements: achievementLevels(p),
-		state:               state, mode: "easy", whitePlayer: white, phase: "commit", actor: 0, winner: -1,
+		state:               state, mode: "easy", whitePlayer: white, phase: phase, actor: actor, winner: -1,
 		playerHeroID: heroID, opponentHeroID: cpuID,
-		message:  "Choose three cards for your round pile. " + mission.Hint,
+		message:  message,
 		campaign: &webCampaignContext{ID: campaign.ID, Index: mission.Index, Name: mission.Name, Hint: mission.Hint, Replay: replay, RewardMarks: mission.RewardMarks},
+	}
+	if state.Draft != nil {
+		s.session.message = s.draftTurnMessage(actor)
 	}
 	return p.Save()
 }
@@ -187,6 +205,9 @@ func (s *webServer) finishWebMission() {
 			message = fmt.Sprintf("Mission complete! +%d Marks.", reward)
 			if outcome.CampaignCompleted {
 				message += " Campaign complete: heroes and completion rewards have been added to your commander."
+			}
+			if outcome.SkillPointsAwarded > 0 {
+				message += fmt.Sprintf(" +%d Skill Tree Point(s).", outcome.SkillPointsAwarded)
 			}
 		}
 	}

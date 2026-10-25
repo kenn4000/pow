@@ -9,13 +9,14 @@ import (
 )
 
 type MissionOutcome struct {
-	MissionMarks      int64
-	CampaignCompleted bool
-	AlreadyCompleted  bool
-	CompletionMarks   int64
-	HeroesUnlocked    []string
-	HeroBoxesAwarded  int
-	BadgeAwarded      string
+	MissionMarks       int64
+	CampaignCompleted  bool
+	AlreadyCompleted   bool
+	CompletionMarks    int64
+	HeroesUnlocked     []string
+	HeroBoxesAwarded   int
+	SkillPointsAwarded int
+	BadgeAwarded       string
 }
 
 func IsUnlocked(p *profile.Profile, campaignID string) bool {
@@ -70,7 +71,8 @@ func CanPlayMission(p *profile.Profile, campaignID string, missionIndex int) boo
 			if missionIndex <= progress.MissionsCompleted {
 				return true
 			}
-			return !progress.Completed && missionIndex == progress.MissionsCompleted+1
+			return missionIndex == progress.MissionsCompleted+1 &&
+				(!progress.Completed || progress.MissionsCompleted < len(campaign.Missions))
 		}
 	}
 	return false
@@ -132,7 +134,7 @@ func CompleteMission(p *profile.Profile, campaignID string, missionIndex int, ca
 			return MissionOutcome{AlreadyCompleted: true}, nil
 		}
 	}
-	if progress.Completed || missionIndex > progress.MissionsCompleted+1 {
+	if missionIndex > progress.MissionsCompleted+1 {
 		return MissionOutcome{}, fmt.Errorf("mission %d is locked; complete the previous mission first", missionIndex)
 	}
 	progress.Started = true
@@ -142,25 +144,33 @@ func CompleteMission(p *profile.Profile, campaignID string, missionIndex int, ca
 	progress.MissionsCompleted = len(progress.CompletedMissionIDs)
 	p.Marks += missionMarks
 	outcome := MissionOutcome{MissionMarks: missionMarks}
-	if progress.MissionsCompleted != len(campaign.Missions) || progress.Completed {
+	if progress.MissionsCompleted != len(campaign.Missions) {
 		return outcome, nil
 	}
 
 	progress.Completed = true
-	p.Marks += campaign.Completion.Marks
 	outcome.CampaignCompleted = true
-	outcome.CompletionMarks = campaign.Completion.Marks
-	for _, heroID := range campaign.Completion.Heroes {
-		if !contains(p.UnlockedHeroes, heroID) {
-			p.UnlockedHeroes = append(p.UnlockedHeroes, heroID)
-			outcome.HeroesUnlocked = append(outcome.HeroesUnlocked, heroID)
+	if !progress.CompletionRewardsAwarded {
+		p.Marks += campaign.Completion.Marks
+		outcome.CompletionMarks = campaign.Completion.Marks
+		progress.CompletionRewardsAwarded = true
+		for _, heroID := range campaign.Completion.Heroes {
+			if !contains(p.UnlockedHeroes, heroID) {
+				p.UnlockedHeroes = append(p.UnlockedHeroes, heroID)
+				outcome.HeroesUnlocked = append(outcome.HeroesUnlocked, heroID)
+			}
+		}
+		p.HeroBoxesAvailable += campaign.Completion.HeroBoxes
+		outcome.HeroBoxesAwarded = campaign.Completion.HeroBoxes
+		if campaign.Completion.Badge != "" && !contains(p.Badges, campaign.Completion.Badge) {
+			outcome.BadgeAwarded = campaign.Completion.Badge
+			p.Badges = append(p.Badges, campaign.Completion.Badge)
 		}
 	}
-	p.HeroBoxesAvailable += campaign.Completion.HeroBoxes
-	outcome.HeroBoxesAwarded = campaign.Completion.HeroBoxes
-	if campaign.Completion.Badge != "" && !contains(p.Badges, campaign.Completion.Badge) {
-		outcome.BadgeAwarded = campaign.Completion.Badge
-		p.Badges = append(p.Badges, campaign.Completion.Badge)
+	if campaign.Completion.SkillPoints > 0 && !progress.CompletionSkillPointAwarded {
+		p.SkillPoints += campaign.Completion.SkillPoints
+		progress.CompletionSkillPointAwarded = true
+		outcome.SkillPointsAwarded = campaign.Completion.SkillPoints
 	}
 	return outcome, nil
 }
@@ -186,12 +196,17 @@ func ensureProgress(p *profile.Profile, campaign Campaign) *profile.CampaignProg
 		}
 		p.Campaigns[campaign.ID] = progress
 	}
+	previousTotal := progress.TotalMissions
 	progress.CampaignID = campaign.ID
 	progress.TotalMissions = len(campaign.Missions)
 	if progress.CompletedMissionIDs == nil {
 		progress.CompletedMissionIDs = []int{}
 	}
 	progress.MissionsCompleted = len(progress.CompletedMissionIDs)
+	if progress.Completed && previousTotal > 0 && previousTotal < len(campaign.Missions) {
+		progress.CompletionRewardsAwarded = true
+		progress.Completed = false
+	}
 	return progress
 }
 

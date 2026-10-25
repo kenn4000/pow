@@ -22,7 +22,7 @@ func TestLoadSaveProfileRoundTripAndSchemaValidation(t *testing.T) {
 			t.Errorf("new profile does not own default chroma %q", id)
 		}
 	}
-	if p.Campaigns["basic"].TotalMissions != 10 || p.Campaigns["advanced"].TotalMissions != 5 {
+	if p.Campaigns["basic"].TotalMissions != 10 || p.Campaigns["advanced"].TotalMissions != 10 {
 		t.Fatalf("new campaign totals = basic %d, advanced %d",
 			p.Campaigns["basic"].TotalMissions, p.Campaigns["advanced"].TotalMissions)
 	}
@@ -32,6 +32,7 @@ func TestLoadSaveProfileRoundTripAndSchemaValidation(t *testing.T) {
 	p.LastOpponentHeroID = "anchor"
 	p.LastOpponentHeroIDs = []string{"anchor", "treasurer"}
 	p.HeroBoxesAvailable = 2
+	p.DraftStats.TotalDraftsCompleted = 3
 	p.Campaigns["basic"].Started = true
 	p.Campaigns["basic"].MissionsCompleted = 1
 	p.Campaigns["basic"].CompletedMissionIDs = []int{1}
@@ -52,6 +53,7 @@ func TestLoadSaveProfileRoundTripAndSchemaValidation(t *testing.T) {
 		loaded.OpponentLastHeroID != "anchor" || loaded.HeroPlayCounts["hunter"] != 2 ||
 		loaded.HeroWinCounts["hunter"] != 1 || loaded.LastOpponentHeroID != "anchor" ||
 		len(loaded.LastOpponentHeroIDs) != 2 || loaded.HeroBoxesAvailable != 2 ||
+		loaded.DraftStats.TotalDraftsCompleted != 3 ||
 		!loaded.Campaigns["basic"].Started || loaded.Campaigns["basic"].MissionsCompleted != 1 {
 		t.Fatalf("round-trip profile missing hero progression: %+v", loaded)
 	}
@@ -60,6 +62,21 @@ func TestLoadSaveProfileRoundTripAndSchemaValidation(t *testing.T) {
 	}
 	if _, err := LoadProfileFrom(path); err == nil {
 		t.Fatal("expected unsupported schema version to fail")
+	}
+}
+
+func TestSchemaV8MigrationInitializesDraftStats(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "profile.json")
+	legacy := `{"schema_version":8,"player_id":"v8-player"}`
+	if err := os.WriteFile(path, []byte(legacy), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	p, err := LoadProfileFrom(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if p.SchemaVersion != SchemaVersion || p.DraftStats.TotalDraftsCompleted != 0 {
+		t.Fatalf("migrated draft stats = %+v at schema %d", p.DraftStats, p.SchemaVersion)
 	}
 }
 
@@ -230,7 +247,7 @@ func TestSchemaV5MigrationInitializesAcquisitionAndCampaignFields(t *testing.T) 
 	}
 }
 
-func TestSchemaV6MigrationExpandsBasicCampaignProgress(t *testing.T) {
+func TestSchemaV6MigrationUpdatesCampaignTotals(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "profile.json")
 	legacy := `{"schema_version":6,"player_id":"v6-player","campaigns":{"basic":{"campaign_id":"basic","missions_completed":3,"total_missions":5,"started":true,"completed_mission_ids":[1,2,3]}}}`
 	if err := os.WriteFile(path, []byte(legacy), 0o600); err != nil {
@@ -243,7 +260,7 @@ func TestSchemaV6MigrationExpandsBasicCampaignProgress(t *testing.T) {
 	basic := p.Campaigns["basic"]
 	if p.SchemaVersion != SchemaVersion || basic == nil || basic.TotalMissions != 10 ||
 		basic.MissionsCompleted != 3 || len(basic.CompletedMissionIDs) != 3 ||
-		p.Campaigns["advanced"] == nil || p.Campaigns["advanced"].TotalMissions != 5 {
+		p.Campaigns["advanced"] == nil || p.Campaigns["advanced"].TotalMissions != 10 {
 		t.Fatalf("v6 campaign migration = schema %d, campaigns %+v", p.SchemaVersion, p.Campaigns)
 	}
 	reloaded, err := LoadProfileFrom(path)
@@ -253,6 +270,24 @@ func TestSchemaV6MigrationExpandsBasicCampaignProgress(t *testing.T) {
 	if reloaded.Campaigns["basic"].MissionsCompleted != 3 ||
 		reloaded.Campaigns["basic"].TotalMissions != 10 {
 		t.Fatalf("persisted campaign migration = %+v", reloaded.Campaigns["basic"])
+	}
+}
+
+func TestSchemaV6MigrationPreservesPreviouslyCompletedAdvancedCampaignCount(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "profile.json")
+	legacy := `{"schema_version":6,"player_id":"v6-complete","campaigns":{"advanced":{"campaign_id":"advanced","missions_completed":5,"total_missions":5,"started":true,"completed":true,"completed_mission_ids":[1,2,3,4,5]}}}`
+	if err := os.WriteFile(path, []byte(legacy), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	p, err := LoadProfileFrom(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	advanced := p.Campaigns["advanced"]
+	if advanced.TotalMissions != 10 || advanced.MissionsCompleted != 5 ||
+		advanced.Completed || !advanced.CompletionRewardsAwarded ||
+		len(advanced.CompletedMissionIDs) != 5 {
+		t.Fatalf("completed campaign migration = %+v", advanced)
 	}
 }
 

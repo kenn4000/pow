@@ -46,6 +46,10 @@ export default defineConfig({
         target: 'http://127.0.0.1:8080',
         rewrite: path => path.replace(/^\/prisoner-of-war/, ''),
       },
+      '/prisoner-of-war/skills/icons': {
+        target: 'http://127.0.0.1:8080',
+        rewrite: path => path.replace(/^\/prisoner-of-war/, ''),
+      },
     },
   },
 });
