@@ -15,6 +15,7 @@ type MissionUI interface {
 	ShowBriefing(mission Mission)
 	ShowStartingHand(playerCards []game.Card)
 	ChooseHeroForMission(allowed []string) (string, error)
+	ChooseDraftPick(pool []game.Card, pickNumber, totalPicks int) (int, error)
 	ChooseCommit(hand []game.Card, count int) ([]int, error)
 	ChoosePoolCard(exchange int, attacking bool, revealed *game.Card, pool []game.Card) (int, error)
 	ShowMissionSetup(state game.GameState)
@@ -74,9 +75,14 @@ func RunMission(p *profile.Profile, mission Mission, rng *rand.Rand, ui MissionU
 	if err != nil {
 		return MissionResult{}, err
 	}
-	ui.ShowMissionSetup(state)
-
 	playerIndex, cpuIndex := 0, 1
+	ui.ShowMissionSetup(state)
+	if state.Draft != nil {
+		if err := runMissionDraft(&state, mission, ui, rng, playerIndex, cpuIndex); err != nil {
+			return MissionResult{}, err
+		}
+	}
+
 	var scoreAfterRoundTwo [2]int
 	var roundWins [3][2]int
 	suitDoublingWin := false
@@ -150,7 +156,7 @@ func validateMissionInputs(p *profile.Profile, mission Mission, rng *rand.Rand, 
 func playThreeRoundMission(state *game.GameState, mission Mission, ui MissionUI, rng *rand.Rand, roundWins *[3][2]int, suitDoublingWin *bool) ([2]int, error) {
 	var scores [2]int
 	for state.Round <= 3 {
-		if state.Round == 3 {
+		if state.Round == 3 && !mission.PlayerAttacksFirstAll {
 			if err := chooseMissionSeat(state, ui, rng); err != nil {
 				return scores, err
 			}
@@ -254,21 +260,225 @@ func missionModifiers(mission Mission, combined heroes.CombinedModifiers, rng *r
 	return result, nil
 }
 
+func runMissionDraft(state *game.GameState, mission Mission, ui MissionUI, rng *rand.Rand, playerIndex, cpuIndex int) error {
+	draft := state.Draft
+	for draft.CurrentPick < len(draft.PickOrder) {
+		seat, ok := draft.CurrentSeat()
+		if !ok {
+			return fmt.Errorf("mission %q draft has no pending pick", mission.Name)
+		}
+		picker, err := state.PlayerAtSeat(seat)
+		if err != nil {
+			return err
+		}
+		var index int
+		if picker == playerIndex {
+			index, err = ui.ChooseDraftPick(append([]game.Card(nil), draft.Pool...), draft.CurrentPick+1, len(draft.PickOrder))
+		} else if picker == cpuIndex {
+			hand, picked := draftCardsForSeat(draft, seat)
+			cpuHand := append(hand, picked...)
+			difficulty, difficultyErr := aiDifficulty(mission.AILevel, rng)
+			if difficultyErr != nil {
+				return difficultyErr
+			}
+			choice, chooseErr := ai.AIDraftPick(draft.Pool, cpuHand, state.Bounty.Suit, difficulty, rng)
+			if chooseErr != nil {
+				return chooseErr
+			}
+			index = -1
+			for poolIndex, card := range draft.Pool {
+				if card == choice {
+					index = poolIndex
+					break
+				}
+			}
+			if index < 0 {
+				return fmt.Errorf("mission %q AI selected a card outside the draft pool", mission.Name)
+			}
+		} else {
+			return fmt.Errorf("mission %q draft selected unknown player %d", mission.Name, picker)
+		}
+		if _, _, err := draft.Pick(index); err != nil {
+			return fmt.Errorf("mission %q draft pick %d: %w", mission.Name, draft.CurrentPick+1, err)
+		}
+	}
+	if err := state.CompleteDraft(); err != nil {
+		return fmt.Errorf("complete mission %q draft: %w", mission.Name, err)
+	}
+	return nil
+}
+
+func draftCardsForSeat(draft *game.DraftState, seat game.Seat) ([]game.Card, []game.Card) {
+	if seat == game.SeatX {
+		return draft.DealtX, draft.PickedX
+	}
+	return draft.DealtY, draft.PickedY
+}
+
+func SetMissionSeats(state *game.GameState, mission Mission) error {
+	if state == nil {
+		return errors.New("game state is required")
+	}
+	if mission.PlayerSeat == nil {
+		return nil
+	}
+	if *mission.PlayerSeat != game.SeatX && *mission.PlayerSeat != game.SeatY {
+		return fmt.Errorf("mission %q has invalid player seat %d", mission.Name, *mission.PlayerSeat)
+	}
+	state.P1.Seat = *mission.PlayerSeat
+	state.P2.Seat = otherSeat(*mission.PlayerSeat)
+	return nil
+}
+
 func newMissionState(mission Mission, gameModifiers game.GameModifiers, rng *rand.Rand) (game.GameState, error) {
+	if mission.DraftMode < 0 || mission.DraftMode > 5 {
+		return game.GameState{}, fmt.Errorf("mission %q has invalid draft mode %d", mission.Name, mission.DraftMode)
+	}
 	state, err := game.NewGameWithModifiers(rng, gameModifiers)
 	if err != nil {
 		return game.GameState{}, err
 	}
 	if mission.Type == ThreeRound {
 		if len(mission.PlayerHand) > 0 {
-			return newFixedThreeRoundState(state, mission, rng)
+			state, err = newFixedThreeRoundState(state, mission, rng)
+			if err != nil {
+				return game.GameState{}, err
+			}
+			return state, nil
 		}
 		if err := applyBountySuitOverride(&state, mission, rng); err != nil {
 			return game.GameState{}, err
 		}
+		if err := SetMissionSeats(&state, mission); err != nil {
+			return game.GameState{}, err
+		}
+		if mission.DraftMode > 0 {
+			state, err = newMissionDraftState(state, mission, rng)
+			if err != nil {
+				return game.GameState{}, err
+			}
+		}
+		if err := SetMissionSeats(&state, mission); err != nil {
+			return game.GameState{}, err
+		}
 		return state, nil
 	}
-	return newScriptedSingleRoundState(state, mission, rng)
+	state, err = newScriptedSingleRoundState(state, mission, rng)
+	if err != nil {
+		return game.GameState{}, err
+	}
+	if err := SetMissionSeats(&state, mission); err != nil {
+		return game.GameState{}, err
+	}
+	return state, nil
+}
+
+func newMissionDraftState(state game.GameState, mission Mission, rng *rand.Rand) (game.GameState, error) {
+	allCards := make([]game.Card, 0, 27)
+	allCards = append(allCards, state.Bounty)
+	allCards = append(allCards, state.Deck...)
+	allCards = append(allCards, state.P1.Hand...)
+	allCards = append(allCards, state.P2.Hand...)
+	if len(allCards) != 27 {
+		return game.GameState{}, fmt.Errorf("mission %q has %d cards before drafting, want 27", mission.Name, len(allCards))
+	}
+
+	fixedCPUCards := make(map[game.Card]bool, len(mission.CPUHoleCards))
+	for index, card := range mission.CPUHoleCards {
+		if !card.Valid() || fixedCPUCards[card] {
+			return game.GameState{}, fmt.Errorf("mission %q has invalid or duplicate CPU hole card at index %d", mission.Name, index)
+		}
+		fixedCPUCards[card] = true
+	}
+	dealtEach := 5 - mission.DraftMode
+	if len(mission.CPUHoleCards) != 0 && len(mission.CPUHoleCards) != dealtEach {
+		return game.GameState{}, fmt.Errorf("mission %q defines %d CPU hole cards for draft mode %d, want %d", mission.Name, len(mission.CPUHoleCards), mission.DraftMode, dealtEach)
+	}
+
+	bountyIndex := -1
+	bountyCandidates := make([]int, 0, len(allCards))
+	sameSuitCandidates := make([]int, 0, len(allCards))
+	for index, card := range allCards {
+		if !fixedCPUCards[card] {
+			bountyCandidates = append(bountyCandidates, index)
+			if card.Suit == state.Bounty.Suit {
+				sameSuitCandidates = append(sameSuitCandidates, index)
+			}
+			if card == state.Bounty {
+				bountyIndex = index
+			}
+		}
+	}
+	if len(bountyCandidates) == 0 {
+		return game.GameState{}, fmt.Errorf("mission %q has no available bounty card", mission.Name)
+	}
+	if bountyIndex < 0 {
+		candidates := sameSuitCandidates
+		if len(candidates) == 0 {
+			candidates = bountyCandidates
+		}
+		bountyIndex = candidates[rng.Intn(len(candidates))]
+	}
+	state.Bounty = allCards[bountyIndex]
+	deck := make([]game.Card, 0, 26)
+	for index, card := range allCards {
+		if index != bountyIndex {
+			deck = append(deck, card)
+		}
+	}
+	game.Shuffle(deck, rng)
+	for card := range fixedCPUCards {
+		if err := removeCard(&deck, card); err != nil {
+			return game.GameState{}, fmt.Errorf("mission %q CPU hole cards: %w", mission.Name, err)
+		}
+	}
+
+	cpuSeat := otherSeat(state.P1.Seat)
+	var xDealt, yDealt []game.Card
+	for _, seat := range []game.Seat{game.SeatX, game.SeatY} {
+		dealt := make([]game.Card, 0, dealtEach)
+		if seat == cpuSeat {
+			dealt = append(dealt, mission.CPUHoleCards...)
+		}
+		for len(dealt) < dealtEach {
+			dealt = append(dealt, takeCard(&deck, rng.Intn(len(deck))))
+		}
+		if seat == game.SeatX {
+			xDealt = dealt
+		} else {
+			yDealt = dealt
+		}
+	}
+	orderedDeck := make([]game.Card, 0, 26)
+	orderedDeck = append(orderedDeck, xDealt...)
+	orderedDeck = append(orderedDeck, yDealt...)
+	orderedDeck = append(orderedDeck, deck...)
+	draft, err := game.NewDraftWithMode(orderedDeck, mission.DraftMode)
+	if err != nil {
+		return game.GameState{}, err
+	}
+	firstPicker := game.SeatY
+	if mission.PlayerDraftsFirst {
+		firstPicker = state.P1.Seat
+	}
+	for index := range draft.PickOrder {
+		picker := firstPicker
+		if index%2 == 1 {
+			picker = otherSeat(firstPicker)
+		}
+		draft.PickOrder[index] = picker
+	}
+	state.Draft = draft
+	state.DraftMode = mission.DraftMode
+	state.Deck = nil
+	state.P1.Hand, state.P1.Pool, state.P1.Jail = nil, nil, nil
+	state.P2.Hand, state.P2.Pool, state.P2.Jail = nil, nil, nil
+	state.P1.CapturedByRound, state.P2.CapturedByRound = [3][3]int{}, [3][3]int{}
+	state.Round, state.Clashes = 1, 0
+	if err := state.Validate(); err != nil {
+		return game.GameState{}, fmt.Errorf("initialize mission %q draft: %w", mission.Name, err)
+	}
+	return state, nil
 }
 
 func newFixedThreeRoundState(state game.GameState, mission Mission, rng *rand.Rand) (game.GameState, error) {
@@ -504,6 +714,12 @@ func playMissionRound(
 		attackerIndex, err := state.PlayerAtSeat(game.SeatX)
 		if exchange == 1 {
 			attackerIndex, err = state.PlayerAtSeat(game.SeatY)
+		}
+		if mission.Type == ThreeRound && mission.PlayerAttacksFirstAll {
+			attackerIndex = playerIndex
+			if exchange == 1 {
+				attackerIndex = cpuIndex
+			}
 		}
 		if err != nil {
 			return err

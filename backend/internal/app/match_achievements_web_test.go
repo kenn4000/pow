@@ -17,6 +17,11 @@ func playWebMatchToEnd(t *testing.T, client *http.Client, base, mode string) web
 	for step := 0; step < 80 && view.Phase != "gameover"; step++ {
 		action := map[string]any{}
 		switch view.Phase {
+		case "draft":
+			action = map[string]any{"action": "draft-pick", "index": 0}
+			if view.Actor != 0 {
+				action = map[string]any{"action": "draft-ai-pick"}
+			}
 		case "commit":
 			action = map[string]any{"action": "commit", "cards": []int{0, 1, 2}}
 		case "attack":
@@ -25,8 +30,6 @@ func playWebMatchToEnd(t *testing.T, client *http.Client, base, mode string) web
 			action = map[string]any{"action": "defend", "index": 0}
 		case "result":
 			action = map[string]any{"action": "continue"}
-		case "seat":
-			action = map[string]any{"action": "seat", "seat": "X"}
 		default:
 			t.Fatalf("unexpected phase %q", view.Phase)
 		}

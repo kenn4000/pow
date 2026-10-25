@@ -13,13 +13,22 @@ func TestCombineAllPairsStayWithinEnvelope(t *testing.T) {
 			pairs++
 			got := Combine(first, second)
 			if got.Bounty < -3 || got.Bounty > 3 || got.Shift < 0 || got.Shift > 3 ||
-				got.Favored < -1 || got.Favored > 2 {
+				got.Favored < -1 || got.Favored > 2 || got.Draft < 1 || got.Draft > 5 {
 				t.Fatalf("%s + %s produced out-of-range modifiers: %+v", first.ID, second.ID, got)
 			}
+
 		}
 	}
 	if pairs != 66 {
 		t.Fatalf("tested %d hero pairs, want 66", pairs)
+	}
+}
+
+func TestHeroDraftModifierRange(t *testing.T) {
+	for _, draft := range []int{-3, 3} {
+		if err := Validate(Hero{ID: "test", Name: "Test", Draft: draft, Unlock: "default"}); err == nil {
+			t.Errorf("hero Draft modifier %d should be outside the allowed range", draft)
+		}
 	}
 }
 
@@ -44,6 +53,9 @@ func TestRecruitMirrorMatchDefaultsToPositiveBounty(t *testing.T) {
 	if got := Combine(recruit, recruit).Bounty; got != 1 {
 		t.Fatalf("Recruit vs Recruit bounty = %d, want +1", got)
 	}
+	if got := DraftMode(recruit, recruit); got != 1 {
+		t.Fatalf("Recruit vs Recruit draft mode = %d, want 1", got)
+	}
 	mods, err := GameModifiersFor(recruit, recruit, rand.New(rand.NewSource(1)))
 	if err != nil {
 		t.Fatal(err)
@@ -58,9 +70,9 @@ func TestHaterFlipsOnlyOpponentBounty(t *testing.T) {
 		first, second string
 		want          CombinedModifiers
 	}{
-		{"hunter", "hater", CombinedModifiers{Bounty: -1, Favored: 1}},
-		{"hater", "warden", CombinedModifiers{Favored: 2}},
-		{"hater", "hater", CombinedModifiers{Bounty: -2, Favored: 2}},
+		{"hunter", "hater", CombinedModifiers{Bounty: -1, Favored: 1, Draft: 3}},
+		{"hater", "warden", CombinedModifiers{Favored: 2, Draft: 3}},
+		{"hater", "hater", CombinedModifiers{Bounty: -2, Favored: 2, Draft: 3}},
 	}
 	for _, test := range tests {
 		first, _ := ByID(test.first)
@@ -90,8 +102,52 @@ func TestCombineWithTuningAppliesBeforeClamp(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if got != (CombinedModifiers{Bounty: 2, Shift: 3, Favored: 2}) {
+	if got != (CombinedModifiers{Bounty: 2, Shift: 3, Favored: 2, Draft: 2}) {
 		t.Fatalf("tuned modifiers = %+v", got)
+	}
+}
+
+func TestDraftModeAddsAndClampsHeroAttributes(t *testing.T) {
+	tests := []struct {
+		first, second int
+		want          int
+	}{
+		{first: -2, second: -2, want: 1},
+		{first: -2, second: 0, want: 1},
+		{first: 0, second: 0, want: 3},
+		{first: 1, second: 1, want: 5},
+		{first: 2, second: 2, want: 5},
+	}
+
+	for _, test := range tests {
+		first, second := Hero{Draft: test.first}, Hero{Draft: test.second}
+		if got := DraftMode(first, second); got != test.want {
+			t.Errorf("DraftMode(%d, %d) = %d, want %d", test.first, test.second, got, test.want)
+		}
+	}
+}
+
+func TestRosterDraftModifiersAndHaterCancellation(t *testing.T) {
+	recruit, _ := ByID("recruit")
+	gorilla, _ := ByID("ascendant")
+	gambler, _ := ByID("gambler")
+	diplomat, _ := ByID("diplomat")
+	turtle, _ := ByID("anchor")
+	hater, _ := ByID("hater")
+	if got := DraftMode(recruit, gorilla); got != 1 {
+		t.Fatalf("minimum roster draft mode = %d, want 1", got)
+	}
+	if got := DraftMode(gambler, diplomat); got != 5 {
+		t.Fatalf("maximum roster draft mode = %d, want 5", got)
+	}
+	if got := DraftMode(hater, gambler); got != 2 {
+		t.Fatalf("Hater versus +1 Draft modifier mode = %d, want 2", got)
+	}
+	if got := DraftMode(hater, hater); got != 3 {
+		t.Fatalf("Hater mirror-match mode = %d, want 3", got)
+	}
+	if got := DraftMode(recruit, turtle); got != 3 {
+		t.Fatalf("Recruit versus Turtle mode = %d, want 3", got)
 	}
 }
 

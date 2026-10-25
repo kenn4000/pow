@@ -23,7 +23,12 @@ type Mission struct {
 	Flavor                string
 	Hint                  string
 	Type                  MissionType
+	DraftMode             int
+	PlayerSeat            *game.Seat
+	PlayerDraftsFirst     bool
+	PlayerAttacksFirstAll bool
 	PlayerHand            []game.Card
+	CPUHoleCards          []game.Card
 	CPULeads              []game.Card
 	CPUPool               []game.Card
 	CPUAttacksAll         bool
@@ -43,6 +48,7 @@ type CampaignRewards struct {
 	Marks           int64
 	Heroes          []string
 	HeroBoxes       int
+	SkillPoints     int
 	Badge           string
 	UnlocksCampaign string
 }
@@ -91,9 +97,14 @@ func cloneCampaign(campaign Campaign) Campaign {
 	for index := range campaign.Missions {
 		mission := &campaign.Missions[index]
 		mission.PlayerHand = append([]game.Card(nil), mission.PlayerHand...)
+		mission.CPUHoleCards = append([]game.Card(nil), mission.CPUHoleCards...)
 		mission.CPULeads = append([]game.Card(nil), mission.CPULeads...)
 		mission.CPUPool = append([]game.Card(nil), mission.CPUPool...)
 		mission.PlayerHeroRestriction = append([]string(nil), mission.PlayerHeroRestriction...)
+		if mission.PlayerSeat != nil {
+			seat := *mission.PlayerSeat
+			mission.PlayerSeat = &seat
+		}
 		if mission.BountyOverride != nil {
 			value := *mission.BountyOverride
 			mission.BountyOverride = &value
@@ -128,6 +139,10 @@ func weightsValue(value [3]int) *[3]int {
 }
 
 func stringValue(value string) *string {
+	return &value
+}
+
+func seatValue(value game.Seat) *game.Seat {
 	return &value
 }
 

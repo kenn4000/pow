@@ -1,5 +1,7 @@
 package campaigns
 
+import "prisonersofwar/internal/game"
+
 func advancedCampaign() Campaign {
 	heroes := []string{"warden", "hunter", "anchor"}
 	missions := []Mission{
@@ -38,6 +40,61 @@ func advancedCampaign() Campaign {
 			Type:   ThreeRound, AILevel: AIGreedy, AIHero: "hater",
 			PlayerHeroRestriction: heroes, RewardMarks: AdvancedMissionMarks, CPUMirrorIndex: -1,
 		},
+		{
+			Index: 6, Name: "No Draft Duel",
+			Flavor: "No public pool, no draft. Five cards each and a fight to the finish. You will have to defend the opening attack.",
+			Hint:   "Draft is skipped (mode 0). Both players receive five hole cards. The CPU attacks first in Round 1, so you begin on defense.",
+			Type:   ThreeRound, DraftMode: 0, PlayerSeat: seatValue(game.SeatY),
+			BountyOverride: intValue(0), ShiftOverride: intValue(0),
+			FavoredOverride: intValue(0), ReckoningOverride: weightsValue([3]int{1, 1, 1}),
+			CPUMirrorIndex: -1, AILevel: AIEasy, AIHero: "recruit",
+			PlayerHeroRestriction: heroes, RewardMarks: AdvancedMissionMarks,
+		},
+		{
+			Index: 7, Name: "Unlucky",
+			Flavor: "The CPU has already drawn every nine in the deck. You will have to outplay those perfect hole cards.",
+			Hint:   "Draft mode 2: three hole cards each and six public cards. All three nines are dealt to the CPU before the draft.",
+			Type:   ThreeRound, DraftMode: 2, PlayerSeat: seatValue(game.SeatX),
+			CPUHoleCards: []game.Card{
+				card(game.Blade, 9), card(game.Shield, 9), card(game.Fang, 9),
+			},
+			BountyOverride: intValue(0), ShiftOverride: intValue(0),
+			FavoredOverride: intValue(0), ReckoningOverride: weightsValue([3]int{1, 1, 1}),
+			CPUMirrorIndex: -1, AILevel: AIEasy, AIHero: "recruit",
+			PlayerHeroRestriction: heroes, RewardMarks: AdvancedMissionMarks,
+		},
+		{
+			Index: 8, Name: "Harsh",
+			Flavor: "The CPU drafts first, but you will attack first in the opening round. Make that first move count.",
+			Hint:   "Draft mode 4: one hole card each and ten public cards. The CPU picks first; you attack first in Round 1.",
+			Type:   ThreeRound, DraftMode: 4, PlayerSeat: seatValue(game.SeatX),
+			BountyOverride: intValue(0), ShiftOverride: intValue(0),
+			FavoredOverride: intValue(0), ReckoningOverride: weightsValue([3]int{1, 1, 1}),
+			CPUMirrorIndex: -1, AILevel: AIEasy, AIHero: "recruit",
+			PlayerHeroRestriction: heroes, RewardMarks: AdvancedMissionMarks,
+		},
+		{
+			Index: 9, Name: "Blind Aggression",
+			Flavor: "Take the first pick, then keep the initiative. You will attack first at the start of every round.",
+			Hint:   "Draft mode 3: two hole cards each and eight public cards. You pick first and attack first in all three rounds.",
+			Type:   ThreeRound, DraftMode: 3, PlayerSeat: seatValue(game.SeatX),
+			PlayerDraftsFirst: true, PlayerAttacksFirstAll: true,
+			BountyOverride: intValue(0), ShiftOverride: intValue(0),
+			FavoredOverride: intValue(0), ReckoningOverride: weightsValue([3]int{1, 1, 1}),
+			CPUMirrorIndex: -1, AILevel: AIEasy, AIHero: "recruit",
+			PlayerHeroRestriction: heroes, RewardMarks: AdvancedMissionMarks,
+		},
+		{
+			Index: 10, Name: "Blind Aggression 2",
+			Flavor: "The CPU gets the first pick. You still take the initiative and attack first at the start of every round.",
+			Hint:   "Draft mode 3: two hole cards each and eight public cards. The CPU picks first; you attack first in all three rounds.",
+			Type:   ThreeRound, DraftMode: 3, PlayerSeat: seatValue(game.SeatX),
+			PlayerAttacksFirstAll: true,
+			BountyOverride:        intValue(0), ShiftOverride: intValue(0),
+			FavoredOverride: intValue(0), ReckoningOverride: weightsValue([3]int{1, 1, 1}),
+			CPUMirrorIndex: -1, AILevel: AIEasy, AIHero: "recruit",
+			PlayerHeroRestriction: heroes, RewardMarks: AdvancedMissionMarks,
+		},
 	}
 	return Campaign{
 		ID:          "advanced",
@@ -46,7 +103,7 @@ func advancedCampaign() Campaign {
 		Missions:    missions,
 		Requires:    "basic",
 		Completion: CampaignRewards{
-			Marks: AdvancedCompleteMarks, HeroBoxes: 1, Badge: "badge_advanced_training",
+			Marks: AdvancedCompleteMarks, HeroBoxes: 1, SkillPoints: 1, Badge: "badge_advanced_training",
 		},
 	}
 }

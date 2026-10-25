@@ -54,6 +54,15 @@ func (s *webServer) applicationRoutes(r chi.Router) {
 			protected.Route("/account", func(account chi.Router) {
 				account.Post("/password", s.handleChangePassword)
 			})
+			protected.Route("/social", func(social chi.Router) {
+				social.Get("/", s.handleSocialOverview)
+				social.Post("/handle", s.handleSocialSetHandle)
+				social.Post("/requests", s.handleSocialFriendRequest)
+				social.Post("/requests/{requestID}/{decision}", s.handleSocialRequestResponse)
+				social.Post("/blocks", s.handleSocialBlock)
+				social.Post("/unblock", s.handleSocialUnblock)
+				social.Post("/messages", s.handleSocialMessage)
+			})
 			protected.Route("/admin", func(admin chi.Router) {
 				admin.Use(requireAdmin)
 				admin.Get("/cards", s.handleCardCatalog)

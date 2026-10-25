@@ -54,6 +54,33 @@ type webServer struct {
 	lastCampDrawPreview bool
 }
 
+func (s *webServer) playerName(playerIndex int) string {
+	if s.session.mode == "hvh" {
+		return fmt.Sprintf("Player %d", playerIndex+1)
+	}
+	if playerIndex == 0 {
+		return "You"
+	}
+	switch s.session.mode {
+	case "easy":
+		return "Easy CPU"
+	case "normal":
+		return "Medium CPU"
+	case "hard":
+		return "Hard CPU"
+	default:
+		return "Opponent"
+	}
+}
+
+func (s *webServer) draftTurnMessage(playerIndex int) string {
+	name := s.playerName(playerIndex)
+	if name == "You" || s.session.mode == "hvh" {
+		return "Choose one card from the public pool."
+	}
+	return fmt.Sprintf("%s is choosing a card from the public pool.", name)
+}
+
 type webSession struct {
 	state               game.GameState
 	mode                string
@@ -136,6 +163,13 @@ type webView struct {
 	Attacker           int                    `json:"attacker"`
 	Bounty             game.Card              `json:"bounty"`
 	Players            []webPlayer            `json:"players,omitempty"`
+	DraftPool          []webCard              `json:"draftPool,omitempty"`
+	DraftMode          int                    `json:"draftMode"`
+	DraftHand          []game.Card            `json:"draftHand,omitempty"`
+	DraftPicked        []game.Card            `json:"draftPicked,omitempty"`
+	DraftOpponentCount int                    `json:"draftOpponentCount,omitempty"`
+	DraftPickNumber    int                    `json:"draftPickNumber,omitempty"`
+	DraftPickTotal     int                    `json:"draftPickTotal,omitempty"`
 	JailSlots          []jailCell             `json:"jailSlots,omitempty"`
 	BattleAttack       *game.Card             `json:"battleAttack,omitempty"`
 	BattleDefend       *game.Card             `json:"battleDefend,omitempty"`
@@ -197,15 +231,17 @@ type webDailyFeaturedItem struct {
 }
 
 type webHeroOption struct {
-	ID       string `json:"id"`
-	Name     string `json:"name"`
-	Unlocked bool   `json:"unlocked"`
-	Flavor   string `json:"flavor"`
-	Bounty   int    `json:"bounty"`
-	Shift    int    `json:"shift"`
-	Favored  int    `json:"favored"`
-	Flip     bool   `json:"flip"`
-	Unlock   string `json:"unlock"`
+	ID        string `json:"id"`
+	Name      string `json:"name"`
+	Unlocked  bool   `json:"unlocked"`
+	Flavor    string `json:"flavor"`
+	Bounty    int    `json:"bounty"`
+	Shift     int    `json:"shift"`
+	Favored   int    `json:"favored"`
+	Draft     int    `json:"draft"`
+	DraftFlip bool   `json:"draftFlip,omitempty"`
+	Flip      bool   `json:"flip"`
+	Unlock    string `json:"unlock"`
 }
 
 type actionRequest struct {
@@ -213,7 +249,6 @@ type actionRequest struct {
 	Mode           string `json:"mode"`
 	Index          int    `json:"index"`
 	Cards          []int  `json:"cards"`
-	Seat           string `json:"seat"`
 	PlayerHeroID   string `json:"playerHeroId"`
 	OpponentHeroID string `json:"opponentHeroId"`
 	ID             string `json:"id"`
@@ -492,7 +527,14 @@ func (s *webServer) handleSkinAsset(w http.ResponseWriter, r *http.Request) {
 		http.NotFound(w, r)
 		return
 	}
-	asset, err := webFiles.ReadFile(strings.TrimPrefix(name, "skins/"))
+	assetPath := strings.TrimPrefix(name, "skins/")
+	var asset []byte
+	var err error
+	if strings.HasPrefix(assetPath, "icons/") {
+		asset, err = skins.IconFiles.ReadFile(assetPath)
+	} else {
+		asset, err = webFiles.ReadFile(assetPath)
+	}
 	if errors.Is(err, fs.ErrNotExist) {
 		http.NotFound(w, r)
 		return
@@ -622,7 +664,7 @@ func (s *webServer) handleNewGame(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusInternalServerError, err)
 		return
 	}
-	state, err := game.NewGameWithModifiers(s.rng, gameModifiers)
+	state, err := game.NewDraftGameWithDraftMode(s.rng, gameModifiers, heroes.DraftMode(playerHero, opponentHero))
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, err)
 		return
@@ -632,17 +674,40 @@ func (s *webServer) handleNewGame(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusInternalServerError, err)
 		return
 	}
-	s.session = &webSession{
+	draftActor := 0
+	phase := "commit"
+	message := "Choose three cards from your hand to commit for Round 1."
+	if state.Draft != nil {
+		draftSeat, _ := state.Draft.CurrentSeat()
+		draftActor, err = state.PlayerAtSeat(draftSeat)
+		if err != nil {
+			writeError(w, http.StatusInternalServerError, err)
+			return
+		}
+		phase = "draft"
+	}
+	session := &webSession{
 		initialAchievements: achievementLevels(s.playerProfile),
 		state:               state,
 		mode:                mode,
 		whitePlayer:         whitePlayer,
-		phase:               "commit",
-		actor:               0,
+		phase:               phase,
+		actor:               draftActor,
 		winner:              -1,
 		playerHeroID:        playerHeroID,
 		opponentHeroID:      opponentHeroID,
-		message:             "Choose three cards from your hand to commit for Round 1.",
+	}
+	s.session = session
+	if state.Draft != nil {
+		session.message = s.draftTurnMessage(draftActor)
+	} else {
+		session.message = message
+	}
+	if mode == "hvh" && state.Draft != nil {
+		session.phase = "handoff"
+		session.handoffTarget = draftActor
+		session.handoffPhase = "draft"
+		session.message = fmt.Sprintf("Pass the screen to Player %d for their private draft pick.", draftActor+1)
 	}
 	if s.playerProfile != nil {
 		s.playerProfile.LastHeroPicked = playerHeroID
@@ -1365,6 +1430,13 @@ func (s *webServer) applyAction(request actionRequest) error {
 	switch request.Action {
 	case "commit":
 		return s.commitAction(request.Cards)
+	case "draft-pick":
+		return s.draftPickAction(request.Index)
+	case "draft-ai-pick":
+		if session.phase != "draft" || !isAI(session.mode, session.actor) {
+			return errors.New("there is no pending AI draft pick")
+		}
+		return s.chooseAIDraftPick()
 	case "ready":
 		return s.readyAction()
 	case "attack":
@@ -1388,21 +1460,6 @@ func (s *webServer) applyAction(request actionRequest) error {
 		if err := s.continueAfterBattle(); err != nil {
 			return err
 		}
-	case "seat":
-		if session.phase != "seat" {
-			return errors.New("Round 3 seat selection is no longer active")
-		}
-		if isAI(session.mode, session.actor) {
-			return errors.New("the AI chooses the Round 3 seat")
-		}
-		seat := game.SeatX
-		if strings.EqualFold(request.Seat, "Y") {
-			seat = game.SeatY
-		} else if !strings.EqualFold(request.Seat, "X") {
-			return errors.New("choose seat X or Y")
-		}
-		s.assignSeat(session.actor, seat)
-		s.beginRoundThree()
 	default:
 		return errors.New("unknown action")
 	}
@@ -1450,6 +1507,8 @@ func (s *webServer) readyAction() error {
 		session.message = fmt.Sprintf("Player %d, choose three cards to commit.", session.actor+1)
 	} else if session.phase == "attack" {
 		session.message = fmt.Sprintf("Player %d attacks. Choose a card from their pile.", session.actor+1)
+	} else if session.phase == "draft" {
+		session.message = s.draftTurnMessage(session.actor)
 	} else {
 		session.message = "Choose a response to the revealed attack."
 	}
@@ -1460,6 +1519,8 @@ func (s *webServer) advanceAI() error {
 	session := s.session
 	for session != nil && isAI(session.mode, session.actor) {
 		switch session.phase {
+		case "draft":
+			return nil
 		case "commit":
 			indices, err := s.chooseWebCPUCommit()
 			if err != nil {
@@ -1490,18 +1551,106 @@ func (s *webServer) advanceAI() error {
 			if err := s.resolveBattle(index); err != nil {
 				return err
 			}
-		case "seat":
-			seat, err := ai.ChooseSeat(session.state, session.actor, webDifficulty(session.mode), s.rng)
-			if err != nil {
-				return err
-			}
-			s.assignSeat(session.actor, seat)
-			s.beginRoundThree()
 		default:
 			return nil
 		}
 	}
 	return nil
+}
+
+func (s *webServer) draftPickAction(index int) error {
+	session := s.session
+	if session.phase != "draft" || session.state.Draft == nil || isAI(session.mode, session.actor) {
+		return errors.New("it is not your draft turn")
+	}
+	if _, _, err := session.state.Draft.Pick(index); err != nil {
+		return err
+	}
+	return s.advanceDraftPicker(session.actor)
+}
+
+func (s *webServer) chooseAIDraftPick() error {
+	session := s.session
+	if session.state.Draft == nil {
+		return errors.New("game has no active draft")
+	}
+	seat, ok := session.state.Draft.CurrentSeat()
+	if !ok {
+		return errors.New("draft has no pending AI pick")
+	}
+	playerIndex, err := session.state.PlayerAtSeat(seat)
+	if err != nil {
+		return err
+	}
+	if playerIndex != session.actor {
+		return errors.New("draft actor does not match the current seat")
+	}
+	hand, drafted, _ := draftPrivateView(session.state.Draft, seat)
+	aiHand := append(append([]game.Card(nil), hand...), drafted...)
+	choice, err := ai.AIDraftPick(session.state.Draft.Pool,
+		aiHand, session.state.Bounty.Suit, webDifficulty(session.mode), s.rng)
+	if err != nil {
+		return err
+	}
+	for index, card := range session.state.Draft.Pool {
+		if card == choice {
+			if _, _, err := session.state.Draft.Pick(index); err != nil {
+				return err
+			}
+			return s.advanceDraftPicker(playerIndex)
+		}
+	}
+	return errors.New("AI selected a card outside the draft pool")
+}
+
+func (s *webServer) advanceDraftPicker(previousActor int) error {
+	session := s.session
+	if session.state.Draft.CurrentPick == len(session.state.Draft.PickOrder) {
+		if err := session.state.CompleteDraft(); err != nil {
+			return err
+		}
+		session.actor = 0
+		session.phase = "commit"
+		session.message = "Draft complete. Choose three cards from your hand to commit for Round 1."
+		if session.mode == "hvh" {
+			session.phase = "handoff"
+			session.handoffTarget = 0
+			session.handoffPhase = "commit"
+			session.message = "Pass the screen to Player 1 to choose their Round 1 pile."
+		}
+		if s.playerProfile != nil {
+			s.playerProfile.DraftStats.TotalDraftsCompleted++
+			if err := s.playerProfile.Save(); err != nil {
+				return fmt.Errorf("save opening draft statistics: %w", err)
+			}
+		}
+		return nil
+	}
+	seat, ok := session.state.Draft.CurrentSeat()
+	if !ok {
+		return errors.New("draft turn did not advance")
+	}
+	nextActor, err := session.state.PlayerAtSeat(seat)
+	if err != nil {
+		return err
+	}
+	session.actor = nextActor
+	session.phase = "draft"
+	session.message = s.draftTurnMessage(nextActor)
+	if session.mode == "hvh" && previousActor != nextActor {
+		session.phase = "handoff"
+		session.handoffTarget = nextActor
+		session.handoffPhase = "draft"
+		session.message = fmt.Sprintf("Pass the screen to Player %d for their private draft pick.", nextActor+1)
+	}
+	return nil
+}
+
+func draftPrivateView(draft *game.DraftState, seat game.Seat) (hand, drafted []game.Card, opponentCount int) {
+	if seat == game.SeatX {
+		return draft.DealtX, draft.PickedX, len(draft.PickedY)
+	}
+	return draft.DealtY, draft.PickedY, len(draft.PickedX)
 }
 
 func (s *webServer) beginBattles() {
@@ -1523,6 +1672,12 @@ func (s *webServer) startBattle() {
 	attacker, err := session.state.PlayerAtSeat(seat)
 	if mission, ok := s.campaignMission(); ok && mission.Type == campaigns.SingleRound && mission.CPUAttacksAll {
 		attacker = 1
+	}
+	if mission, ok := s.campaignMission(); ok && mission.Type == campaigns.ThreeRound && mission.PlayerAttacksFirstAll {
+		attacker = 0
+		if session.exchange == 1 {
+			attacker = 1
+		}
 	}
 	if err != nil {
 		session.message = err.Error()
@@ -1671,7 +1826,7 @@ func (s *webServer) continueAfterBattle() error {
 	}
 	session.state.Round++
 	if session.state.Round == 3 {
-		s.chooseRoundThreeSeat()
+		s.assignRoundThreeSeats()
 		return nil
 	}
 	session.actor = 0
@@ -1686,29 +1841,18 @@ func (s *webServer) continueAfterBattle() error {
 	return nil
 }
 
-func (s *webServer) chooseRoundThreeSeat() {
+func (s *webServer) assignRoundThreeSeats() {
 	session := s.session
-	score1 := game.ScorePlayer(session.state.P1, session.state.Bounty.Suit, session.state.Modifiers).Total
-	score2 := game.ScorePlayer(session.state.P2, session.state.Bounty.Suit, session.state.Modifiers).Total
-	chooser := 0
-	if score2 < score1 || (score1 == score2 && s.rng.Intn(2) == 1) {
-		chooser = 1
-	}
-	session.actor = chooser
-	session.phase = "seat"
-	session.message = fmt.Sprintf("Player %d chooses whether to take seat X or Y for Round 3.", chooser+1)
-}
-
-func (s *webServer) assignSeat(playerIndex int, seat game.Seat) {
-	player, _ := s.session.state.Player(playerIndex)
-	opponent, _ := s.session.state.Player(1 - playerIndex)
-	player.Seat, opponent.Seat = seat, otherSeat(seat)
-}
-
-func (s *webServer) beginRoundThree() {
-	s.session.actor = 0
+	assignRoundThreeSeats(&session.state)
+	session.actor = 0
 	s.session.phase = "commit"
 	s.session.message = "Round 3: choose three cards from your hand to commit."
+	if session.mode == "hvh" {
+		session.phase = "handoff"
+		session.handoffTarget = 0
+		session.handoffPhase = "commit"
+		session.message = "Pass the screen to Player 1 to choose their Round 3 pile."
+	}
 }
 
 func (s *webServer) finishGame() {
@@ -1807,6 +1951,7 @@ func (s *webServer) view() webView {
 		Mode:           session.mode,
 		Phase:          session.phase,
 		Round:          session.state.Round,
+		DraftMode:      session.state.DraftMode,
 		Exchange:       session.exchange + 1,
 		Actor:          session.actor,
 		Attacker:       session.attacker,
@@ -1826,6 +1971,19 @@ func (s *webServer) view() webView {
 		DefaultHeroID:  session.playerHeroID,
 	}
 	copy(result.JailSlots, session.slots[:])
+	if session.phase == "draft" && session.state.Draft != nil {
+		draft := session.state.Draft
+		result.DraftPool = make([]webCard, len(draft.Pool))
+		for index, card := range draft.Pool {
+			result.DraftPool[index] = webCard{Card: card, Index: index, Selectable: !isAI(session.mode, session.actor)}
+		}
+		seat, ok := draft.CurrentSeat()
+		if ok {
+			result.DraftHand, result.DraftPicked, result.DraftOpponentCount = draftPrivateView(draft, seat)
+			result.DraftPickNumber = draft.CurrentPick + 1
+			result.DraftPickTotal = len(draft.PickOrder)
+		}
+	}
 	if session.phase == "defend" || session.phase == "result" && session.hasLastBattle {
 		result.BattleAttack = cardPointer(session.attackCard)
 	}
@@ -1861,9 +2019,6 @@ func (s *webServer) view() webView {
 			result.Message = "You Lost."
 		}
 	}
-	if session.phase == "seat" && session.actor == 0 {
-		result.Message = "You choose a seat for Round 3."
-	}
 	if session.phase == "handoff" {
 		result.Message = fmt.Sprintf("Pass the screen to Player %d.", session.handoffTarget+1)
 	}
@@ -1880,6 +2035,13 @@ func (s *webServer) playerView(index int, player game.Player, score int) webPlay
 	session := s.session
 	private := session.mode == "hvh" && index == session.actor && session.phase != "handoff" || session.mode != "hvh" && index == 0
 	view := webPlayer{Color: s.colorName(index), You: session.mode != "hvh" && index == 0, Seat: player.Seat.String(), Score: score, Hand: []webCard{}, Pool: []webCard{}, HiddenHand: len(player.Hand), HiddenPool: len(player.Pool)}
+	if session.state.Draft != nil {
+		if player.Seat == game.SeatX {
+			view.HiddenHand = len(session.state.Draft.DealtX) + len(session.state.Draft.PickedX)
+		} else {
+			view.HiddenHand = len(session.state.Draft.DealtY) + len(session.state.Draft.PickedY)
+		}
+	}
 	if (session.phase == "defend" || session.phase == "handoff" && session.handoffPhase == "defend") && index == session.attacker {
 		view.HiddenPool--
 	}

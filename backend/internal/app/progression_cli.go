@@ -545,7 +545,9 @@ func (a *app) completeCampaignProgress(p *profile.Profile, campaign campaigns.Ca
 	fmt.Printf("Mission complete! +%d Marks.\n", outcome.MissionMarks)
 	if outcome.CampaignCompleted {
 		fmt.Printf("\n=== CAMPAIGN COMPLETE: %s ===\n", campaign.Name)
-		fmt.Printf("Completion reward: +%d Marks.\n", outcome.CompletionMarks)
+		if outcome.CompletionMarks > 0 {
+			fmt.Printf("Completion reward: +%d Marks.\n", outcome.CompletionMarks)
+		}
 		for _, heroID := range outcome.HeroesUnlocked {
 			for _, event := range evaluateAchievementEvent(p, achievements.EventHeroAcquired, "campaign") {
 				showUnlockToast(event)
@@ -554,6 +556,9 @@ func (a *app) completeCampaignProgress(p *profile.Profile, campaign campaigns.Ca
 		}
 		if outcome.HeroBoxesAwarded > 0 {
 			fmt.Printf("Received %d Hero Box(es).\n", outcome.HeroBoxesAwarded)
+		}
+		if outcome.SkillPointsAwarded > 0 {
+			fmt.Printf("Received %d Skill Tree Point(s).\n", outcome.SkillPointsAwarded)
 		}
 		if outcome.BadgeAwarded != "" {
 			fmt.Printf("Badge earned: %s\n", outcome.BadgeAwarded)
@@ -602,6 +607,22 @@ func (ui *campaignMissionUI) ChooseHeroForMission(allowed []string) (string, err
 		return "", err
 	}
 	return hero.ID, nil
+}
+
+func (ui *campaignMissionUI) ChooseDraftPick(pool []game.Card, pickNumber, totalPicks int) (int, error) {
+	for {
+		fmt.Printf("Draft pick %d of %d. Choose one card from the public pool:\n", pickNumber, totalPicks)
+		ui.app.showCards(pool)
+		answer, err := ui.app.ask("Card number: ")
+		if err != nil {
+			return 0, err
+		}
+		index, err := strconv.Atoi(strings.TrimSpace(answer))
+		if err == nil && index >= 1 && index <= len(pool) {
+			return index - 1, nil
+		}
+		fmt.Println("Enter a valid pool card number.")
+	}
 }
 
 func (ui *campaignMissionUI) ChooseCommit(hand []game.Card, count int) ([]int, error) {
@@ -653,8 +674,12 @@ func (ui *campaignMissionUI) ChoosePoolCard(exchange int, attacking bool, reveal
 
 func (ui *campaignMissionUI) ShowMissionSetup(state game.GameState) {
 	mods := state.Modifiers
-	fmt.Printf("Bounty card: %s | Bounty %+d | Shift %+d | Favored %+d | Round weights %d/%d/%d\n",
-		ui.app.card(state.Bounty), mods.Bounty, mods.Shift, mods.Favored,
+	draft := "skipped"
+	if state.DraftMode > 0 {
+		draft = fmt.Sprintf("mode %d", state.DraftMode)
+	}
+	fmt.Printf("Bounty card: %s | Bounty %+d | Shift %+d | Favored %+d | Draft %s | Round weights %d/%d/%d\n",
+		ui.app.card(state.Bounty), mods.Bounty, mods.Shift, mods.Favored, draft,
 		mods.Reckoning[0], mods.Reckoning[1], mods.Reckoning[2])
 	if state.Round == 1 {
 		fmt.Println("CPU cards remain hidden until played.")
@@ -818,6 +843,13 @@ func (a *app) chooseHeroTuning(playerLabel string, maxModifiers int) (heroes.Tun
 	return tuning, nil
 }
 
+func heroDraftLabel(hero heroes.Hero) string {
+	if hero.DraftFlip {
+		return "D(opponent)"
+	}
+	return fmt.Sprintf("D%+d", hero.Draft)
+}
+
 func (a *app) chooseUnlockedHero(p *profile.Profile, playerLabel string) (heroes.Hero, error) {
 	if skills.AggregateBonuses(p).HeroHistory && len(p.LastOpponentHeroIDs) > 0 {
 		fmt.Print("Your opponent's last hero picks:")
@@ -840,7 +872,7 @@ func (a *app) chooseUnlockedHero(p *profile.Profile, playerLabel string) (heroes
 			continue
 		}
 		unlocked = append(unlocked, hero)
-		fmt.Printf("[%d] %s — B%+d S%+d F%+d\n", len(unlocked), hero.Name, hero.Bounty, hero.Shift, hero.Favored)
+		fmt.Printf("[%d] %s — B%+d S%+d F%+d %s\n", len(unlocked), hero.Name, hero.Bounty, hero.Shift, hero.Favored, heroDraftLabel(hero))
 	}
 	if len(unlocked) == 0 {
 		return heroes.Hero{}, errors.New("profile has no unlocked heroes")
@@ -880,8 +912,8 @@ func (a *app) heroesMenu(p *profile.Profile) error {
 			if plays > 0 {
 				winRate = float64(wins) * 100 / float64(plays)
 			}
-			fmt.Printf("[%d] %-15s B%+d S%+d F%+d | plays %d, wins %d (%.0f%%) | %s\n",
-				index+1, hero.Name, hero.Bounty, hero.Shift, hero.Favored,
+			fmt.Printf("[%d] %-15s B%+d S%+d F%+d %s | plays %d, wins %d (%.0f%%) | %s\n",
+				index+1, hero.Name, hero.Bounty, hero.Shift, hero.Favored, heroDraftLabel(hero),
 				plays, wins, winRate, status)
 			fmt.Printf("    %s\n", hero.Flavor)
 		}
@@ -932,8 +964,8 @@ func (a *app) confirmHeroPreview(p *profile.Profile, playerHero heroes.Hero) (bo
 		return false, fmt.Errorf("unknown preview opponent hero %q", opponentID)
 	}
 	combined := heroes.Combine(playerHero, opponentHero)
-	fmt.Printf("Preview vs %s: Bounty %+d, Shift %+d, Favored %+d.\n",
-		opponentHero.Name, combined.Bounty, combined.Shift, combined.Favored)
+	fmt.Printf("Preview vs %s: Bounty %+d, Shift %+d, Favored %+d, Draft mode %d.\n",
+		opponentHero.Name, combined.Bounty, combined.Shift, combined.Favored, combined.Draft)
 	answer, err := a.ask("Lock this hero pick? (Y/n): ")
 	if err != nil {
 		return false, err
@@ -1131,6 +1163,9 @@ func (a *app) playBestOfThree() (economy.MatchResult, game.MatchResult, error) {
 				return economy.MatchResult{}, game.MatchResult{}, err
 			}
 		}
+		if err := a.runOpeningDraft(&state); err != nil {
+			return economy.MatchResult{}, game.MatchResult{}, err
+		}
 		if matchGame == 0 {
 			firstSeats = [2]game.Seat{state.P1.Seat, state.P2.Seat}
 		}
@@ -1213,6 +1248,9 @@ func assignInitialSeats(state *game.GameState, p1Seat game.Seat) error {
 		return fmt.Errorf("invalid initial seat %d", p1Seat)
 	}
 	state.P1.Seat, state.P2.Seat = p1Seat, otherSeat(p1Seat)
+	if state.Draft != nil {
+		return state.Validate()
+	}
 	targetP1, targetP2 := 5, 6
 	if state.P1.Seat == game.SeatX {
 		targetP1, targetP2 = 6, 5

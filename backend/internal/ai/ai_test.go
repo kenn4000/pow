@@ -44,6 +44,41 @@ func TestHardAIChoicesAreLegal(t *testing.T) {
 	}
 }
 
+func TestAIDraftPickUsesSuitBountyAndHandSynergy(t *testing.T) {
+	pool := []game.Card{
+		{Suit: game.Blade, Face: 7},
+		{Suit: game.Fang, Face: 6},
+		{Suit: game.Shield, Face: 9},
+	}
+	hand := []game.Card{{Suit: game.Blade, Face: 3}, {Suit: game.Blade, Face: 5}}
+	got, err := AIDraftPick(pool, hand, game.Blade, Hard, rand.New(rand.NewSource(4)))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got != pool[0] {
+		t.Fatalf("greedy draft picked %v, want bounty/synergy card %v", got, pool[0])
+	}
+}
+
+func TestAIDraftPickMediumUsesFaceThenFewestSuitCards(t *testing.T) {
+	pool := []game.Card{
+		{Suit: game.Blade, Face: 9},
+		{Suit: game.Fang, Face: 9},
+		{Suit: game.Shield, Face: 8},
+	}
+	hand := []game.Card{{Suit: game.Blade, Face: 2}, {Suit: game.Blade, Face: 3}}
+	got, err := AIDraftPickMedium(pool, hand)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got != pool[1] {
+		t.Fatalf("medium draft pick = %v, want %v (highest face and fewer cards of that suit)", got, pool[1])
+	}
+	if _, err := AIDraftPickMedium(nil, hand); err == nil {
+		t.Fatal("empty draft pool should fail")
+	}
+}
+
 func TestHardVersusHardBalanceAndCardAccounting(t *testing.T) {
 	if testing.Short() {
 		t.Skip("10,000-game balance simulation")

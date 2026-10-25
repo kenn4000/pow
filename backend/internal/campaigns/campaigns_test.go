@@ -17,8 +17,9 @@ func TestCampaignDefinitions(t *testing.T) {
 		t.Fatalf("basic campaign definition = %+v", basic)
 	}
 	advanced, ok := ByID("advanced")
-	if !ok || len(advanced.Missions) != 5 || advanced.Requires != "basic" ||
-		advanced.Completion.Marks != 2000 || advanced.Completion.HeroBoxes != 1 {
+	if !ok || len(advanced.Missions) != 10 || advanced.Requires != "basic" ||
+		advanced.Completion.Marks != 2000 || advanced.Completion.HeroBoxes != 1 ||
+		advanced.Completion.SkillPoints != 1 {
 		t.Fatalf("advanced campaign definition = %+v", advanced)
 	}
 	if !basic.Missions[1].CPUAttacksAll || !basic.Missions[3].CPUAttacksAll ||
@@ -34,6 +35,63 @@ func TestCampaignDefinitions(t *testing.T) {
 		again.Missions[0].PlayerHeroRestriction[0] != "recruit" ||
 		again.Completion.Heroes[0] != "warden" {
 		t.Fatal("campaign definitions expose mutable internal slices")
+	}
+}
+
+func TestNewDraftMissionRules(t *testing.T) {
+	advanced, _ := ByID("advanced")
+	tests := []struct {
+		index       int
+		mode        int
+		playerSeat  game.Seat
+		firstPicker game.Seat
+		keepSeat    bool
+	}{
+		{index: 6, mode: 0, playerSeat: game.SeatY},
+		{index: 7, mode: 2, playerSeat: game.SeatX, firstPicker: game.SeatY},
+		{index: 8, mode: 4, playerSeat: game.SeatX, firstPicker: game.SeatY},
+		{index: 9, mode: 3, playerSeat: game.SeatX, firstPicker: game.SeatX, keepSeat: true},
+		{index: 10, mode: 3, playerSeat: game.SeatX, firstPicker: game.SeatY, keepSeat: true},
+	}
+	for _, test := range tests {
+		mission, ok := findMission(advanced, test.index)
+		if !ok {
+			t.Fatalf("mission %d missing", test.index)
+		}
+		state, err := newMissionState(mission, game.GameModifiers{Reckoning: [3]int{1, 1, 1}},
+			rand.New(rand.NewSource(int64(test.index))))
+		if err != nil {
+			t.Fatalf("mission %d state: %v", test.index, err)
+		}
+		if state.P1.Seat != test.playerSeat || state.P2.Seat == test.playerSeat {
+			t.Errorf("mission %d seats = %s/%s, player should be %s", test.index, state.P1.Seat, state.P2.Seat, test.playerSeat)
+		}
+		if mission.PlayerAttacksFirstAll != test.keepSeat {
+			t.Errorf("mission %d keep-seat rule = %v, want %v", test.index, mission.PlayerAttacksFirstAll, test.keepSeat)
+		}
+		if test.mode == 0 {
+			if state.Draft != nil || state.DraftMode != 0 || len(state.P1.Hand) != 5 || len(state.P2.Hand) != 5 {
+				t.Errorf("No Draft Duel setup: draft=%v mode=%d hands=%d/%d", state.Draft, state.DraftMode, len(state.P1.Hand), len(state.P2.Hand))
+			}
+			continue
+		}
+		if state.Draft == nil || state.Draft.Mode != test.mode ||
+			len(state.Draft.Pool) != 2+2*test.mode ||
+			len(state.Draft.DealtX) != 5-test.mode ||
+			len(state.Draft.DealtY) != 5-test.mode ||
+			state.Draft.PickOrder[0] != test.firstPicker {
+			t.Errorf("mission %d draft setup = %+v", test.index, state.Draft)
+		}
+		if test.index == 7 {
+			for _, card := range state.Draft.DealtY {
+				if card.Face != 9 {
+					t.Errorf("Unlucky CPU hole card = %s, want a nine", card)
+				}
+			}
+			if state.Bounty.Face == 9 {
+				t.Error("Unlucky bounty used one of the CPU's three nines")
+			}
+		}
 	}
 }
 
@@ -82,6 +140,48 @@ func TestCampaignUnlocksProgressionAndRewards(t *testing.T) {
 	}
 }
 
+func TestPreviouslyCompletedAdvancedCampaignCanAccessAddedMissionsAndSkillPoint(t *testing.T) {
+	p, err := profile.New(time.Now())
+	if err != nil {
+		t.Fatal(err)
+	}
+	for mission := 1; mission <= 10; mission++ {
+		if _, err := CompleteMission(p, "basic", mission, 0); err != nil {
+			t.Fatal(err)
+		}
+	}
+	completed := make([]int, 5)
+	for index := range completed {
+		completed[index] = index + 1
+	}
+	p.Marks += AdvancedCompleteMarks + 5*AdvancedMissionMarks
+	p.HeroBoxesAvailable = 1
+	p.Badges = append(p.Badges, "badge_advanced_training")
+	p.Campaigns["advanced"] = &profile.CampaignProgress{
+		CampaignID: "advanced", MissionsCompleted: 5, TotalMissions: 5,
+		CompletedMissionIDs: completed, Completed: true,
+	}
+	if !CanPlayMission(p, "advanced", 6) {
+		t.Fatal("previously completed campaign cannot access its first newly added mission")
+	}
+	for mission := 6; mission <= 10; mission++ {
+		outcome, err := CompleteMission(p, "advanced", mission, 0)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if mission == 10 && (!outcome.CampaignCompleted || outcome.CompletionMarks != 0 ||
+			outcome.SkillPointsAwarded != 1) {
+			t.Fatalf("new final reward for previously completed campaign = %+v", outcome)
+		}
+	}
+	if !p.Campaigns["advanced"].Completed || p.SkillPoints != 1 ||
+		p.Marks != 8000 || p.HeroBoxesAvailable != 1 ||
+		!hasBadge(p.Badges, "badge_advanced_training") {
+		t.Fatalf("appended mission progression = progress %+v, marks %d, skill points %d, boxes %d",
+			p.Campaigns["advanced"], p.Marks, p.SkillPoints, p.HeroBoxesAvailable)
+	}
+}
+
 func TestAdvancedCampaignRewardsAndReplayDoNotRewardTwice(t *testing.T) {
 	p, err := profile.New(time.Now())
 	if err != nil {
@@ -92,18 +192,20 @@ func TestAdvancedCampaignRewardsAndReplayDoNotRewardTwice(t *testing.T) {
 			t.Fatal(err)
 		}
 	}
-	for mission := 1; mission <= 5; mission++ {
+	for mission := 1; mission <= 10; mission++ {
 		outcome, err := CompleteMission(p, "advanced", mission, 0)
 		if err != nil {
 			t.Fatal(err)
 		}
-		if mission == 5 && (!outcome.CampaignCompleted || outcome.HeroBoxesAwarded != 1) {
+		if mission == 10 && (!outcome.CampaignCompleted || outcome.HeroBoxesAwarded != 1 ||
+			outcome.SkillPointsAwarded != 1) {
 			t.Fatalf("advanced completion outcome = %+v", outcome)
 		}
 	}
-	if p.Marks != 6000 || p.HeroBoxesAvailable != 1 ||
+	if p.Marks != 8000 || p.HeroBoxesAvailable != 1 || p.SkillPoints != 1 ||
 		!hasBadge(p.Badges, "badge_advanced_training") {
-		t.Fatalf("advanced rewards: marks %d, boxes %d, badges %v", p.Marks, p.HeroBoxesAvailable, p.Badges)
+		t.Fatalf("advanced rewards: marks %d, boxes %d, skill points %d, badges %v",
+			p.Marks, p.HeroBoxesAvailable, p.SkillPoints, p.Badges)
 	}
 	previousMarks, previousBoxes := p.Marks, p.HeroBoxesAvailable
 	outcome, err := CompleteMission(p, "advanced", 1, 0)
@@ -236,6 +338,38 @@ func TestThreeRoundMissionUsesNormalRoundFlow(t *testing.T) {
 	}
 }
 
+func TestBlindAggressionStartsEachRoundWithPlayerAttack(t *testing.T) {
+	campaign, _ := ByID("advanced")
+	p, err := profile.New(time.Now())
+	if err != nil {
+		t.Fatal(err)
+	}
+	for mission := 1; mission <= 10; mission++ {
+		if _, err := CompleteMission(p, "basic", mission, 0); err != nil {
+			t.Fatal(err)
+		}
+	}
+	for _, missionIndex := range []int{9, 10} {
+		mission, _ := findMission(campaign, missionIndex)
+		ui := &testMissionUI{}
+		_, err := RunMission(p, mission, rand.New(rand.NewSource(int64(missionIndex))), ui)
+		if err != nil {
+			t.Fatalf("%s: %v", mission.Name, err)
+		}
+		if len(ui.battles) != 9 {
+			t.Fatalf("%s recorded %d exchanges, want 9", mission.Name, len(ui.battles))
+		}
+		for round := 0; round < 3; round++ {
+			for exchange, wantPlayerAttack := range []bool{true, false, true} {
+				if got := ui.battles[round*3+exchange].attackerIsPlayer; got != wantPlayerAttack {
+					t.Errorf("%s round %d exchange %d player attacking = %v, want %v",
+						mission.Name, round+1, exchange+1, got, wantPlayerAttack)
+				}
+			}
+		}
+	}
+}
+
 func TestBasicMissionModifierOverrides(t *testing.T) {
 	campaign, _ := ByID("basic")
 	expected := map[int]game.GameModifiers{
@@ -302,16 +436,22 @@ type testMissionUI struct {
 }
 
 type testBattle struct {
-	attacker game.Card
-	defender game.Card
-	outcome  game.Outcome
+	attacker         game.Card
+	defender         game.Card
+	outcome          game.Outcome
+	attackerIsPlayer bool
 }
 
 func (ui *testMissionUI) ShowBriefing(Mission)            {}
 func (ui *testMissionUI) ShowStartingHand([]game.Card)    {}
 func (ui *testMissionUI) ShowMissionSetup(game.GameState) {}
-func (ui *testMissionUI) ShowBattleResult(_ int, attacker, defender game.Card, outcome game.Outcome, _ bool) {
-	ui.battles = append(ui.battles, testBattle{attacker: attacker, defender: defender, outcome: outcome})
+func (ui *testMissionUI) ChooseDraftPick([]game.Card, int, int) (int, error) {
+	return 0, nil
+}
+func (ui *testMissionUI) ShowBattleResult(_ int, attacker, defender game.Card, outcome game.Outcome, attackerIsPlayer bool) {
+	ui.battles = append(ui.battles, testBattle{
+		attacker: attacker, defender: defender, outcome: outcome, attackerIsPlayer: attackerIsPlayer,
+	})
 }
 func (ui *testMissionUI) ChooseRoundThreeSeat([2]int) (game.Seat, error) { return game.SeatX, nil }
 func (ui *testMissionUI) ShowMissionResult(result MissionResult)         { ui.lastResult = result }

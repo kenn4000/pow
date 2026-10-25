@@ -25,8 +25,15 @@ func campaignTestServer(t *testing.T) *webServer {
 func finishTestMission(t *testing.T, web *webServer) {
 	t.Helper()
 	for step := 0; step < 100 && web.session.phase != "gameover"; step++ {
-		request := actionRequest{Action: web.session.phase, Index: 0, Cards: []int{0, 1, 2}, Seat: "X"}
-		if request.Action == "result" {
+		request := actionRequest{Action: web.session.phase, Index: 0, Cards: []int{0, 1, 2}}
+		switch request.Action {
+		case "draft":
+			if web.session.actor == 0 {
+				request.Action = "draft-pick"
+			} else {
+				request.Action = "draft-ai-pick"
+			}
+		case "result":
 			request.Action = "continue"
 		}
 		if err := web.applyAction(request); err != nil {
@@ -124,6 +131,19 @@ func TestEveryWebCampaignMissionCompletesWithRestoredState(t *testing.T) {
 				}
 				if web.session.state.Round != wantRounds {
 					t.Fatalf("finished in round %d, want %d", web.session.state.Round, wantRounds)
+				}
+				if mission.Name == "No Draft Duel" && web.session.battles[0].Attacker == "You" {
+					t.Fatal("No Draft Duel did not make the player defend first")
+				}
+				if mission.Name == "Harsh" && web.session.battles[0].Attacker != "You" {
+					t.Fatal("Harsh did not make the player attack first in Round 1")
+				}
+				if mission.PlayerAttacksFirstAll {
+					for round := 0; round < 3; round++ {
+						if got := web.session.battles[round*3].Attacker; got != "You" {
+							t.Errorf("round %d first attacker = %q, want You", round+1, got)
+						}
+					}
 				}
 			})
 		}

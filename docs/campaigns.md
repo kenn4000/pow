@@ -5,9 +5,8 @@ Basic Training teaches the core rules with The Recruit; Advanced Training
 introduces hero modifiers and three selectable heroes. Both campaigns run
 through the same public game rules and keep their scripted card overrides in
 the `campaigns` package.
-The browser dashboard's **Campaigns** action shows the same saved unlock and
-mission-completion progress; campaign missions are still played from the
-terminal campaign menu.
+The browser dashboard's **Campaigns** action and the terminal campaign menu
+both show the same saved unlock and mission-completion progress.
 
 ## Basic Training
 
@@ -24,13 +23,12 @@ single-round tutorials; missions 5-10 are three-round matches.
 | 2 | The Clash | Equal cards clash and both are destroyed. The hint recommends playing 3, then 5, then 7. | Player hand: R3, R5, R7. CPU leads R9, mirror, R6 and attacks all three exchanges. The middle exchange is a tutorial-only mirror clash. Bounty 0; weights 1/1/1. |
 | 3 | The Cycle | Kess explains Rock beats Scissors, Scissors beats Paper, and Paper beats Rock. | Player hand: R5, P5, S5. CPU pool and leads: S9, R9, P9. The player can win 27-0 by playing R5, P5, S5. Bounty 0; weights 1/1/1. |
 | 4 | The Bounty | Rock prisoners are worth more. The hint recommends Paper 4 against Rock 7, Rock 4 against Scissors 8, then Scissors 7 against Rock 8. | Player hand: P4, R4, S7. CPU leads R7, S8, R8 and attacks all three exchanges. Rock bounty +2; weights 1/1/1. Expected score: 9-7. |
-| 5 | Standard | A straight match with no hero or scoring modifiers. | Three rounds; Bounty, Shift, and Favored are 0; weights 1/1/1. |
+| 5 | Standard | A straight match with no hero or scoring modifiers. | Three rounds; both players start with five cards; Bounty, Shift, and Favored are 0; weights 1/1/1. |
 | 6 | The Reckoning | Round 3 counts triple, so the player is encouraged to save strong cards. | Three rounds; weights 1/2/3; other modifiers are 0. |
 | 7 | Negative Bounty | Rock cards are worth less, so players are encouraged to consider when not to contest a capture. | Three rounds; Rock bounty -2; other modifiers are 0; weights 1/1/1. |
 | 8 | Favored | Cycle wins receive an additional +2 to their doubled combat value. | Three rounds; Favored +2; other modifiers are 0; weights 1/1/1. |
 | 9 | Shift | Every card receives +2 effective face value. | Three rounds; Shift +2; other modifiers are 0; weights 1/1/1. |
 | 10 | Final Exam | Kess combines the modifiers and challenges the Recruit to become a Warden. | Three rounds; Rock bounty +2, Shift +1, Favored -1, weights 1/1/2. |
-
 Each mission awards 100 Marks. Completing Basic Training awards 1,000
 additional Marks, unlocks Warden, Hunter, and the Turtle, grants
 `badge_basic_training`, and unlocks Advanced Training. Total campaign Marks:
@@ -52,15 +50,27 @@ Hunter, or the Turtle. The opponent's hero and AI level are fixed.
 | 3 | The Gorilla | Gorilla, Greedy AI | The Gorilla adds +2 Shift, strengthening every card and its cycle wins. |
 | 4 | The Gambler | Gambler, Greedy AI | Gambler adds +2 Bounty and +1 Shift. Kess suggests balancing or leaning into Bounty. |
 | 5 | The Hater | Hater, Greedy AI | Hater flips the opponent's Bounty contribution. Kess explains the risks for positive and negative Bounty heroes. |
+| 6 | No Draft Duel | Recruit, Easy AI | Skip the draft and defend the CPU's opening attack. No draft (mode 0); both players start with five cards; CPU attacks first in Round 1. |
+| 7 | Unlucky | Recruit, Easy AI | The CPU receives all three nines before the draft begins. Draft mode 2; three hole cards each; six public cards. |
+| 8 | Harsh | Recruit, Easy AI | CPU drafts first, but you attack first in Round 1. Draft mode 4; one hole card each; ten public cards. |
+| 9 | Blind Aggression | Recruit, Easy AI | Take the first draft pick and open every round's attack. Draft mode 3; two hole cards each; eight public cards. |
+| 10 | Blind Aggression 2 | Recruit, Easy AI | CPU drafts first, but you attack first at the start of every round. Draft mode 3; two hole cards each; eight public cards. |
 
 Each mission awards 400 Marks. Completing Advanced Training awards 2,000
-additional Marks, one Hero Box, and `badge_advanced_training`. Total campaign
-Marks: 4,000.
+additional Marks, one Hero Box, one Skill Tree Point, and
+`badge_advanced_training`. Total campaign Marks: 6,000.
 
 ## Mission behavior
 
 - `SingleRound` missions deal one three-exchange round. `ThreeRound` missions
-  use the normal three-round deal, refill, seat-change, and scoring rules.
+  use the normal three-round deal, refill, seat-change, and scoring rules unless
+  a mission explicitly sets an opening draft or attack order.
+- A `DraftMode` of 0 skips the draft and deals five cards to each player.
+  Modes 1-5 use the normal opening draft with the mission's configured first
+  picker. Fixed CPU hole cards are removed from the bounty and public pool.
+- Missions with a forced player-first attack order start each round with the
+  player attacking, followed by the CPU, then the player again; normal seat
+  rotation and refills are otherwise preserved.
 - Fixed player hands, CPU pools, scripted CPU leads, and modifier overrides
   are declared on each `Mission`. A nil modifier override leaves the
   hero-combined or normally rolled value in place.
@@ -78,6 +88,9 @@ Marks: 4,000.
 - Missions unlock in order. Advanced Training remains locked until Basic
   Training is complete. Campaign completion rewards and achievement events
   are applied by the existing profile and achievement flows.
+- Completing Advanced Training grants one Skill Tree Point. Players who had
+  already completed its original five missions can play the five additions;
+  their earlier completion rewards are not granted again.
 
 ## Adding a campaign
 

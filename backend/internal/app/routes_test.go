@@ -19,6 +19,7 @@ func TestPrefixedDeploymentRoutes(t *testing.T) {
 		{"/healthz", http.StatusOK},
 		{"/prisoner-of-war/api/state", http.StatusOK},
 		{"/prisoner-of-war/skins/tribal_red/small_idle.png", http.StatusOK},
+		{"/prisoner-of-war/skills/icons/BattleRewards.png", http.StatusOK},
 		{"/api/state", http.StatusNotFound},
 		{"/other-game/api/state", http.StatusNotFound},
 	} {
@@ -42,6 +43,7 @@ func TestNestedChiRouteScopes(t *testing.T) {
 		{"GET", "/healthz", "", 200},
 		{"GET", "/games/cards/", "", 200},
 		{"GET", "/games/cards/skins/tribal_red/small_idle.png", "", 200},
+		{"GET", "/games/cards/skills/icons/Campaign.png", "", 200},
 		{"GET", "/games/cards/api/state", "", 401},
 		{"GET", "/games/cards/api/admin/users", "", 401},
 		{"GET", "/games/cards/api/admin/cards", "", 401},

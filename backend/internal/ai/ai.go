@@ -18,6 +18,61 @@ const (
 
 const sampleCount = 8
 
+func AIDraftPick(pool, aiHand []game.Card, bountySuit game.Suit, difficulty Difficulty, rng *rand.Rand) (game.Card, error) {
+	if len(pool) == 0 {
+		return game.Card{}, errors.New("draft pool is empty")
+	}
+	if rng == nil {
+		return game.Card{}, errors.New("random source is required")
+	}
+	if difficulty == Easy || difficulty == Normal && rng.Intn(2) == 1 {
+		return pool[rng.Intn(len(pool))], nil
+	}
+	bestIndex, bestScore := 0, -1
+	for index, card := range pool {
+		suitCount, highestFace := 0, 0
+		for _, held := range aiHand {
+			if held.Suit == card.Suit {
+				suitCount++
+				if held.Face > highestFace {
+					highestFace = held.Face
+				}
+			}
+		}
+		score := int(card.Face) + suitCount*2
+		if card.Suit == bountySuit {
+			score += 2
+		}
+		if int(card.Face) > highestFace {
+			score += 3
+		}
+		if score > bestScore {
+			bestIndex, bestScore = index, score
+		}
+	}
+	return pool[bestIndex], nil
+}
+
+func AIDraftPickMedium(pool, aiHand []game.Card) (game.Card, error) {
+	if len(pool) == 0 {
+		return game.Card{}, errors.New("draft pool is empty")
+	}
+	suitCounts := [3]int{}
+	for _, card := range aiHand {
+		if card.Suit.Valid() {
+			suitCounts[card.Suit]++
+		}
+	}
+	best := pool[0]
+	for _, card := range pool[1:] {
+		if card.Face > best.Face ||
+			card.Face == best.Face && suitCounts[card.Suit] < suitCounts[best.Suit] {
+			best = card
+		}
+	}
+	return best, nil
+}
+
 func (d Difficulty) String() string {
 	switch d {
 	case Easy:

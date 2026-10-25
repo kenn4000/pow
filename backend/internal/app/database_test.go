@@ -197,8 +197,6 @@ func TestPostgresApplication(t *testing.T) {
 			body = map[string]any{"action": view.Phase, "index": 0}
 		case "result":
 			body["action"] = "continue"
-		case "seat":
-			body = map[string]any{"action": "seat", "seat": "X"}
 		default:
 			t.Fatalf("unexpected phase %s", view.Phase)
 		}

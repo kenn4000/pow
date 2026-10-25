@@ -14,6 +14,9 @@ import (
 
 func TestScriptedTerminalGamePreservesAllCards(t *testing.T) {
 	var input strings.Builder
+	for pick := 0; pick < 6; pick++ {
+		input.WriteString("\n1\n")
+	}
 	for round := 1; round <= 3; round++ {
 		if round == 3 {
 			input.WriteString("X\n")

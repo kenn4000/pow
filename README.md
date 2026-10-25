@@ -33,19 +33,26 @@ use the existing DOM renderer.
 - The 27-card deck contains faces 1–9 in Scissors (S), Paper (P), and Rock (R).
 - Scissors beats Paper, Paper beats Rock, and Rock beats Scissors. A card that
   beats its opponent has its face value doubled for that exchange.
-- At setup, one card is removed as the bounty. Hero modifiers affect combat
-  and scoring: Shift changes every face, Favored adjusts cycle-winning cards,
-  and Bounty changes the scoring face of cards matching the bounty suit.
-- Players are randomly assigned seats. X receives six cards and Y receives
-  five. Each round, both players secretly commit three cards, then resolve
-  three exchanges in X/Y/X attack order. The defender sees the attack card
-  before choosing a response.
+- At setup, one card is removed as the bounty. The draft mode is
+  `clamp(3 + both heroes' Draft attributes, 1, 5)`. Both players receive the
+  same number of hole cards: four, three, two, one, or zero in Draft 1–5.
+  The public pool contains 4, 6, 8, 10, or 12 cards for one through five
+  alternating picks per player, with Y picking first. Both players begin
+  Round 1 with five cards; the two unpicked pool cards are removed from play.
+  Campaign missions keep their scripted hands and skip the draft. See
+  [Opening Draft](README-draft.md).
+- Hero modifiers affect combat and scoring: Shift changes every face, Favored
+  adjusts cycle-winning cards, and Bounty changes the scoring face of cards
+  matching the bounty suit. Each round, both players secretly commit three
+  cards, then resolve three exchanges in X/Y/X attack order. The defender sees
+  the attack card before choosing a response.
 - The player with the higher effective value captures the opposing card; the
   winner's card is discarded. A tie is a clash, and both cards are discarded.
   The third battle automatically plays each player's last pile card.
 - After Round 1 the seats swap before hands refill to the new seat targets.
-  Before Round 3, the lower-scoring player chooses their seat; tied scores
-  decide the chooser by coin flip. There is no refill after Round 3.
+  Before Round 3, the lower-scoring player is assigned Seat Y. If the score is
+  tied, the player who started in Seat Y takes Seat Y again. There is no refill
+  after Round 3.
 - Each suit scores its captured-card count multiplied by that suit's highest
   effective scoring face. Reckoning can weight captures by the round in which
   they were won. Ties are broken by distinct suits, then highest effective
@@ -110,6 +117,11 @@ revoked. Players also have a **Cards & rules** page: its contact sheet covers
 the 27-card deck and all 72 embedded artwork files. Clicking a thumbnail opens
 a detail panel with suit rules, color/pose variants, and image metadata.
 
+The **Social** tab provides public handles, ELO and leaderboard display,
+friend requests, blocking, and direct messages between friends. The displayed
+friendly-wager limits are informational; matchmaking, wagering, and gifting
+are not yet connected.
+
 The UI draws the bounty and
 nine battle cells, capture borders, live score, current battle, piles, and
 hands. Cards use configurable colors for Scissors, Paper, and Rock. Click a
@@ -161,8 +173,8 @@ mission list, scripted setups, progression rules, and rewards. The Shop offers
 chromas, Hero Boxes, and direct hero purchases.
 At commit, enter exactly three distinct hand numbers separated by spaces or
 commas. During a battle, enter the number of a pile card. At the start of
-Round 3, the eligible player enters `X` or `Y`. Invalid entries are rejected.
-ANSI suit colors can be disabled with `--no-color` or the `NO_COLOR`
+Round 3, seats are assigned automatically from the current score. ANSI suit
+colors can be disabled with `--no-color` or the `NO_COLOR`
 environment variable. Progression details and payout rules are in
 [economy](docs/economy.md).
 
@@ -175,10 +187,10 @@ GOWORK=off go -C backend run ./cmd/prisoners-of-war --dump-economy
 
 ## AI
 
-- **Easy** chooses random legal cards and seats.
+- **Easy** chooses random legal cards.
 - **Normal** chooses commits using immediate score value, attacks randomly,
   and makes greedy defenses.
-- **Hard** evaluates commits and seat choices against sampled unseen cards,
+- **Hard** evaluates commits against sampled unseen cards,
   uses a sampled worst-case attack choice, and makes greedy defenses. It only
   samples cards that are not known to the AI.
 
