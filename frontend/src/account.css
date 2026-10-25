@@ -1,5 +1,11 @@
 .account-bar { position: relative; z-index: 5; display: flex; flex-wrap: wrap; justify-content: space-between; align-items: center; gap: .6rem; max-width: 1100px; margin: 0 auto; padding: .65rem 1rem; background: #101624; border-bottom: 1px solid #344159; }
 .account-bar nav { display: flex; flex-wrap: wrap; gap: .4rem; }
+.account-bar .build-info { display: flex; flex-basis: 100%; justify-content: flex-end; align-items: center; gap: .45rem; color: #9ba8bb; font-size: .7rem; }
+.build-info-title { color: #c5cedb; font-size: .65rem; font-weight: 700; letter-spacing: .06em; text-transform: uppercase; }
+.build-version { display: inline-flex; align-items: center; gap: .35rem; padding: .25rem .5rem; border: 1px solid #344159; border-radius: 999px; background: #151e2d; }
+.build-version code { color: #f0c75e; font-size: .68rem; }
+.build-version time { color: #9ba8bb; }
+@media (max-width: 560px) { .account-bar .build-info { justify-content: flex-start; flex-wrap: wrap; } }
 .account-bar button, .account-page button { padding: .6rem .9rem; border: 1px solid #62718b; border-radius: 6px; color: #f3f4ef; background: #263047; cursor: pointer; }
 .account-bar button[aria-current], .account-page button[type=submit] { color: #101624; background: #f0c75e; }
 .account-page { max-width: 1000px; padding: 1.5rem; margin: 1rem auto 6rem; }

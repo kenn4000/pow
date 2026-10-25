@@ -32,6 +32,7 @@ func (s *webServer) routes() http.Handler {
 
 func (s *webServer) applicationRoutes(r chi.Router) {
 	r.Get("/", s.handlePage)
+	r.Get("/build-info", s.handleBuildInfo)
 	r.Route("/skins", func(assets chi.Router) {
 		assets.Get("/*", s.handleSkinAsset)
 	})

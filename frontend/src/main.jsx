@@ -86,6 +86,8 @@ function AuthForm({ onLogin }) {
 }
 
 function App() {
+  const frontendBuild = { hash: import.meta.env.VITE_BUILD_HASH || 'unknown', date: import.meta.env.VITE_BUILD_DATE || 'unknown' };
+  const [backendBuild, setBackendBuild] = useState({ hash: 'unknown', date: 'unknown' });
   const [user, setUser] = useState(undefined);
   const accountScreens = { 'saved-games': 'history', admin: 'admin', cards: 'cards', password: 'password' };
   const routeScreen = () => accountScreens[window.location.hash.split('/')[1]] || 'game';
@@ -94,6 +96,10 @@ function App() {
   const [accountOpen, setAccountOpen] = useState(false);
   const [displayName, setDisplayName] = useState('');
   const accountBar = useRef(null);
+
+  useEffect(() => {
+    fetch(`${import.meta.env.BASE_URL}build-info`).then(response => response.ok ? response.json() : null).then(info => { if (info) setBackendBuild(info); }).catch(() => {});
+  }, []);
 
   useEffect(() => {
     if (!accountBar.current) return;
@@ -172,6 +178,11 @@ function App() {
           <button onClick={logout}>Sign out</button>
         </span>}
       </nav>
+      <section className="build-info" aria-label="Build information">
+        <span className="build-info-title">Build information</span>
+        <span className="build-version"><span>Frontend</span><code>{frontendBuild.hash}</code><time>{frontendBuild.date}</time></span>
+        <span className="build-version"><span>Backend</span><code>{backendBuild.hash}</code><time>{backendBuild.date}</time></span>
+      </section>
       {error && <p role="alert">{error}</p>}
     </header>
     {screen === 'admin' && user.role === 'admin'

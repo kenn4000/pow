@@ -2,6 +2,10 @@ import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { defineConfig } from 'vite';
 import react from '@vitejs/plugin-react';
+import { execFileSync } from 'node:child_process';
+
+const buildHash = (() => { try { return execFileSync('git', ['rev-parse', '--short=12', 'HEAD'], { encoding: 'utf8' }).trim(); } catch { return 'unknown'; } })();
+const buildDate = new Date().toISOString().slice(0, 10);
 
 const sourceFile = fileURLToPath(new URL('./src/game.html', import.meta.url));
 
@@ -35,6 +39,7 @@ function gameModules() {
 
 export default defineConfig({
   base: '/prisoner-of-war/',
+  define: { 'import.meta.env.VITE_BUILD_HASH': JSON.stringify(buildHash), 'import.meta.env.VITE_BUILD_DATE': JSON.stringify(buildDate) },
   plugins: [react(), gameModules()],
   server: {
     proxy: {

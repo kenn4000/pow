@@ -16,6 +16,7 @@ import (
 	"net/url"
 	"os"
 	"path"
+	"runtime/debug"
 	"strings"
 	"sync"
 	"time"
@@ -512,6 +513,24 @@ func (s *webServer) handlePage(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	writeJSON(w, http.StatusOK, map[string]string{"service": "prisoners-of-war", "frontend": "Run the Vite frontend or deploy the Helm chart"})
+}
+
+func (s *webServer) handleBuildInfo(w http.ResponseWriter, r *http.Request) {
+	info := map[string]string{"hash": "unknown", "date": "unknown"}
+	if build, ok := debug.ReadBuildInfo(); ok {
+		for _, setting := range build.Settings {
+			switch setting.Key {
+			case "vcs.revision":
+				if len(setting.Value) > 12 {
+					setting.Value = setting.Value[:12]
+				}
+				info["hash"] = setting.Value
+			case "vcs.time":
+				info["date"] = setting.Value
+			}
+		}
+	}
+	writeJSON(w, http.StatusOK, info)
 }
 
 func (s *webServer) handleSkinAsset(w http.ResponseWriter, r *http.Request) {
