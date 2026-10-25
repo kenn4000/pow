@@ -191,6 +191,11 @@ func TestPostgresApplication(t *testing.T) {
 	for step := 0; step < 80 && view.Phase != "gameover"; step++ {
 		body := map[string]any{}
 		switch view.Phase {
+		case "draft":
+			body = map[string]any{"action": "draft-pick", "index": 0}
+			if view.Actor != 0 {
+				body = map[string]any{"action": "draft-ai-pick"}
+			}
 		case "commit":
 			body = map[string]any{"action": "commit", "cards": []int{0, 1, 2}}
 		case "attack", "defend":
