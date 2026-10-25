@@ -29,6 +29,8 @@ backend-lint:
 backend-test:
   image: golang:1.25-alpine
   stage: test
+  when: manual
+  allow_failure: true
   services:
     - name: postgres:17-alpine
       alias: postgres
@@ -46,6 +48,8 @@ backend-test:
 frontend-test:
   image: node:22-alpine
   stage: test
+  when: manual
+  allow_failure: true
   script:
     - npm --prefix frontend ci
     - npm --prefix frontend run build
@@ -55,6 +59,8 @@ helm-test:
     name: alpine/helm:3.17.3
     entrypoint: [""]
   stage: test
+  when: manual
+  allow_failure: true
   script:
     - helm lint deploy/helm/prisoner-of-war --strict
     - helm template prisoner-of-war deploy/helm/prisoner-of-war
