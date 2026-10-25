@@ -1,0 +1,148 @@
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: prisoner-of-war-dev
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: workspace-home
+  namespace: prisoner-of-war-dev
+spec:
+  accessModes: [ReadWriteOnce]
+  storageClassName: local-path
+  resources:
+    requests:
+      storage: 20Gi
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: workspace-postgres
+  namespace: prisoner-of-war-dev
+spec:
+  accessModes: [ReadWriteOnce]
+  storageClassName: local-path
+  resources:
+    requests:
+      storage: 5Gi
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: workspace
+  namespace: prisoner-of-war-dev
+spec:
+  replicas: 1
+  strategy:
+    type: Recreate
+  selector:
+    matchLabels:
+      app: pow-workspace
+  template:
+    metadata:
+      labels:
+        app: pow-workspace
+    spec:
+      automountServiceAccountToken: false
+      nodeSelector:
+        kubernetes.io/hostname: server
+      terminationGracePeriodSeconds: 30
+      containers:
+        - name: workspace
+          image: pow-workspace:1.19.4-4
+          imagePullPolicy: Never
+          securityContext:
+            allowPrivilegeEscalation: false
+          env:
+            - name: PGHOST
+              value: 127.0.0.1
+            - name: PGUSER
+              value: prisonersofwar
+            - name: PGDATABASE
+              value: prisonersofwar
+            - name: PGPASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: workspace-passwords
+                  key: postgres-password
+            - name: BOOTSTRAP_ADMIN_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: workspace-passwords
+                  key: admin-password
+            - name: BOOTSTRAP_ADMIN_EMAIL
+              value: admin@example.com
+            - name: PUBLIC_URL
+              value: http://localhost:5173
+            - name: COOKIE_SECURE
+              value: "false"
+            - name: DEVELOPMENT_LOGIN
+              value: "true"
+            - name: GOWORK
+              value: "off"
+          readinessProbe:
+            exec:
+              command: [bash, -c, "exec 3<>/dev/tcp/127.0.0.1/2222"]
+            initialDelaySeconds: 3
+            periodSeconds: 10
+          resources:
+            requests:
+              cpu: 100m
+              memory: 256Mi
+            limits:
+              cpu: "2"
+              memory: 2Gi
+          volumeMounts:
+            - name: home
+              mountPath: /home/dev
+            - name: repo
+              mountPath: /home/dev/repo
+            - name: ssh
+              mountPath: /etc/workspace-ssh
+              readOnly: true
+        - name: postgres
+          image: postgres:17-bookworm
+          env:
+            - name: POSTGRES_USER
+              value: prisonersofwar
+            - name: POSTGRES_DB
+              value: prisonersofwar
+            - name: POSTGRES_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: workspace-passwords
+                  key: postgres-password
+            - name: PGDATA
+              value: /var/lib/postgresql/data/pgdata
+          args: ["-c", "listen_addresses=127.0.0.1", "-c", "shared_buffers=32MB", "-c", "max_connections=30"]
+          readinessProbe:
+            exec:
+              command: [pg_isready, -h, 127.0.0.1, -U, prisonersofwar, -d, prisonersofwar]
+            initialDelaySeconds: 5
+            periodSeconds: 5
+          resources:
+            requests:
+              cpu: 50m
+              memory: 64Mi
+            limits:
+              cpu: "1"
+              memory: 256Mi
+          volumeMounts:
+            - name: postgres
+              mountPath: /var/lib/postgresql/data
+      volumes:
+        - name: home
+          persistentVolumeClaim:
+            claimName: workspace-home
+        - name: repo
+          hostPath:
+            path: /srv/pow-dev/repo
+            type: Directory
+        - name: postgres
+          persistentVolumeClaim:
+            claimName: workspace-postgres
+        - name: ssh
+          secret:
+            secretName: workspace-ssh
+            defaultMode: 0600

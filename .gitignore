@@ -25,6 +25,7 @@ npm-debug.log*
 *.tgz
 .env
 .env.*
+/deploy/workspace/keys/pow-dev_ed25519
 !.env.example
 !.env.*.example
 .DS_Store

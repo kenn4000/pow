@@ -1,0 +1,24 @@
+Host pow-host
+  HostName 66.63.184.194
+  User powdev
+  Port 8888
+  IdentityFile ${POW_WORKSPACE_DIR}/keys/pow-dev_ed25519
+  IdentitiesOnly yes
+  ServerAliveInterval 30
+  ServerAliveCountMax 3
+
+Host pow-dev
+  HostName 127.0.0.1
+  User dev
+  Port 22220
+  IdentityFile ${POW_WORKSPACE_DIR}/keys/pow-dev_ed25519
+  IdentitiesOnly yes
+  HostKeyAlias pow-workspace
+  ProxyCommand ssh -F "$POW_WORKSPACE_DIR/ssh_config" -W %h:%p pow-host
+  LocalForward 127.0.0.1:5173 127.0.0.1:5173
+  LocalForward 127.0.0.1:8080 127.0.0.1:8080
+  ExitOnForwardFailure yes
+  ServerAliveInterval 30
+  ServerAliveCountMax 3
+  RequestTTY force
+  RemoteCommand cd /home/dev/repo && exec bash -l

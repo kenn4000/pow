@@ -1,5 +1,8 @@
 # Deployment
 
+For persistent remote OpenCode development with SSH and local browser previews,
+see [remote workspace](workspace/README.md).
+
 ## Target
 
 - URL: `https://games.markdownthing.com/prisoner-of-war/`
@@ -125,4 +128,6 @@ ssh k3s_personal_box_root 'KUBECONFIG=/etc/rancher/k3s/k3s.yaml helm -n prisoner
 ssh k3s_personal_box_root 'KUBECONFIG=/etc/rancher/k3s/k3s.yaml helm -n prisoner-of-war rollback prisoner-of-war'
 ```
 
-No private keys, registry tokens, or kubeconfigs belong in this repository.
+Server-administrator private keys, registry tokens, and kubeconfigs stay outside
+this repository. The dedicated shared development key and its access scope are
+documented in [remote workspace](workspace/README.md).

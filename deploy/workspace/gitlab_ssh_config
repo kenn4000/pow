@@ -1,0 +1,8 @@
+Host gitlabs.markdownthing.com
+  HostName gitlabs.markdownthing.com
+  User git
+  Port 22
+  IdentityFile ~/.ssh/pow-gitlab/pow-dev_ed25519
+  IdentitiesOnly yes
+  UserKnownHostsFile ~/.ssh/pow-gitlab/gitlab_known_hosts
+  StrictHostKeyChecking yes

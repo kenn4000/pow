@@ -1,0 +1,18 @@
+[Unit]
+Description=Loopback SSH transport to Prisoners of War development pod
+After=network-online.target k3s.service
+Wants=network-online.target
+Requires=k3s.service
+
+[Service]
+Type=simple
+Environment=KUBECONFIG=/etc/rancher/k3s/k3s.yaml
+ExecStart=/usr/local/bin/kubectl -n prisoner-of-war-dev port-forward --address=127.0.0.1 deployment/workspace 22220:2222
+Restart=always
+RestartSec=3
+NoNewPrivileges=true
+ProtectHome=true
+PrivateTmp=true
+
+[Install]
+WantedBy=multi-user.target
