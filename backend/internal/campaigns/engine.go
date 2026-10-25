@@ -383,41 +383,15 @@ func newMissionDraftState(state game.GameState, mission Mission, rng *rand.Rand)
 		return game.GameState{}, fmt.Errorf("mission %q has %d cards before drafting, want 27", mission.Name, len(allCards))
 	}
 
-	fixedCPUCards := make(map[game.Card]bool, len(mission.CPUHoleCards))
-	for index, card := range mission.CPUHoleCards {
-		if !card.Valid() || fixedCPUCards[card] {
-			return game.GameState{}, fmt.Errorf("mission %q has invalid or duplicate CPU hole card at index %d", mission.Name, index)
-		}
-		fixedCPUCards[card] = true
+	fixedCPUCards, err := missionDraftCPUHoleCards(mission)
+	if err != nil {
+		return game.GameState{}, err
 	}
 	dealtEach := 5 - mission.DraftMode
-	if len(mission.CPUHoleCards) != 0 && len(mission.CPUHoleCards) != dealtEach {
-		return game.GameState{}, fmt.Errorf("mission %q defines %d CPU hole cards for draft mode %d, want %d", mission.Name, len(mission.CPUHoleCards), mission.DraftMode, dealtEach)
-	}
 
-	bountyIndex := -1
-	bountyCandidates := make([]int, 0, len(allCards))
-	sameSuitCandidates := make([]int, 0, len(allCards))
-	for index, card := range allCards {
-		if !fixedCPUCards[card] {
-			bountyCandidates = append(bountyCandidates, index)
-			if card.Suit == state.Bounty.Suit {
-				sameSuitCandidates = append(sameSuitCandidates, index)
-			}
-			if card == state.Bounty {
-				bountyIndex = index
-			}
-		}
-	}
-	if len(bountyCandidates) == 0 {
-		return game.GameState{}, fmt.Errorf("mission %q has no available bounty card", mission.Name)
-	}
+	bountyIndex := missionDraftBountyIndex(allCards, state.Bounty, fixedCPUCards, rng)
 	if bountyIndex < 0 {
-		candidates := sameSuitCandidates
-		if len(candidates) == 0 {
-			candidates = bountyCandidates
-		}
-		bountyIndex = candidates[rng.Intn(len(candidates))]
+		return game.GameState{}, fmt.Errorf("mission %q has no available bounty card", mission.Name)
 	}
 	state.Bounty = allCards[bountyIndex]
 	deck := make([]game.Card, 0, 26)
@@ -479,6 +453,49 @@ func newMissionDraftState(state game.GameState, mission Mission, rng *rand.Rand)
 		return game.GameState{}, fmt.Errorf("initialize mission %q draft: %w", mission.Name, err)
 	}
 	return state, nil
+}
+
+func missionDraftCPUHoleCards(mission Mission) (map[game.Card]bool, error) {
+	fixedCPUCards := make(map[game.Card]bool, len(mission.CPUHoleCards))
+	for index, card := range mission.CPUHoleCards {
+		if !card.Valid() || fixedCPUCards[card] {
+			return nil, fmt.Errorf("mission %q has invalid or duplicate CPU hole card at index %d", mission.Name, index)
+		}
+		fixedCPUCards[card] = true
+	}
+	dealtEach := 5 - mission.DraftMode
+	if len(mission.CPUHoleCards) != 0 && len(mission.CPUHoleCards) != dealtEach {
+		return nil, fmt.Errorf("mission %q defines %d CPU hole cards for draft mode %d, want %d", mission.Name, len(mission.CPUHoleCards), mission.DraftMode, dealtEach)
+	}
+	return fixedCPUCards, nil
+}
+
+func missionDraftBountyIndex(cards []game.Card, bounty game.Card, fixedCPUCards map[game.Card]bool, rng *rand.Rand) int {
+	bountyIndex := -1
+	bountyCandidates := make([]int, 0, len(cards))
+	sameSuitCandidates := make([]int, 0, len(cards))
+	for index, card := range cards {
+		if !fixedCPUCards[card] {
+			bountyCandidates = append(bountyCandidates, index)
+			if card.Suit == bounty.Suit {
+				sameSuitCandidates = append(sameSuitCandidates, index)
+			}
+			if card == bounty {
+				bountyIndex = index
+			}
+		}
+	}
+	if len(bountyCandidates) == 0 {
+		return -1
+	}
+	if bountyIndex < 0 {
+		candidates := sameSuitCandidates
+		if len(candidates) == 0 {
+			candidates = bountyCandidates
+		}
+		bountyIndex = candidates[rng.Intn(len(candidates))]
+	}
+	return bountyIndex
 }
 
 func newFixedThreeRoundState(state game.GameState, mission Mission, rng *rand.Rand) (game.GameState, error) {
@@ -711,21 +728,9 @@ func playMissionRound(
 	suitDoublingWin *bool,
 ) error {
 	for exchange := 0; exchange < 3; exchange++ {
-		attackerIndex, err := state.PlayerAtSeat(game.SeatX)
-		if exchange == 1 {
-			attackerIndex, err = state.PlayerAtSeat(game.SeatY)
-		}
-		if mission.Type == ThreeRound && mission.PlayerAttacksFirstAll {
-			attackerIndex = playerIndex
-			if exchange == 1 {
-				attackerIndex = cpuIndex
-			}
-		}
+		attackerIndex, err := missionAttackerIndex(state, mission, exchange, playerIndex, cpuIndex)
 		if err != nil {
 			return err
-		}
-		if mission.Type == SingleRound && mission.CPUAttacksAll {
-			attackerIndex = cpuIndex
 		}
 		defenderIndex := 1 - attackerIndex
 		attacker, _ := state.Player(attackerIndex)
@@ -787,6 +792,26 @@ func playMissionRound(
 		recordMissionOutcome(roundIndex, attackerIndex, outcome, attackCard, defendCard, roundWins, suitDoublingWin)
 	}
 	return nil
+}
+
+func missionAttackerIndex(state *game.GameState, mission Mission, exchange, playerIndex, cpuIndex int) (int, error) {
+	attackerIndex, err := state.PlayerAtSeat(game.SeatX)
+	if exchange == 1 {
+		attackerIndex, err = state.PlayerAtSeat(game.SeatY)
+	}
+	if mission.Type == ThreeRound && mission.PlayerAttacksFirstAll {
+		attackerIndex = playerIndex
+		if exchange == 1 {
+			attackerIndex = cpuIndex
+		}
+	}
+	if err != nil {
+		return 0, err
+	}
+	if mission.Type == SingleRound && mission.CPUAttacksAll {
+		attackerIndex = cpuIndex
+	}
+	return attackerIndex, nil
 }
 
 func playMissionMirror(state *game.GameState, mission Mission, ui MissionUI, exchange, attackerIndex int, cpuAttacks bool) (game.Card, game.Card, error) {

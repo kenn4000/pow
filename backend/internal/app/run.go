@@ -57,20 +57,8 @@ func Run() {
 	dumpEconomy := flag.Bool("dump-economy", false, "print economy, skill, chroma, and Camp Draw configuration as JSON")
 	flag.Parse()
 
-	if *simGames < 0 {
-		fmt.Fprintln(os.Stderr, "--sim must be zero or greater")
-		os.Exit(2)
-	}
-	if *simHeroGames < 0 {
-		fmt.Fprintln(os.Stderr, "--sim-heroes must be zero or greater")
-		os.Exit(2)
-	}
-	if *simDraftGames < 0 {
-		fmt.Fprintln(os.Stderr, "--sim-draft must be zero or greater")
-		os.Exit(2)
-	}
-	if *simCampDraws < 0 {
-		fmt.Fprintln(os.Stderr, "--sim-campdraw must be zero or greater")
+	if err := validateSimulationCounts(*simGames, *simHeroGames, *simDraftGames, *simCampDraws); err != nil {
+		fmt.Fprintln(os.Stderr, err)
 		os.Exit(2)
 	}
 	if *dumpEconomy {
@@ -131,6 +119,23 @@ func Run() {
 		os.Exit(2)
 	}
 	runTerminal(*modeFlag, *noColor, rng)
+}
+
+func validateSimulationCounts(games, heroGames, draftGames, campDraws int) error {
+	for _, simulation := range []struct {
+		name  string
+		count int
+	}{
+		{"sim", games},
+		{"sim-heroes", heroGames},
+		{"sim-draft", draftGames},
+		{"sim-campdraw", campDraws},
+	} {
+		if simulation.count < 0 {
+			return fmt.Errorf("--%s must be zero or greater", simulation.name)
+		}
+	}
+	return nil
 }
 
 func runTerminal(modeFlag string, noColor bool, rng *rand.Rand) {
@@ -1073,38 +1078,9 @@ func simulateHeroGame(first, second heroes.Hero, p1Difficulty, p2Difficulty ai.D
 		if err := commitSimulationPlayers(&state, difficulties, rng); err != nil {
 			return heroSimulationGameResult{}, err
 		}
-		roundWins := 0
-		for exchange := 0; exchange < 3; exchange++ {
-			attackerSeat := game.SeatX
-			if exchange == 1 {
-				attackerSeat = game.SeatY
-			}
-			attacker, err := state.PlayerAtSeat(attackerSeat)
-			if err != nil {
-				return heroSimulationGameResult{}, err
-			}
-			defender := 1 - attacker
-			attackerPlayer, _ := state.Player(attacker)
-			defenderPlayer, _ := state.Player(defender)
-			if len(attackerPlayer.Pool) == 0 || len(defenderPlayer.Pool) == 0 {
-				continue
-			}
-			attackIndex, err := ai.ChoosePoolIndex(state, attacker, true, nil, difficulties[attacker], rng)
-			if err != nil {
-				return heroSimulationGameResult{}, err
-			}
-			attackCard := attackerPlayer.Pool[attackIndex]
-			defendIndex, err := ai.ChoosePoolIndex(state, defender, false, &attackCard, difficulties[defender], rng)
-			if err != nil {
-				return heroSimulationGameResult{}, err
-			}
-			outcome, err := game.PlayExchange(&state, attacker, attackIndex, defender, defendIndex)
-			if err != nil {
-				return heroSimulationGameResult{}, err
-			}
-			if outcome.Winner != -1 {
-				roundWins++
-			}
+		roundWins, err := playHeroSimulationRound(&state, difficulties, rng)
+		if err != nil {
+			return heroSimulationGameResult{}, err
 		}
 		if roundWins <= 1 {
 			stalls++
@@ -1129,6 +1105,43 @@ func simulateHeroGame(first, second heroes.Hero, p1Difficulty, p2Difficulty ai.D
 		xScore: scores[initialXPlayer], yScore: scores[yIndex],
 		clashes: state.Clashes, stalls: stalls, depleted: depleted,
 	}, nil
+}
+
+func playHeroSimulationRound(state *game.GameState, difficulties [2]ai.Difficulty, rng *rand.Rand) (int, error) {
+	roundWins := 0
+	for exchange := 0; exchange < 3; exchange++ {
+		attackerSeat := game.SeatX
+		if exchange == 1 {
+			attackerSeat = game.SeatY
+		}
+		attacker, err := state.PlayerAtSeat(attackerSeat)
+		if err != nil {
+			return 0, err
+		}
+		defender := 1 - attacker
+		attackerPlayer, _ := state.Player(attacker)
+		defenderPlayer, _ := state.Player(defender)
+		if len(attackerPlayer.Pool) == 0 || len(defenderPlayer.Pool) == 0 {
+			continue
+		}
+		attackIndex, err := ai.ChoosePoolIndex(*state, attacker, true, nil, difficulties[attacker], rng)
+		if err != nil {
+			return 0, err
+		}
+		attackCard := attackerPlayer.Pool[attackIndex]
+		defendIndex, err := ai.ChoosePoolIndex(*state, defender, false, &attackCard, difficulties[defender], rng)
+		if err != nil {
+			return 0, err
+		}
+		outcome, err := game.PlayExchange(state, attacker, attackIndex, defender, defendIndex)
+		if err != nil {
+			return 0, err
+		}
+		if outcome.Winner != -1 {
+			roundWins++
+		}
+	}
+	return roundWins, nil
 }
 
 func completeSimulationDraft(state *game.GameState, difficulties [2]ai.Difficulty, rng *rand.Rand) error {

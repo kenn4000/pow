@@ -669,10 +669,34 @@ func (s *webServer) handleNewGame(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusInternalServerError, err)
 		return
 	}
-	whitePlayer, err := state.PlayerAtSeat(game.SeatX)
-	if err != nil {
+	if err := s.startWebGameSession(state, mode, playerHeroID, opponentHeroID); err != nil {
 		writeError(w, http.StatusInternalServerError, err)
 		return
+	}
+	if s.playerProfile != nil {
+		s.playerProfile.LastHeroPicked = playerHeroID
+		s.playerProfile.OpponentLastHeroID = opponentHeroID
+		s.playerProfile.LastOpponentHeroID = opponentHeroID
+		s.playerProfile.LastOpponentHeroIDs = append([]string{opponentHeroID}, s.playerProfile.LastOpponentHeroIDs...)
+		if len(s.playerProfile.LastOpponentHeroIDs) > 2 {
+			s.playerProfile.LastOpponentHeroIDs = s.playerProfile.LastOpponentHeroIDs[:2]
+		}
+		if err := s.playerProfile.Save(); err != nil {
+			writeError(w, http.StatusInternalServerError, err)
+			return
+		}
+	}
+	if err := s.advanceAI(); err != nil {
+		writeError(w, http.StatusInternalServerError, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, s.view())
+}
+
+func (s *webServer) startWebGameSession(state game.GameState, mode, playerHeroID, opponentHeroID string) error {
+	whitePlayer, err := state.PlayerAtSeat(game.SeatX)
+	if err != nil {
+		return err
 	}
 	draftActor := 0
 	phase := "commit"
@@ -681,8 +705,7 @@ func (s *webServer) handleNewGame(w http.ResponseWriter, r *http.Request) {
 		draftSeat, _ := state.Draft.CurrentSeat()
 		draftActor, err = state.PlayerAtSeat(draftSeat)
 		if err != nil {
-			writeError(w, http.StatusInternalServerError, err)
-			return
+			return err
 		}
 		phase = "draft"
 	}
@@ -709,24 +732,7 @@ func (s *webServer) handleNewGame(w http.ResponseWriter, r *http.Request) {
 		session.handoffPhase = "draft"
 		session.message = fmt.Sprintf("Pass the screen to Player %d for their private draft pick.", draftActor+1)
 	}
-	if s.playerProfile != nil {
-		s.playerProfile.LastHeroPicked = playerHeroID
-		s.playerProfile.OpponentLastHeroID = opponentHeroID
-		s.playerProfile.LastOpponentHeroID = opponentHeroID
-		s.playerProfile.LastOpponentHeroIDs = append([]string{opponentHeroID}, s.playerProfile.LastOpponentHeroIDs...)
-		if len(s.playerProfile.LastOpponentHeroIDs) > 2 {
-			s.playerProfile.LastOpponentHeroIDs = s.playerProfile.LastOpponentHeroIDs[:2]
-		}
-		if err := s.playerProfile.Save(); err != nil {
-			writeError(w, http.StatusInternalServerError, err)
-			return
-		}
-	}
-	if err := s.advanceAI(); err != nil {
-		writeError(w, http.StatusInternalServerError, err)
-		return
-	}
-	writeJSON(w, http.StatusOK, s.view())
+	return nil
 }
 
 func (s *webServer) handleAction(w http.ResponseWriter, r *http.Request) {
@@ -1971,19 +1977,7 @@ func (s *webServer) view() webView {
 		DefaultHeroID:  session.playerHeroID,
 	}
 	copy(result.JailSlots, session.slots[:])
-	if session.phase == "draft" && session.state.Draft != nil {
-		draft := session.state.Draft
-		result.DraftPool = make([]webCard, len(draft.Pool))
-		for index, card := range draft.Pool {
-			result.DraftPool[index] = webCard{Card: card, Index: index, Selectable: !isAI(session.mode, session.actor)}
-		}
-		seat, ok := draft.CurrentSeat()
-		if ok {
-			result.DraftHand, result.DraftPicked, result.DraftOpponentCount = draftPrivateView(draft, seat)
-			result.DraftPickNumber = draft.CurrentPick + 1
-			result.DraftPickTotal = len(draft.PickOrder)
-		}
-	}
+	s.fillDraftView(&result)
 	if session.phase == "defend" || session.phase == "result" && session.hasLastBattle {
 		result.BattleAttack = cardPointer(session.attackCard)
 	}
@@ -2029,6 +2023,24 @@ func (s *webServer) view() webView {
 		s.scoreLabel(session.whitePlayer), scores[session.whitePlayer].Total,
 		s.scoreLabel(1-session.whitePlayer), scores[1-session.whitePlayer].Total)
 	return result
+}
+
+func (s *webServer) fillDraftView(result *webView) {
+	session := s.session
+	if session.phase != "draft" || session.state.Draft == nil {
+		return
+	}
+	draft := session.state.Draft
+	result.DraftPool = make([]webCard, len(draft.Pool))
+	for index, card := range draft.Pool {
+		result.DraftPool[index] = webCard{Card: card, Index: index, Selectable: !isAI(session.mode, session.actor)}
+	}
+	seat, ok := draft.CurrentSeat()
+	if ok {
+		result.DraftHand, result.DraftPicked, result.DraftOpponentCount = draftPrivateView(draft, seat)
+		result.DraftPickNumber = draft.CurrentPick + 1
+		result.DraftPickTotal = len(draft.PickOrder)
+	}
 }
 
 func (s *webServer) playerView(index int, player game.Player, score int) webPlayer {

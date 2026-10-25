@@ -188,6 +188,19 @@ func (d *DraftState) validate() error {
 	if len(d.DealtX) != 5-d.Mode || len(d.DealtY) != 5-d.Mode {
 		return errors.New("draft deal does not match the selected mode")
 	}
+	if err := d.validatePickCounts(); err != nil {
+		return err
+	}
+	if err := d.validateCompletion(); err != nil {
+		return err
+	}
+	if err := d.validateCards(); err != nil {
+		return err
+	}
+	return d.validatePickOrder()
+}
+
+func (d *DraftState) validatePickCounts() error {
 	pickedX, pickedY := 0, 0
 	for _, seat := range d.PickOrder[:d.CurrentPick] {
 		if seat == SeatX {
@@ -200,6 +213,10 @@ func (d *DraftState) validate() error {
 		(!d.Finished && len(d.Pool) != 2+2*d.Mode-d.CurrentPick) {
 		return errors.New("draft picks do not match the pick counter")
 	}
+	return nil
+}
+
+func (d *DraftState) validateCompletion() error {
 	if d.Finished && (d.CurrentPick != len(d.PickOrder) || len(d.Pool) != 0 ||
 		len(d.PickedX) != d.Mode || len(d.PickedY) != d.Mode || len(d.DrawPile) != 14 ||
 		len(d.Removed) != 2) {
@@ -211,6 +228,10 @@ func (d *DraftState) validate() error {
 	if !d.Finished && len(d.Removed) != 0 {
 		return errors.New("unfinished draft cannot have removed cards")
 	}
+	return nil
+}
+
+func (d *DraftState) validateCards() error {
 	seen := make(map[Card]bool, 26)
 	for _, cards := range [][]Card{d.DealtX, d.DealtY, d.Pool, d.PickedX, d.PickedY,
 		d.DrawPile, d.Removed} {
@@ -224,6 +245,10 @@ func (d *DraftState) validate() error {
 	if len(seen) != 26 {
 		return fmt.Errorf("draft accounts for %d of 26 cards", len(seen))
 	}
+	return nil
+}
+
+func (d *DraftState) validatePickOrder() error {
 	firstSeat := d.PickOrder[0]
 	for i, seat := range d.PickOrder {
 		want := firstSeat

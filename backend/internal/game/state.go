@@ -199,6 +199,19 @@ func (s GameState) Validate() error {
 		(s.P2.Seat != SeatX && s.P2.Seat != SeatY) {
 		return errors.New("players must occupy opposite seats")
 	}
+	if err := s.validateCardAccounting(); err != nil {
+		return err
+	}
+	if err := validateCaptureCounts(s.P1); err != nil {
+		return fmt.Errorf("player 1 capture history: %w", err)
+	}
+	if err := validateCaptureCounts(s.P2); err != nil {
+		return fmt.Errorf("player 2 capture history: %w", err)
+	}
+	return nil
+}
+
+func (s GameState) validateCardAccounting() error {
 	seen := make(map[Card]bool, 27)
 	add := func(card Card) error {
 		if !card.Valid() {
@@ -237,12 +250,6 @@ func (s GameState) Validate() error {
 	}
 	if len(seen) != 27 {
 		return fmt.Errorf("card accounting has %d of 27 cards", len(seen))
-	}
-	if err := validateCaptureCounts(s.P1); err != nil {
-		return fmt.Errorf("player 1 capture history: %w", err)
-	}
-	if err := validateCaptureCounts(s.P2); err != nil {
-		return fmt.Errorf("player 2 capture history: %w", err)
 	}
 	return nil
 }
