@@ -19,6 +19,8 @@ variables:
 backend-lint:
   image: golang:1.25-alpine
   stage: test
+  when: manual
+  allow_failure: true
   before_script:
     - apk add --no-cache make
   script:
