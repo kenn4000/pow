@@ -80,6 +80,58 @@ func TestConquistadorChromasCost100Marks(t *testing.T) {
 	}
 }
 
+func TestNewSkinChromasUseTheirFolderColorsAndArePurchasable(t *testing.T) {
+	want := map[string]struct {
+		name  string
+		color string
+		skin  string
+	}{
+		"alien-yellow": {"Alien (yellow)", "yellow", "shop/alien/yellow"},
+		"amazon-green": {"Amazon (green)", "green", "shop/amazon/green"},
+		"bee-silver":   {"Bee (silver)", "silver", "shop/bee/silver"},
+		"cat-brown":    {"Cat (brown)", "brown", "shop/cat/brown"},
+		"dog-gray":     {"Dog (gray)", "gray", "shop/dog/gray"},
+		"dragon-ruby":  {"Dragon (ruby)", "ruby", "shop/dragon/ruby"},
+		"dwarf-purple": {"Dwarf (purple)", "purple", "shop/dwarf/purple"},
+		"orc-white":    {"Orc (white)", "white", "shop/orc/white"},
+		"reptile-pink": {"Reptile (pink)", "pink", "shop/reptile/pink"},
+		"zulu-orange":  {"Zulu (orange)", "orange", "shop/zulu/orange"},
+	}
+	for id, expected := range want {
+		chroma, ok := FindChroma(id)
+		if !ok {
+			t.Errorf("skin chroma %q is missing from the catalog", id)
+			continue
+		}
+		if chroma.Name != expected.name || chroma.Color != expected.color || chroma.Skin != expected.skin || chroma.HexColor == "" {
+			t.Errorf("chroma %q = %+v, want name %q, color %q, skin %q",
+				id, chroma, expected.name, expected.color, expected.skin)
+		}
+		if chroma.Cost != 250 || chroma.Currency != string(Marks) {
+			t.Errorf("chroma %q costs %d %s, want 250 Marks", id, chroma.Cost, chroma.Currency)
+		}
+	}
+
+	p, err := profile.New(time.Now())
+	if err != nil {
+		t.Fatal(err)
+	}
+	p.Marks = 250
+	if err := BuyChroma(p, "bee-silver"); err != nil {
+		t.Fatalf("buy new skin chroma: %v", err)
+	}
+	if p.Marks != 0 || !p.OwnedChromas["bee-silver"] {
+		t.Fatalf("skin chroma purchase left %d Marks and owned=%t", p.Marks, p.OwnedChromas["bee-silver"])
+	}
+	if err := AssignChroma(p, "B", "bee-silver"); err != nil {
+		t.Fatalf("assign new skin chroma: %v", err)
+	}
+	p.OwnedChromas["silver"] = true
+	if err := AssignChroma(p, "F", "silver"); err == nil {
+		t.Fatal("chromas with the same folder color should not be assigned to different suits")
+	}
+}
+
 func TestRedeemChromaPickConsumesTokenAndGrantsUnownedChroma(t *testing.T) {
 	p, err := profile.New(time.Now())
 	if err != nil {

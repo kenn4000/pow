@@ -132,7 +132,7 @@ func TestWebGameFlowRedactsHandsAndAutoPlaysThirdBattle(t *testing.T) {
 
 func TestWebSkinAssetsAreServedWithImageHeaders(t *testing.T) {
 	web := &webServer{}
-	request := httptest.NewRequest(http.MethodGet, "/skins/tribal_red/small_idle.png", nil)
+	request := httptest.NewRequest(http.MethodGet, "/skins/shop/tribal/red/small_idle.png", nil)
 	response := httptest.NewRecorder()
 	web.handleSkinAsset(response, request)
 	if response.Code != http.StatusOK {
@@ -147,7 +147,7 @@ func TestWebSkinAssetsAreServedWithImageHeaders(t *testing.T) {
 	if response.Body.Len() == 0 {
 		t.Fatal("skin image response is empty")
 	}
-	original, err := webFiles.ReadFile("tribal_red/small_idle.png")
+	original, err := webFiles.ReadFile("shop/tribal/red/small_idle.png")
 	if err != nil {
 		t.Fatalf("read source skin image: %v", err)
 	}
@@ -155,11 +155,21 @@ func TestWebSkinAssetsAreServedWithImageHeaders(t *testing.T) {
 		t.Fatal("skin image response changed the source image")
 	}
 	for _, assetPath := range []string{
-		"/skins/conq_lime/small_idle.png",
-		"/skins/conq_gold/large_win.png",
+		"/skins/shop/conq/lime/small_idle.png",
+		"/skins/shop/conq/gold/large_win.png",
 		"/skins/hero_icons/gorilla.png",
 		"/skins/hero_icons/coach.png",
 		"/skins/hero_icons/cpu_easy.png",
+		"/skins/shop/alien/yellow/large_idle.png",
+		"/skins/shop/amazon/green/large_idle.png",
+		"/skins/shop/bee/silver/large_idle.png",
+		"/skins/shop/cat/brown/large_idle.png",
+		"/skins/shop/dog/gray/large_idle.png",
+		"/skins/shop/dragon/ruby/large_idle.png",
+		"/skins/shop/dwarf/purple/large_idle.png",
+		"/skins/shop/orc/white/large_idle.png",
+		"/skins/shop/reptile/pink/large_idle.png",
+		"/skins/shop/zulu/orange/large_idle.png",
 		"/skins/icons/marks.png",
 		"/skins/icons/crowns.png",
 		"/skins/icons/energy.png",
@@ -325,6 +335,7 @@ func TestWebWaitingStateIncludesLiveDashboardData(t *testing.T) {
 	}
 	if dashboard.Commander != p.PlayerID[:8] || dashboard.Title != heroName(p.DefaultHeroID) ||
 		dashboard.DefaultHeroID != p.DefaultHeroID || len(dashboard.OwnedChromas) != 3 ||
+		len(dashboard.OwnedChromaDetails) != 3 ||
 		dashboard.Marks != p.Marks || dashboard.Crowns != p.Crowns ||
 		dashboard.Energy != 7 || dashboard.MaxEnergy != p.MaxEnergy ||
 		dashboard.AdsLeft != energy.DailyAdLimit-2 ||
@@ -344,6 +355,16 @@ func TestWebWaitingStateIncludesLiveDashboardData(t *testing.T) {
 		}
 		if !found {
 			t.Errorf("dashboard did not expose owned chroma %q", id)
+		}
+		detailFound := false
+		for _, chroma := range dashboard.OwnedChromaDetails {
+			if chroma.ID == id {
+				detailFound = true
+				break
+			}
+		}
+		if !detailFound {
+			t.Errorf("dashboard did not expose details for owned chroma %q", id)
 		}
 	}
 }

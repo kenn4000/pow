@@ -12,7 +12,7 @@ func TestCardCatalogIncludesDeckAndEveryArtwork(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(catalog.Cards) != 27 || len(catalog.Artwork) != 120 {
+	if len(catalog.Cards) != 27 || len(catalog.Artwork) != 240 {
 		t.Fatalf("catalog has %d cards and %d artwork files", len(catalog.Cards), len(catalog.Artwork))
 	}
 
@@ -27,6 +27,14 @@ func TestCardCatalogIncludesDeckAndEveryArtwork(t *testing.T) {
 		}
 		if art.Path != "skins/"+art.ID {
 			t.Fatalf("invalid asset URL %q", art.Path)
+		}
+		parts := strings.Split(art.Skin, "/")
+		if len(parts) != 3 || art.Color != parts[2] {
+			wantColor := ""
+			if len(parts) > 0 {
+				wantColor = strings.ReplaceAll(parts[len(parts)-1], "-", " ")
+			}
+			t.Errorf("artwork %q color = %q, want folder color %q", art.ID, art.Color, wantColor)
 		}
 	}
 	cards := map[string]bool{}
@@ -56,7 +64,13 @@ func TestCardCatalogExcludesHeroIcons(t *testing.T) {
 		}
 		artwork[art.ID] = true
 	}
-	for _, id := range []string{"conq_lime/small_idle.png", "conq_gold/med_attack.png", "conq_pink/large_win.png", "conq_blue/large_lose.png"} {
+	for _, id := range []string{
+		"shop/conq/lime/small_idle.png", "shop/conq/gold/med_attack.png", "shop/conq/pink/large_win.png", "shop/conq/blue/large_lose.png",
+		"shop/alien/yellow/large_idle.png", "shop/amazon/green/large_idle.png", "shop/bee/silver/large_idle.png",
+		"shop/cat/brown/large_idle.png", "shop/dog/gray/large_idle.png", "shop/dragon/ruby/large_idle.png",
+		"shop/dwarf/purple/large_idle.png", "shop/orc/white/large_idle.png", "shop/reptile/pink/large_idle.png",
+		"shop/zulu/orange/large_idle.png",
+	} {
 		if !artwork[id] {
 			t.Errorf("Conquistador artwork %q is missing", id)
 		}
@@ -64,7 +78,7 @@ func TestCardCatalogExcludesHeroIcons(t *testing.T) {
 }
 
 func TestArtworkThumbnailKeepsAspectRatioAndReducesTransferSize(t *testing.T) {
-	name := "tribal_blue/small_idle.png"
+	name := "shop/tribal/blue/small_idle.png"
 	asset, err := webFiles.ReadFile(name)
 	if err != nil {
 		t.Fatal(err)

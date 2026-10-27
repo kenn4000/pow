@@ -1,16 +1,24 @@
 package catalog
 
 import (
+	"encoding/json"
 	"errors"
 	"fmt"
+	"io/fs"
+	"path"
+	"regexp"
+	"strings"
 
 	"prisonersofwar/internal/profile"
+	"prisonersofwar/internal/skins"
 )
 
 type Chroma struct {
 	ID       string `json:"id"`
 	Name     string `json:"name"`
 	Color    string `json:"color"`
+	Skin     string `json:"skin,omitempty"`
+	HexColor string `json:"hexColor,omitempty"`
 	Rarity   string `json:"rarity"`
 	Cost     int64  `json:"cost"`
 	Currency string `json:"currency"`
@@ -32,23 +40,143 @@ const (
 )
 
 var chromas = []Chroma{
-	{ID: "crimson", Name: "Tribal (red)", Color: "red", Rarity: "common", Cost: 250, Currency: string(Marks)},
-	{ID: "cobalt", Name: "Tribal (blue)", Color: "blue", Rarity: "common", Cost: 250, Currency: string(Marks)},
-	{ID: "sunflower", Name: "Tribal (yellow)", Color: "yellow", Rarity: "common", Cost: 250, Currency: string(Marks)},
-	{ID: "conq-lime", Name: "Conquistador (lime green)", Color: "lime", Rarity: "common", Cost: 100, Currency: string(Marks)},
-	{ID: "conq-gold", Name: "Conquistador (gold)", Color: "gold", Rarity: "common", Cost: 100, Currency: string(Marks)},
-	{ID: "conq-pink", Name: "Conquistador (pink)", Color: "pink", Rarity: "common", Cost: 100, Currency: string(Marks)},
-	{ID: "conq-blue", Name: "Conquistador (sky blue)", Color: "sky blue", Rarity: "common", Cost: 100, Currency: string(Marks)},
-	{ID: "emerald", Name: "Tribal (green)", Color: "green", Rarity: "uncommon", Cost: 15, Currency: string(Crowns)},
-	{ID: "tangerine", Name: "Tribal (orange)", Color: "orange", Rarity: "uncommon", Cost: 15, Currency: string(Crowns)},
-	{ID: "amethyst", Name: "Tribal (purple)", Color: "purple", Rarity: "uncommon", Cost: 20, Currency: string(Crowns)},
-	{ID: "walnut", Name: "Walnut", Color: "brown", Rarity: "rare", Cost: 30, Currency: string(Crowns)},
-	{ID: "silver", Name: "Silver", Color: "silver", Rarity: "rare", Cost: 30, Currency: string(Crowns)},
-	{ID: "rose-gold", Name: "Rose Gold", Color: "rose-gold", Rarity: "rare", Cost: 35, Currency: string(Crowns)},
-	{ID: "aurora", Name: "Aurora", Color: "aurora", Rarity: "epic", Cost: 50, Currency: string(Crowns)},
-	{ID: "obsidian", Name: "Obsidian", Color: "obsidian", Rarity: "epic", Cost: 50, Currency: string(Crowns)},
-	{ID: "prismatic", Name: "Prismatic", Color: "prismatic", Rarity: "legendary", Cost: 80, Currency: string(Crowns)},
-	{ID: "ember-dog", Name: "Ember Dog", Color: "orange", Rarity: "seasonal", Currency: "event"},
+	{ID: "walnut", Name: "Walnut", Color: "brown", Skin: "shop/tribal/orange", HexColor: "#8a5a32", Rarity: "rare", Cost: 30, Currency: string(Crowns)},
+	{ID: "silver", Name: "Silver", Color: "silver", HexColor: "#d7dce2", Rarity: "rare", Cost: 30, Currency: string(Crowns)},
+	{ID: "rose-gold", Name: "Rose Gold", Color: "rose-gold", Skin: "shop/tribal/red", HexColor: "#c77b72", Rarity: "rare", Cost: 35, Currency: string(Crowns)},
+	{ID: "aurora", Name: "Aurora", Color: "aurora", Skin: "shop/tribal/purple", HexColor: "#9457d6", Rarity: "epic", Cost: 50, Currency: string(Crowns)},
+	{ID: "obsidian", Name: "Obsidian", Color: "obsidian", Skin: "shop/tribal/blue", HexColor: "#353e57", Rarity: "epic", Cost: 50, Currency: string(Crowns)},
+	{ID: "prismatic", Name: "Prismatic", Color: "prismatic", Skin: "shop/tribal/purple", HexColor: "#ba73ed", Rarity: "legendary", Cost: 80, Currency: string(Crowns)},
+	{ID: "ember-dog", Name: "Ember Dog", Color: "orange", Skin: "shop/tribal/orange", HexColor: "#ed782e", Rarity: "seasonal", Currency: "event"},
+}
+
+type skinManifest struct {
+	ID          string `json:"id"`
+	DisplayName string `json:"displayName"`
+	Color       string `json:"color"`
+	HexColor    string `json:"hexColor"`
+	Price       int64  `json:"price"`
+	Currency    string `json:"currency"`
+	Rarity      string `json:"rarity"`
+}
+
+var (
+	skinPathPart = regexp.MustCompile(`^[a-z0-9]+(?:-[a-z0-9]+)*$`)
+	skinID       = regexp.MustCompile(`^[a-z0-9]+(?:-[a-z0-9]+)*$`)
+	skinHexColor = regexp.MustCompile(`^#[0-9a-fA-F]{6}$`)
+)
+
+func init() {
+	discovered, err := loadSkinChromas(skins.Files)
+	if err != nil {
+		panic(fmt.Errorf("load skin shop catalog: %w", err))
+	}
+	for _, added := range discovered {
+		if _, exists := FindChroma(added.ID); exists {
+			panic(fmt.Errorf("load skin shop catalog: duplicate chroma ID %q", added.ID))
+		}
+		chromas = append(chromas, added)
+	}
+}
+
+func loadSkinChromas(assets fs.FS) ([]Chroma, error) {
+	families, err := fs.ReadDir(assets, "shop")
+	if err != nil {
+		return nil, fmt.Errorf("read shop skin families: %w", err)
+	}
+	result := make([]Chroma, 0)
+	seenIDs := make(map[string]bool)
+	for _, family := range families {
+		if !family.IsDir() || !skinPathPart.MatchString(family.Name()) {
+			return nil, fmt.Errorf("invalid skin family %q", family.Name())
+		}
+		familyPath := path.Join("shop", family.Name())
+		variants, err := fs.ReadDir(assets, familyPath)
+		if err != nil {
+			return nil, fmt.Errorf("read skin family %q: %w", family.Name(), err)
+		}
+		if len(variants) == 0 {
+			return nil, fmt.Errorf("skin family %q has no color variants", family.Name())
+		}
+		for _, variant := range variants {
+			if !variant.IsDir() || !skinPathPart.MatchString(variant.Name()) {
+				return nil, fmt.Errorf("invalid skin variant %q in family %q", variant.Name(), family.Name())
+			}
+			skinPath := path.Join(familyPath, variant.Name())
+			chroma, err := readSkinManifest(assets, skinPath, family.Name(), variant.Name())
+			if err != nil {
+				return nil, err
+			}
+			if seenIDs[chroma.ID] {
+				return nil, fmt.Errorf("duplicate chroma ID %q", chroma.ID)
+			}
+			seenIDs[chroma.ID] = true
+			result = append(result, chroma)
+		}
+	}
+	return result, nil
+}
+
+func readSkinManifest(assets fs.FS, skinPath, family, variant string) (Chroma, error) {
+	manifestPath := path.Join(skinPath, "skin.json")
+	data, err := fs.ReadFile(assets, manifestPath)
+	if err != nil {
+		return Chroma{}, fmt.Errorf("read skin manifest %q: %w", manifestPath, err)
+	}
+	var manifest skinManifest
+	if err := json.Unmarshal(data, &manifest); err != nil {
+		return Chroma{}, fmt.Errorf("decode skin manifest %q: %w", manifestPath, err)
+	}
+	manifest.DisplayName = strings.TrimSpace(manifest.DisplayName)
+	if manifest.DisplayName == "" {
+		return Chroma{}, fmt.Errorf("skin manifest %q has an empty displayName", manifestPath)
+	}
+	if !skinHexColor.MatchString(manifest.HexColor) {
+		return Chroma{}, fmt.Errorf("skin manifest %q has invalid hexColor %q", manifestPath, manifest.HexColor)
+	}
+	if manifest.Price <= 0 {
+		return Chroma{}, fmt.Errorf("skin manifest %q price must be positive", manifestPath)
+	}
+	manifest.Currency = strings.ToLower(strings.TrimSpace(manifest.Currency))
+	if manifest.Currency != string(Marks) && manifest.Currency != string(Crowns) {
+		return Chroma{}, fmt.Errorf("skin manifest %q currency must be marks or crowns", manifestPath)
+	}
+	manifest.Rarity = strings.ToLower(strings.TrimSpace(manifest.Rarity))
+	if manifest.Rarity == "" {
+		manifest.Rarity = "common"
+	}
+	switch manifest.Rarity {
+	case "common", "uncommon", "rare", "epic", "legendary", "seasonal", "super-rare":
+	default:
+		return Chroma{}, fmt.Errorf("skin manifest %q has unsupported rarity %q", manifestPath, manifest.Rarity)
+	}
+	manifest.ID = strings.TrimSpace(manifest.ID)
+	if manifest.ID == "" {
+		manifest.ID = family + "-" + variant
+	}
+	if !skinID.MatchString(manifest.ID) {
+		return Chroma{}, fmt.Errorf("skin manifest %q has invalid id %q", manifestPath, manifest.ID)
+	}
+	color := strings.ToLower(strings.TrimSpace(manifest.Color))
+	if color == "" {
+		color = strings.ReplaceAll(variant, "-", " ")
+	}
+	for _, tier := range []string{"small", "med", "large"} {
+		for _, pose := range []string{"idle", "attack", "win", "lose"} {
+			artPath := path.Join(skinPath, tier+"_"+pose+".png")
+			info, err := fs.Stat(assets, artPath)
+			if err != nil {
+				return Chroma{}, fmt.Errorf("skin %q is missing artwork %q: %w", skinPath, artPath, err)
+			}
+			if info.IsDir() {
+				return Chroma{}, fmt.Errorf("skin artwork %q is not a file", artPath)
+			}
+		}
+	}
+	return Chroma{
+		ID: manifest.ID, Name: manifest.DisplayName, Color: color, Skin: skinPath,
+		HexColor: manifest.HexColor, Rarity: manifest.Rarity, Cost: manifest.Price,
+		Currency: manifest.Currency,
+	}, nil
 }
 
 var bundles = []Bundle{

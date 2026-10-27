@@ -20,7 +20,10 @@ func applySuitAppearance(p *profile.Profile, request actionRequest) (string, err
 		return "", errors.New("choose a valid suit")
 	}
 	color := strings.ToLower(request.ID)
-	if !containsHeroID([]string{"red", "blue", "yellow", "green", "orange", "purple"}, color) {
+	if !containsHeroID([]string{
+		"red", "blue", "yellow", "green", "orange", "purple", "lime green", "gold", "pink", "sky blue",
+		"silver", "brown", "gray", "ruby", "white",
+	}, color) {
 		return "", errors.New("choose an available suit color")
 	}
 	for suit, assigned := range p.AssignedChromas {

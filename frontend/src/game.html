@@ -23,6 +23,9 @@
       --card-purple: #784bb1;
       --card-brown: #805332;
       --card-silver: #6c747b;
+      --card-gray: #7b8086;
+      --card-ruby: #bd2945;
+      --card-white: #f4f3ec;
       --card-gold: #d4a72c;
       --card-pink: #d94f9d;
       --card-lime: #84b82d;
@@ -658,46 +661,37 @@
   <script>
     const suits = ["Scissors", "Paper", "Rock"];
     const skinFolders = {
-      Red: "tribal_red",
-      Blue: "tribal_blue",
-      Yellow: "tribal_yellow",
-      Purple: "tribal_purple",
-      Orange: "tribal_orange",
-      Green: "tribal_green",
-      "Lime Green": "conq_lime",
-      Gold: "conq_gold",
-      Pink: "conq_pink",
-      "Sky Blue": "conq_blue"
+      Red: "shop/tribal/red",
+      Blue: "shop/tribal/blue",
+      Yellow: "shop/tribal/yellow",
+      Purple: "shop/tribal/purple",
+      Orange: "shop/tribal/orange",
+      Green: "shop/tribal/green",
+      "Lime Green": "shop/conq/lime",
+      Gold: "shop/conq/gold",
+      Pink: "shop/conq/pink",
+      "Sky Blue": "shop/conq/blue",
+      Silver: "shop/bee/silver",
+      Brown: "shop/cat/brown",
+      Gray: "shop/dog/gray",
+      Ruby: "shop/dragon/ruby",
+      White: "shop/orc/white"
     };
     const defaultSuitColors = ["Blue", "Yellow", "Red"];
-    const colors = ["Red", "Blue", "Yellow", "Green", "Orange", "Purple", "Lime Green", "Gold", "Pink", "Sky Blue"];
     const colorVars = {
       Red: "var(--card-red)", Blue: "var(--card-blue)", Yellow: "var(--card-yellow)",
       Green: "var(--card-green)", Orange: "var(--card-orange)", Purple: "var(--card-purple)",
       "Lime Green": "var(--card-lime)", Gold: "var(--card-gold)", Pink: "var(--card-pink)",
-      "Sky Blue": "var(--card-sky-blue)"
-    };
-    const chromaLabels = {
-      crimson: "Tribal (red)", cobalt: "Tribal (blue)", sunflower: "Tribal (yellow)",
-      emerald: "Tribal (green)", tangerine: "Tribal (orange)", amethyst: "Tribal (purple)",
-      "conq-lime": "Conquistador (lime green)", "conq-gold": "Conquistador (gold)",
-      "conq-pink": "Conquistador (pink)", "conq-blue": "Conquistador (sky blue)",
-      walnut: "Walnut", silver: "Silver", "rose-gold": "Rose Gold",
-      aurora: "Aurora", obsidian: "Obsidian", prismatic: "Prismatic", "ember-dog": "Ember Dog"
+      "Sky Blue": "var(--card-sky-blue)", Silver: "var(--card-silver)", Brown: "var(--card-brown)",
+      Gray: "var(--card-gray)", Ruby: "var(--card-ruby)", White: "var(--card-white)"
     };
     const chromaLooks = {
-      crimson: {color:"Red", skin:"tribal_red"}, cobalt: {color:"Blue", skin:"tribal_blue"},
-      sunflower: {color:"Yellow", skin:"tribal_yellow"}, emerald: {color:"Green", skin:"tribal_green"},
-      tangerine: {color:"Orange", skin:"tribal_orange"}, amethyst: {color:"Purple", skin:"tribal_purple"},
-      "conq-lime": {color:"Lime Green", skin:"conq_lime"}, "conq-gold": {color:"Gold", skin:"conq_gold"},
-      "conq-pink": {color:"Pink", skin:"conq_pink"}, "conq-blue": {color:"Sky Blue", skin:"conq_blue"},
-      walnut: {color:"Orange", skin:"tribal_orange", filter:"saturate(.55) brightness(.7)"},
-      silver: {color:"Blue", skin:"tribal_blue", filter:"grayscale(1) brightness(1.3)"},
-      "rose-gold": {color:"Red", skin:"tribal_red", filter:"sepia(.4) saturate(.7) brightness(1.2)"},
-      aurora: {color:"Purple", skin:"tribal_purple", filter:"hue-rotate(30deg) saturate(1.4)"},
-      obsidian: {color:"Blue", skin:"tribal_blue", filter:"grayscale(.8) brightness(.6)"},
-      prismatic: {color:"Purple", skin:"tribal_purple", filter:"hue-rotate(90deg) saturate(2)"},
-      "ember-dog": {color:"Orange", skin:"tribal_orange"}
+      walnut: {filter:"saturate(.55) brightness(.7)"},
+      silver: {filter:"grayscale(1) brightness(1.3)"},
+      "rose-gold": {filter:"sepia(.4) saturate(.7) brightness(1.2)"},
+      aurora: {filter:"hue-rotate(30deg) saturate(1.4)"},
+      obsidian: {filter:"grayscale(.8) brightness(.6)"},
+      prismatic: {filter:"hue-rotate(90deg) saturate(2)"}
     };
     const heroIconNames = {
       ascendant: "gorilla", anchor: "turtle", ascetic: "bureaucrat",
@@ -797,7 +791,7 @@
       const face = options.face === undefined ? card.face : options.face;
       const faceMarkup = options.hideFace ? "" : `<span class="face">${esc(face)}</span>`;
       const mirrored = options.mirror ? " mirrored" : "";
-      const faceColor = options.faceColor || colorVars[color] || "var(--paper)";
+      const faceColor = options.faceColor || appearance?.hexColor || colorVars[color] || "var(--paper)";
       const ariaLabel = `${suits[card.suit]} ${card.face}, ${color}${options.face !== undefined ? `, effective value ${face}` : ''}`;
       return `<${tag} class="card skin-card${chosen ? " chosen" : ""}${mirrored}" style="--card-suit-color:${faceColor}" ${attrs} aria-label="${esc(ariaLabel)}">
         <img class="card-art" style="${appearance?.filter ? `filter:${appearance.filter}` : ''}" src="${import.meta.env.BASE_URL}skins/${skin}/${tier}_${pose}.png?thumb=160" alt="" aria-hidden="true">
@@ -853,9 +847,12 @@
 
     function renderSuitCycle() {
       const container = document.getElementById("suitCycle");
+      const appearances = [];
       for (let suit = 0; suit < suits.length; suit++) {
         const equipped = equippedChroma(suit);
-        if (equipped) suitColors[suit] = chromaAppearance(equipped).color;
+        const appearance = equipped ? chromaAppearance(equipped) : null;
+        appearances[suit] = appearance;
+        if (appearance) suitColors[suit] = appearance.color;
       }
       const locations = [
         { suit: 0, location: "scissors" },
@@ -873,22 +870,24 @@
           <path d="M140 232 L200 232"></path>
           <path d="M288 187 L255 141"></path>
         </svg>${locations.map(({ suit, location }) => {
-          const owned = new Set(state?.dashboard?.ownedChromas || []);
+          const owned = state?.dashboard?.ownedChromaDetails || [];
           const menu = openSuitMenu === suit
             ? `<div class="color-menu" role="menu" aria-label="Choose an unused color">
-                ${colors.filter(color => !suitColors.includes(color)).flatMap(color =>
-                  Object.entries(chromaLooks).filter(([id, look]) => look.color === color && owned.has(id)).map(([id]) =>
-                    `<button type="button" class="color-option" role="menuitem" data-suit-option="${suit}" data-chroma="${id}">
-                      <span class="color-option-swatch" style="background:${colorVars[color]}"></span>${chromaLabels[id]}
-                    </button>`)).join("")}
+                ${owned.map(chroma => ({chroma, appearance: chromaAppearance(chroma)}))
+                  .filter(({appearance}) => appearance.color && !suitColors.includes(appearance.color))
+                  .map(({chroma, appearance}) =>
+                    `<button type="button" class="color-option" role="menuitem" data-suit-option="${suit}" data-chroma="${esc(chroma.id)}">
+                      <span class="color-option-swatch" style="background:${appearance.hexColor || colorVars[appearance.color] || 'var(--paper)'}"></span>${esc(chroma.name)}
+                    </button>`).join("")}
               </div>`
             : "";
+          const skin = appearances[suit]?.skin || skinFolders[suitColors[suit]];
           return `<div class="suit-node-wrap ${location}${openSuitMenu === suit ? " menu-open" : ""}">
             <button type="button" class="suit-node" data-suit-trigger="${suit}"
-              style="--suit-node-color:${colorVars[suitColors[suit]]}"
+              style="--suit-node-color:${appearances[suit]?.hexColor || colorVars[suitColors[suit]] || 'var(--paper)'}"
               aria-label="${suits[suit]}, ${suitColors[suit]} color, open color menu" aria-haspopup="menu"
               aria-expanded="${openSuitMenu === suit}">
-              <img src="${import.meta.env.BASE_URL}skins/${skinFolders[suitColors[suit]]}/large_attack.png?v=3" alt="" aria-hidden="true">
+              <img src="${import.meta.env.BASE_URL}skins/${skin}/large_attack.png?v=3" alt="" aria-hidden="true">
             </button>
             ${menu}
           </div>`;
@@ -908,10 +907,10 @@
         if (option) {
           const suit = Number(option.dataset.suitOption);
           const chromaID = option.dataset.chroma;
-          const look = chromaLooks[chromaID];
-          const owned = state?.dashboard?.ownedChromas || [];
+          const chroma = (state?.dashboard?.ownedChromaDetails || []).find(item => item.id === chromaID);
+          const look = chroma && chromaAppearance(chroma);
           if (!Number.isInteger(suit) || suit < 0 || suit >= suits.length ||
-              !look || !owned.includes(chromaID) || suitColors.includes(look.color)) return;
+              !look || suitColors.includes(look.color)) return;
           await saveSuitAppearance({action:'assign-chroma',suit:['B','F','S'][suit],id:chromaID});
           return;
         }
@@ -961,10 +960,10 @@
         return;
       }
       const bounty = `<div class="bounty-column">
-        <div class="track-cell bounty" style="--bounty-border-color:${colorVars[suitColors[state.bounty.suit]]}">
+        <div class="track-cell bounty" style="--bounty-border-color:${suitColorValue(state.bounty.suit)}">
           ${cardMarkup(state.bounty, { pose: "win", hideFace: true })}
         </div>
-        <span class="bounty-value" style="color:${colorVars[suitColors[state.bounty.suit]]}">Bounty: ${formatModifier(state.modifiers.bounty)}</span>
+        <span class="bounty-value" style="color:${suitColorValue(state.bounty.suit)}">Bounty: ${formatModifier(state.modifiers.bounty)}</span>
       </div>`;
       const rounds = [0, 1, 2].map(roundIndex => {
         const slots = state.jailSlots.slice(roundIndex * 3, roundIndex * 3 + 3)
@@ -979,7 +978,7 @@
               ? '<span class="cell-empty" aria-label="Battle resolving"></span>'
               : cell.card
               ? `<div class="jailed-card">${cardMarkup(cell.card, { pose: "lose", hideFace: true })}
-                  <span class="capture-face" style="color:${colorVars[suitColors[cell.card.suit]]}">${cell.card.face}</span>
+                  <span class="capture-face" style="color:${suitColorValue(cell.card.suit)}">${cell.card.face}</span>
                 </div>`
               : `<span class="cell-empty">${cell.clash ? "CLASH" : String(slotIndex + 1).padStart(2, "0")}</span>`;
             return `<div class="track-cell ${resolvingSlot ? "" : border}">${content}</div>`;
@@ -1182,8 +1181,8 @@
         ? (showValues ? resolved.attackerValue : state.battleAttack.face) : "";
       const defendFace = state?.battleDefend
         ? (showValues ? resolved.defenderValue : state.battleDefend.face) : "";
-      const attackNumberColor = showValues ? attackColor : colorVars[chromaAppearance(equippedChroma(state.battleAttack?.suit)).color];
-      const defendNumberColor = showValues ? defendColor : colorVars[chromaAppearance(equippedChroma(state.battleDefend?.suit)).color];
+      const attackNumberColor = showValues ? attackColor : suitColorValue(state.battleAttack?.suit);
+      const defendNumberColor = showValues ? defendColor : suitColorValue(state.battleDefend?.suit);
       document.getElementById("battleLeft").innerHTML =
         `<span class="battle-player-name">${esc(attackerName)} ${attackerName === 'You' ? 'attack' : 'attacks'}</span><div class="battle-card-line${lost(0)}"><div class="battle-card-wrap">${attack}</div>${state?.battleAttack ? `<span class="battle-face" style="color:${attackNumberColor}">${attackFace}</span>` : ""}</div>${badge(0)}`;
       document.getElementById("battleRight").innerHTML =
@@ -2464,18 +2463,21 @@
     }
 
     function chromaAppearance(chroma) {
-      const look = chromaLooks[chroma?.id];
-      if (look) return {...look, filter: look.filter || ''};
-      const named = String(chroma?.color || '').replace(/^./, c => c.toUpperCase());
-      if (skinFolders[named]) return {color: named, skin: skinFolders[named], filter: ''};
+      const fallback = chromaLooks[chroma?.id] || {};
+      const rawColor = String(chroma?.color || '').trim() || 'blue';
+      const named = rawColor.split(/[\s_-]+/).filter(Boolean).map(part => part[0].toUpperCase() + part.slice(1)).join(' ');
+      const color = named.toLowerCase() === 'lime' ? 'Lime Green' : named;
       return {
-        brown: {color:'Orange',skin:skinFolders.Orange,filter:'saturate(.55) brightness(.7)'},
-        silver: {color:'Blue',skin:skinFolders.Blue,filter:'grayscale(1) brightness(1.3)'},
-        'rose-gold': {color:'Red',skin:skinFolders.Red,filter:'sepia(.4) saturate(.7) brightness(1.2)'},
-        aurora: {color:'Purple',skin:skinFolders.Purple,filter:'hue-rotate(30deg) saturate(1.4)'},
-        obsidian: {color:'Blue',skin:skinFolders.Blue,filter:'grayscale(.8) brightness(.6)'},
-        prismatic: {color:'Purple',skin:skinFolders.Purple,filter:'hue-rotate(90deg) saturate(2)'}
-      }[chroma?.color] || {color:'Blue',filter:''};
+        color,
+        skin: chroma?.skin || fallback.skin || skinFolders[color],
+        hexColor: chroma?.hexColor || '',
+        filter: fallback.filter || ''
+      };
+    }
+
+    function suitColorValue(suit) {
+      const appearance = chromaAppearance(equippedChroma(suit));
+      return appearance.hexColor || colorVars[appearance.color || suitColors[suit]] || "var(--paper)";
     }
 
     function equippedChroma(suit) { return state?.dashboard?.equippedChromas?.[['B','F','S'][suit]]; }
