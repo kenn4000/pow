@@ -199,6 +199,7 @@ type webDashboard struct {
 	DisplayName        string                    `json:"displayName"`
 	EquippedChromas    map[string]catalog.Chroma `json:"equippedChromas"`
 	OwnedChromas       []string                  `json:"ownedChromas"`
+	OwnedChromaDetails []catalog.Chroma          `json:"ownedChromaDetails"`
 	Commander          string                    `json:"commander"`
 	Title              string                    `json:"title"`
 	DefaultHeroID      string                    `json:"defaultHeroId"`
@@ -2152,9 +2153,11 @@ func dashboardFor(p *profile.Profile) *webDashboard {
 	}
 	equipped := map[string]catalog.Chroma{}
 	ownedChromas := make([]string, 0, len(p.OwnedChromas))
+	ownedChromaDetails := make([]catalog.Chroma, 0, len(p.OwnedChromas))
 	for _, chroma := range catalog.AllChromas() {
 		if p.OwnedChromas[chroma.ID] {
 			ownedChromas = append(ownedChromas, chroma.ID)
+			ownedChromaDetails = append(ownedChromaDetails, chroma)
 		}
 	}
 	for _, suit := range []string{"B", "F", "S"} {
@@ -2168,6 +2171,7 @@ func dashboardFor(p *profile.Profile) *webDashboard {
 		DisplayName:        p.DisplayName,
 		EquippedChromas:    equipped,
 		OwnedChromas:       ownedChromas,
+		OwnedChromaDetails: ownedChromaDetails,
 		Commander:          commander,
 		Title:              heroName(p.DefaultHeroID),
 		DefaultHeroID:      p.DefaultHeroID,

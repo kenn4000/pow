@@ -86,6 +86,11 @@ other suit uses the same color. The selected chroma controls the deck artwork
 and face-number color. Initial assignments are Tribal (blue) for Scissors,
 Tribal (yellow) for Paper, and Tribal (red) for Rock.
 
+Alien (yellow), Amazon (green), Bee (silver), Cat (brown), Dog (gray), Dragon
+(ruby), Dwarf (purple), Orc (white), Reptile (pink), and Zulu (orange) skins
+are available in the browser Shop for 250 Marks each. Each uses the color suffix
+from its skin folder as its color identity and displays that exact skin artwork.
+
 ## CLI
 
 ```powershell

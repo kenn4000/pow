@@ -5,6 +5,7 @@ import (
 	"image/png"
 	"io/fs"
 	"net/http"
+	"path"
 	"strings"
 
 	"prisonersofwar/internal/game"
@@ -39,7 +40,7 @@ type cardCatalog struct {
 
 func loadCardCatalog() (cardCatalog, error) {
 	result := cardCatalog{Cards: []catalogCard{}, Artwork: []cardArtwork{}}
-	skins := []string{"tribal_blue", "tribal_yellow", "tribal_red"}
+	skins := []string{"shop/tribal/blue", "shop/tribal/yellow", "shop/tribal/red"}
 	for _, card := range game.NewDeck() {
 		tier := "large"
 		if card.Face <= 3 {
@@ -53,10 +54,7 @@ func loadCardCatalog() (cardCatalog, error) {
 		if err != nil {
 			return err
 		}
-		if entry.IsDir() || !strings.HasSuffix(path, ".png") {
-			return nil
-		}
-		if strings.HasPrefix(path, "hero_icons/") {
+		if entry.IsDir() || !strings.HasPrefix(path, "shop/") || !strings.HasSuffix(path, ".png") {
 			return nil
 		}
 		art, err := inspectArtwork(path)
@@ -69,16 +67,22 @@ func loadCardCatalog() (cardCatalog, error) {
 	return result, err
 }
 
-func inspectArtwork(path string) (cardArtwork, error) {
-	skin, file, ok := strings.Cut(path, "/")
-	if !ok {
-		return cardArtwork{}, fmt.Errorf("invalid artwork path %q", path)
+func inspectArtwork(assetPath string) (cardArtwork, error) {
+	skin := path.Dir(assetPath)
+	parts := strings.Split(skin, "/")
+	if len(parts) != 3 || parts[0] != "shop" {
+		return cardArtwork{}, fmt.Errorf("invalid artwork path %q", assetPath)
 	}
-	tier, pose, ok := strings.Cut(strings.TrimSuffix(file, ".png"), "_")
-	if !ok {
+	file := path.Base(assetPath)
+	if path.Ext(file) != ".png" {
 		return cardArtwork{}, fmt.Errorf("invalid artwork name %q", file)
 	}
-	asset, err := webFiles.Open(path)
+	color := strings.ReplaceAll(parts[2], "-", " ")
+	tier, pose, ok := strings.Cut(strings.TrimSuffix(file, ".png"), "_")
+	if !ok {
+		return cardArtwork{}, fmt.Errorf("invalid artwork path %q", assetPath)
+	}
+	asset, err := webFiles.Open(assetPath)
 	if err != nil {
 		return cardArtwork{}, err
 	}
@@ -91,7 +95,7 @@ func inspectArtwork(path string) (cardArtwork, error) {
 	if err != nil {
 		return cardArtwork{}, err
 	}
-	return cardArtwork{path, "skins/" + path, skin, strings.TrimPrefix(skin, "tribal_"), tier, pose, dimensions.Width, dimensions.Height, info.Size()}, nil
+	return cardArtwork{assetPath, "skins/" + assetPath, skin, color, tier, pose, dimensions.Width, dimensions.Height, info.Size()}, nil
 }
 
 func (s *webServer) handleCardCatalog(w http.ResponseWriter, r *http.Request) {
