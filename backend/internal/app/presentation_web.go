@@ -5,20 +5,24 @@ import (
 
 	"prisonersofwar/internal/achievements"
 	"prisonersofwar/internal/economy"
-	"prisonersofwar/internal/game"
 	"prisonersofwar/internal/heroes"
 	"prisonersofwar/internal/lootbox"
 	"prisonersofwar/internal/profile"
 )
 
 type webBattleRecord struct {
-	Round    int              `json:"round"`
-	Exchange int              `json:"exchange"`
-	Attacker string           `json:"attacker"`
-	Attack   game.Card        `json:"attack"`
-	Defense  game.Card        `json:"defense"`
-	Outcome  webBattleOutcome `json:"outcome"`
-	Scores   [2]int           `json:"scores"`
+	Round             int              `json:"round"`
+	Exchange          int              `json:"exchange"`
+	Attacker          string           `json:"attacker"`
+	AttackerIndex     int              `json:"-"`
+	Attack            webFaceCard      `json:"attack"`
+	Defense           webFaceCard      `json:"defense"`
+	AttackFaceHidden  bool             `json:"attackFaceHidden,omitempty"`
+	AttackFaceRange   string           `json:"attackFaceRange,omitempty"`
+	DefenseFaceHidden bool             `json:"defenseFaceHidden,omitempty"`
+	DefenseFaceRange  string           `json:"defenseFaceRange,omitempty"`
+	Outcome           webBattleOutcome `json:"outcome"`
+	Scores            [2]int           `json:"scores"`
 }
 
 type webBoxReward struct {

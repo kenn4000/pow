@@ -19,9 +19,6 @@ func TestSuccessMessageNamesUsePlayerFacingLabels(t *testing.T) {
 	if got := chromaName(chroma.ID); got != chroma.Name {
 		t.Fatalf("chromaName(%q) = %q, want %q", chroma.ID, got, chroma.Name)
 	}
-	if bundles := catalog.AllBundles(); len(bundles) > 0 && bundleName(bundles[0].ID) != bundles[0].Name {
-		t.Fatalf("bundleName(%q) = %q", bundles[0].ID, bundleName(bundles[0].ID))
-	}
 	if got := skillName("unknown-node"); got != "unknown-node" {
 		t.Fatalf("unknown IDs must fall back to themselves, got %q", got)
 	}

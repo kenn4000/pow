@@ -85,6 +85,9 @@ func (s *webServer) draftTurnMessage(playerIndex int) string {
 type webSession struct {
 	state               game.GameState
 	mode                string
+	variant             string
+	puzzle              *puzzleSession
+	abandon             *abandonSession
 	whitePlayer         int
 	phase               string
 	actor               int
@@ -122,21 +125,40 @@ type webMatchPayout struct {
 }
 
 type webBattleOutcome struct {
-	AttackerValue int `json:"attackerValue"`
-	DefenderValue int `json:"defenderValue"`
-	Winner        int `json:"winner"`
+	AttackerValue int  `json:"attackerValue"`
+	DefenderValue int  `json:"defenderValue"`
+	Winner        int  `json:"winner"`
+	HideValues    bool `json:"-"`
+}
+
+func (o webBattleOutcome) MarshalJSON() ([]byte, error) {
+	if o.HideValues {
+		return json.Marshal(struct {
+			Winner int `json:"winner"`
+		}{Winner: o.Winner})
+	}
+	type outcomeAlias webBattleOutcome
+	return json.Marshal(outcomeAlias(o))
 }
 
 type jailCell struct {
-	Card       *game.Card `json:"card,omitempty"`
-	CapturedBy string     `json:"capturedBy,omitempty"`
-	Clash      bool       `json:"clash,omitempty"`
+	Card       *webFaceCard `json:"card,omitempty"`
+	CapturedBy string       `json:"capturedBy,omitempty"`
+	Clash      bool         `json:"clash,omitempty"`
 }
 
 type webCard struct {
 	Card       game.Card `json:"card"`
 	Index      int       `json:"index"`
 	Selectable bool      `json:"selectable"`
+	FaceHidden bool      `json:"faceHidden,omitempty"`
+	FaceRange  string    `json:"faceRange,omitempty"`
+}
+
+type webFaceCard struct {
+	game.Card
+	FaceHidden bool   `json:"faceHidden,omitempty"`
+	FaceRange  string `json:"faceRange,omitempty"`
 }
 
 type webPlayer struct {
@@ -157,6 +179,11 @@ type webView struct {
 	Started            bool                   `json:"started"`
 	Dashboard          *webDashboard          `json:"dashboard,omitempty"`
 	Mode               string                 `json:"mode,omitempty"`
+	Variant            string                 `json:"variant"`
+	PuzzleOptions      []puzzleDefinition     `json:"puzzleOptions"`
+	AbandonOptions     []abandonBoardOption   `json:"abandonOptions"`
+	Puzzle             *webPuzzleState        `json:"puzzle,omitempty"`
+	Abandon            *webAbandonState       `json:"abandon,omitempty"`
 	Phase              string                 `json:"phase,omitempty"`
 	Round              int                    `json:"round,omitempty"`
 	Exchange           int                    `json:"exchange,omitempty"`
@@ -166,14 +193,14 @@ type webView struct {
 	Players            []webPlayer            `json:"players,omitempty"`
 	DraftPool          []webCard              `json:"draftPool,omitempty"`
 	DraftMode          int                    `json:"draftMode"`
-	DraftHand          []game.Card            `json:"draftHand,omitempty"`
-	DraftPicked        []game.Card            `json:"draftPicked,omitempty"`
+	DraftHand          []webFaceCard          `json:"draftHand,omitempty"`
+	DraftPicked        []webFaceCard          `json:"draftPicked,omitempty"`
 	DraftOpponentCount int                    `json:"draftOpponentCount,omitempty"`
 	DraftPickNumber    int                    `json:"draftPickNumber,omitempty"`
 	DraftPickTotal     int                    `json:"draftPickTotal,omitempty"`
 	JailSlots          []jailCell             `json:"jailSlots,omitempty"`
-	BattleAttack       *game.Card             `json:"battleAttack,omitempty"`
-	BattleDefend       *game.Card             `json:"battleDefend,omitempty"`
+	BattleAttack       *webFaceCard           `json:"battleAttack,omitempty"`
+	BattleDefend       *webFaceCard           `json:"battleDefend,omitempty"`
 	BattleOutcome      *webBattleOutcome      `json:"battleOutcome,omitempty"`
 	Message            string                 `json:"message,omitempty"`
 	ScoreLine          string                 `json:"scoreLine,omitempty"`
@@ -249,6 +276,7 @@ type webHeroOption struct {
 type actionRequest struct {
 	Action         string `json:"action"`
 	Mode           string `json:"mode"`
+	Variant        string `json:"variant"`
 	Index          int    `json:"index"`
 	Cards          []int  `json:"cards"`
 	PlayerHeroID   string `json:"playerHeroId"`
@@ -257,6 +285,7 @@ type actionRequest struct {
 	Payment        string `json:"payment"`
 	BoxType        string `json:"boxType"`
 	Suit           string `json:"suit"`
+	SuitIndex      int    `json:"suitIndex"`
 	CampaignID     string `json:"campaignId"`
 	MissionIndex   int    `json:"missionIndex"`
 }
@@ -303,11 +332,6 @@ type webShopChroma struct {
 	Owned  bool           `json:"owned"`
 }
 
-type webShopBundle struct {
-	Bundle catalog.Bundle `json:"bundle"`
-	Owned  bool           `json:"owned"`
-}
-
 type webShopHero struct {
 	Hero   webHeroOption `json:"hero"`
 	Owned  bool          `json:"owned"`
@@ -332,7 +356,6 @@ const (
 type webShopPage struct {
 	RewardTables       map[string][]webBoxReward `json:"rewardTables"`
 	Chromas            []webShopChroma           `json:"chromas"`
-	Bundles            []webShopBundle           `json:"bundles"`
 	Heroes             []webShopHero             `json:"heroes"`
 	BoxOffers          []webShopBoxOffer         `json:"boxOffers"`
 	Dashboard          *webDashboard             `json:"dashboard"`
@@ -405,6 +428,8 @@ type webCampaignSummary struct {
 	ID                string               `json:"id"`
 	Name              string               `json:"name"`
 	Description       string               `json:"description"`
+	Variant           string               `json:"variant"`
+	Status            string               `json:"status,omitempty"`
 	Requires          string               `json:"requires,omitempty"`
 	Unlocked          bool                 `json:"unlocked"`
 	Started           bool                 `json:"started"`
@@ -419,6 +444,12 @@ type webCampaignMission struct {
 	Index       int             `json:"index"`
 	Name        string          `json:"name"`
 	Description string          `json:"description"`
+	Variant     string          `json:"variant"`
+	VariantID   string          `json:"variantId,omitempty"`
+	Status      string          `json:"status,omitempty"`
+	Enabled     bool            `json:"enabled"`
+	Target      int             `json:"target,omitempty"`
+	CardCount   int             `json:"cardCount,omitempty"`
 	RewardMarks int64           `json:"rewardMarks"`
 	Completed   bool            `json:"completed"`
 	CanPlay     bool            `json:"canPlay"`
@@ -643,6 +674,15 @@ func (s *webServer) handleNewGame(w http.ResponseWriter, r *http.Request) {
 		s.startWebMission(w, r, request)
 		return
 	}
+	variant, err := specialVariant(request.Variant)
+	if err != nil {
+		writeError(w, http.StatusBadRequest, err)
+		return
+	}
+	if variant == "puzzler" || variant == "abandon" {
+		writeError(w, http.StatusBadRequest, errors.New("Puzzler and Abandon are only available as campaign missions"))
+		return
+	}
 	mode := requestedWebMode(request.Mode, s.defaultMode)
 	if !validWebMode(mode) {
 		writeError(w, http.StatusBadRequest, errors.New("mode must be hvh, easy, normal, or hard"))
@@ -693,6 +733,7 @@ func (s *webServer) handleNewGame(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusInternalServerError, err)
 		return
 	}
+	s.session.variant = variant
 	if s.playerProfile != nil {
 		s.playerProfile.LastHeroPicked = playerHeroID
 		s.playerProfile.OpponentLastHeroID = opponentHeroID
@@ -733,6 +774,7 @@ func (s *webServer) startWebGameSession(state game.GameState, mode, playerHeroID
 		initialAchievements: achievementLevels(s.playerProfile),
 		state:               state,
 		mode:                mode,
+		variant:             "main",
 		whitePlayer:         whitePlayer,
 		phase:               phase,
 		actor:               draftActor,
@@ -1085,7 +1127,6 @@ func (s *webServer) shopPage(p *profile.Profile) webShopPage {
 	page := webShopPage{
 		RewardTables: boxRewardTables(p),
 		Chromas:      make([]webShopChroma, 0, len(catalog.AllChromas())),
-		Bundles:      make([]webShopBundle, 0, len(catalog.AllBundles())),
 		Heroes:       make([]webShopHero, 0, len(heroes.All())),
 		Dashboard:    dashboardFor(p), HeroBoxesAvailable: p.HeroBoxesAvailable,
 		HeroBoxCost: heroes.HeroBoxCost(p), DirectHeroCost: heroes.DirectHeroCrownsCost,
@@ -1099,9 +1140,6 @@ func (s *webServer) shopPage(p *profile.Profile) webShopPage {
 	}
 	for _, chroma := range catalog.AllChromas() {
 		page.Chromas = append(page.Chromas, webShopChroma{Chroma: chroma, Owned: p.OwnedChromas[chroma.ID]})
-	}
-	for _, bundle := range catalog.AllBundles() {
-		page.Bundles = append(page.Bundles, webShopBundle{Bundle: bundle, Owned: p.PurchasedBundles[bundle.ID]})
 	}
 	for _, hero := range heroes.All() {
 		owned := containsHeroID(p.UnlockedHeroes, hero.ID)
@@ -1126,12 +1164,17 @@ func (s *webServer) applyShopAction(p *profile.Profile, request actionRequest) (
 		}
 		evaluateAchievementEvent(p, achievements.EventPurchase, "shop")
 		return "Purchased " + chroma.Name + ".", nil
-	case "buy-bundle":
-		if err := catalog.BuyBundle(p, request.ID); err != nil {
+	case "buy-chroma-family":
+		cost, currency, err := catalog.BuyChromaFamily(p, request.ID)
+		if err != nil {
 			return "", err
 		}
 		evaluateAchievementEvent(p, achievements.EventPurchase, "shop")
-		return "Purchased " + bundleName(request.ID) + ".", nil
+		currencyName := "Marks"
+		if currency == catalog.Crowns {
+			currencyName = "Crowns"
+		}
+		return fmt.Sprintf("Purchased family colors for %d %s.", cost, currencyName), nil
 	case "buy-box":
 		return buyShopBox(p, request.BoxType)
 	case "open-hero-box":
@@ -1381,6 +1424,7 @@ func (s *webServer) handleCampaigns(w http.ResponseWriter, r *http.Request) {
 		}
 		summary := webCampaignSummary{
 			ID: campaign.ID, Name: campaign.Name, Description: campaign.Description,
+			Variant: campaignVariant(campaign), Status: campaign.Status,
 			Requires: campaign.Requires, Unlocked: campaigns.IsUnlocked(p, campaign.ID),
 			Missions:      make([]webCampaignMission, 0, len(campaign.Missions)),
 			TotalMissions: len(campaign.Missions),
@@ -1394,9 +1438,13 @@ func (s *webServer) handleCampaigns(w http.ResponseWriter, r *http.Request) {
 			if completed {
 				summary.MissionsCompleted++
 			}
+			name, description, target, cardCount := campaignMissionMetadata(mission)
 			summary.Missions = append(summary.Missions, webCampaignMission{
 				Heroes: s.missionHeroOptions(mission),
-				Index:  mission.Index, Name: mission.Name, Description: mission.Hint,
+				Index:  mission.Index, Name: name, Description: description,
+				Variant: missionVariant(mission), VariantID: mission.VariantID,
+				Status: mission.Status, Enabled: !mission.Disabled,
+				Target: target, CardCount: cardCount,
 				RewardMarks: mission.RewardMarks, Completed: completed,
 				CanPlay:    campaigns.CanPlayMission(p, campaign.ID, mission.Index),
 				EnergyCost: campaignMissionEnergyCost(p, mission),
@@ -1453,6 +1501,72 @@ func webHistoryModeName(modeID int) string {
 
 func (s *webServer) applyAction(request actionRequest) error {
 	session := s.session
+	if session.variant == "puzzler" {
+		if request.Action != "puzzle-pick" {
+			return errors.New("unknown puzzler action")
+		}
+		if session.phase != "puzzle-pick" || session.puzzle == nil {
+			return errors.New("puzzle is not accepting picks")
+		}
+		if err := session.puzzle.pick(request.Index); err != nil {
+			return err
+		}
+		if len(session.puzzle.Pairings) == len(session.puzzle.Definition.Cards)/2 {
+			session.phase = "gameover"
+			session.winner = 1
+			if session.puzzle.Won {
+				session.winner = 0
+				session.message = "Puzzle solved."
+			} else {
+				session.message = "Puzzle complete."
+			}
+			s.finishSpecialCampaignMission(session.puzzle.Won)
+		} else if session.puzzle.Selected >= 0 {
+			session.message = "Choose a card to defend."
+		} else {
+			session.message = "Choose an attacker."
+		}
+		return nil
+	}
+	if session.variant == "abandon" {
+		hero, ok := heroes.ByID(session.playerHeroID)
+		if !ok {
+			return errors.New("selected hero is unavailable")
+		}
+		switch request.Action {
+		case "abandon-suit":
+			if err := session.abandon.assignCategorySuit(request.Index, game.Suit(request.SuitIndex), s.rng); err != nil {
+				return err
+			}
+			s.session.phase = "abandon-select"
+			s.session.message = "Choose the first board card."
+		case "abandon-rotate":
+			if err := session.abandon.rotateCategorySuits(s.rng); err != nil {
+				return err
+			}
+			s.session.phase = "abandon-select"
+			s.session.message = "Choose the first board card."
+		case "abandon-select":
+			if err := session.abandon.selectCard(request.Index); err != nil {
+				return err
+			}
+			session.phase = "abandon-pair"
+			session.message = "Choose a board card or spend a draw token."
+		case "abandon-pair-board":
+			if err := session.abandon.pairBoard(request.Index, hero); err != nil {
+				return err
+			}
+			s.updateAbandonPhase()
+		case "abandon-pair-draw":
+			if err := session.abandon.pairDraw(hero); err != nil {
+				return err
+			}
+			s.updateAbandonPhase()
+		default:
+			return errors.New("unknown abandon action")
+		}
+		return nil
+	}
 	switch request.Action {
 	case "commit":
 		return s.commitAction(request.Cards)
@@ -1543,6 +1657,9 @@ func (s *webServer) readyAction() error {
 
 func (s *webServer) advanceAI() error {
 	session := s.session
+	if session != nil && (session.variant == "puzzler" || session.variant == "abandon") {
+		return nil
+	}
 	for session != nil && isAI(session.mode, session.actor) {
 		switch session.phase {
 		case "draft":
@@ -1582,6 +1699,28 @@ func (s *webServer) advanceAI() error {
 		}
 	}
 	return nil
+}
+
+func (s *webServer) updateAbandonPhase() {
+	session := s.session
+	if session.abandon == nil {
+		session.phase = "gameover"
+		return
+	}
+	if session.abandon.Finished {
+		session.phase = "gameover"
+		session.winner = 1
+		session.message = "Abandon complete."
+		if session.abandon.Won {
+			session.winner = 0
+		} else {
+			session.message = "Abandon complete. Target not reached."
+		}
+		s.finishSpecialCampaignMission(session.abandon.Won)
+		return
+	}
+	session.phase = "abandon-select"
+	session.message = "Choose the first board card."
 }
 
 func (s *webServer) draftPickAction(index int) error {
@@ -1798,7 +1937,7 @@ func (s *webServer) resolveBattle(defendIndex int) error {
 	}
 	session.lastAttack, session.lastDefense, session.lastOutcome = attackCard, defenseCard, outcome
 	session.attackCard = attackCard
-	session.battles = append(session.battles, webBattleRecord{Round: session.state.Round, Exchange: session.exchange + 1, Attacker: s.scoreLabel(attackerIndex), Attack: attackCard, Defense: defenseCard, Outcome: webBattleOutcome{AttackerValue: outcome.AttackerValue, DefenderValue: outcome.DefenderValue, Winner: outcome.Winner}, Scores: [2]int{game.ScorePlayer(session.state.P1, session.state.Bounty.Suit, session.state.Modifiers).Total, game.ScorePlayer(session.state.P2, session.state.Bounty.Suit, session.state.Modifiers).Total}})
+	session.battles = append(session.battles, webBattleRecord{Round: session.state.Round, Exchange: session.exchange + 1, Attacker: s.scoreLabel(attackerIndex), AttackerIndex: attackerIndex, Attack: webFaceCard{Card: attackCard}, Defense: webFaceCard{Card: defenseCard}, Outcome: webBattleOutcome{AttackerValue: outcome.AttackerValue, DefenderValue: outcome.DefenderValue, Winner: outcome.Winner}, Scores: [2]int{game.ScorePlayer(session.state.P1, session.state.Bounty.Suit, session.state.Modifiers).Total, game.ScorePlayer(session.state.P2, session.state.Bounty.Suit, session.state.Modifiers).Total}})
 	session.hasLastBattle = true
 	slotIndex := (session.state.Round-1)*3 + session.exchange
 	cell := jailCell{}
@@ -1967,14 +2106,45 @@ func (s *webServer) view() webView {
 		return webView{
 			Started: false, Dashboard: s.dashboard(), Mode: s.defaultMode, Winner: -1, DefaultHeroID: defaultHeroID,
 			OpponentHint: s.opponentLastHeroName(), Heroes: s.heroOptions(),
+			Variant: "main", PuzzleOptions: puzzleOptions(), AbandonOptions: abandonBoardOptions(),
 		}
 	}
 	session := s.session
+	variant := session.variant
+	if variant == "" {
+		variant = "main"
+	}
+	if variant == "puzzler" || variant == "abandon" {
+		result := webView{
+			GameID: s.gameID, Started: true, Dashboard: s.dashboard(), Mode: session.mode,
+			Variant: variant, PuzzleOptions: puzzleOptions(), AbandonOptions: abandonBoardOptions(), Phase: session.phase,
+			Actor: session.actor, Winner: session.winner, Message: session.message,
+			PlayerHero: heroName(session.playerHeroID), PlayerHeroID: session.playerHeroID,
+			DefaultHeroID: session.playerHeroID, Heroes: s.heroOptions(),
+		}
+		if session.puzzle != nil {
+			result.Puzzle = session.puzzle.webView()
+			result.Modifiers = session.puzzle.Modifiers
+			result.Bounty = game.Card{Suit: session.puzzle.Definition.Bounty, Face: 1}
+		}
+		if session.abandon != nil {
+			result.Abandon = session.abandon.webView()
+			result.Bounty = session.abandon.Bounty
+			if hero, ok := heroes.ByID(session.playerHeroID); ok {
+				result.Modifiers = heroModifiers(hero)
+			}
+		}
+		result.Campaign = session.campaign
+		return result
+	}
 	result := webView{
 		GameID:         s.gameID,
 		Started:        true,
 		Dashboard:      s.dashboard(),
 		Mode:           session.mode,
+		Variant:        variant,
+		PuzzleOptions:  puzzleOptions(),
+		AbandonOptions: abandonBoardOptions(),
 		Phase:          session.phase,
 		Round:          session.state.Round,
 		DraftMode:      session.state.DraftMode,
@@ -2018,7 +2188,7 @@ func (s *webServer) view() webView {
 	}
 	result.Scores = scores
 	result.Campaign = session.campaign
-	result.Battles = session.battles
+	result.Battles = append([]webBattleRecord(nil), session.battles...)
 	if session.phase == "gameover" {
 		result.AchievementUpdates = session.achievementUpdates
 	}
@@ -2042,7 +2212,129 @@ func (s *webServer) view() webView {
 	result.ScoreLine = fmt.Sprintf("%s = %d  |  %s = %d",
 		s.scoreLabel(session.whitePlayer), scores[session.whitePlayer].Total,
 		s.scoreLabel(1-session.whitePlayer), scores[1-session.whitePlayer].Total)
+	if variant == "fog" {
+		redactFogView(&result, session)
+	}
 	return result
+}
+
+func redactFogView(view *webView, session *webSession) {
+	for index := range view.DraftPool {
+		view.DraftPool[index] = hideWebCardFace(view.DraftPool[index])
+	}
+	if session.actor == 1 {
+		view.DraftHand = hideCardFaces(view.DraftHand)
+		view.DraftPicked = hideCardFaces(view.DraftPicked)
+	}
+	for playerIndex := range view.Players {
+		if playerIndex != 1 {
+			continue
+		}
+		for cardIndex := range view.Players[playerIndex].Hand {
+			view.Players[playerIndex].Hand[cardIndex] = hideWebCardFace(view.Players[playerIndex].Hand[cardIndex])
+		}
+		for cardIndex := range view.Players[playerIndex].Pool {
+			view.Players[playerIndex].Pool[cardIndex] = hideWebCardFace(view.Players[playerIndex].Pool[cardIndex])
+		}
+	}
+	for index := range view.JailSlots {
+		cell := &view.JailSlots[index]
+		capturedByPlayer := cell.CapturedBy == "White" && session.whitePlayer == 0 ||
+			cell.CapturedBy == "Black" && session.whitePlayer == 1
+		if cell.Card != nil && capturedByPlayer {
+			card := hideWebFaceCard(*cell.Card)
+			cell.Card = &card
+		}
+	}
+	view.Scores[1].HighestCard = hiddenFaceRepresentative(view.Scores[1].HighestCard)
+	if view.BattleAttack != nil && session.attacker == 1 {
+		originalFace := view.BattleAttack.Face
+		card := hideWebFaceCard(*view.BattleAttack)
+		view.BattleAttack = &card
+		view.BattleAttack.FaceRange = faceRange(originalFace)
+	}
+	if view.BattleDefend != nil && session.attacker == 0 {
+		originalFace := view.BattleDefend.Face
+		card := hideWebFaceCard(*view.BattleDefend)
+		view.BattleDefend = &card
+		view.BattleDefend.FaceRange = faceRange(originalFace)
+	}
+	if view.BattleOutcome != nil {
+		view.BattleOutcome.HideValues = true
+	}
+	for index := range view.Battles {
+		record := &view.Battles[index]
+		if record.AttackerIndex == 1 {
+			record.AttackFaceHidden = true
+			record.AttackFaceRange = faceRange(record.Attack.Face)
+			record.Attack = hideWebFaceCard(record.Attack)
+		} else {
+			record.DefenseFaceHidden = true
+			record.DefenseFaceRange = faceRange(record.Defense.Face)
+			record.Defense = hideWebFaceCard(record.Defense)
+		}
+		record.Outcome.HideValues = true
+	}
+}
+
+func hideCardFaces(cards []webFaceCard) []webFaceCard {
+	masked := append([]webFaceCard(nil), cards...)
+	for index, card := range cards {
+		masked[index] = hideWebFaceCard(card)
+	}
+	return masked
+}
+
+func hideWebCardFace(card webCard) webCard {
+	face := card.Card.Face
+	card.Card = hideCardFace(card.Card)
+	card.FaceHidden = true
+	card.FaceRange = faceRange(face)
+	return card
+}
+
+func hideWebFaceCard(card webFaceCard) webFaceCard {
+	face := card.Face
+	card.Card = hideCardFace(card.Card)
+	card.FaceHidden = true
+	card.FaceRange = faceRange(face)
+	return card
+}
+
+func hideCardFace(card game.Card) game.Card {
+	switch {
+	case card.Face <= 3:
+		card.Face = 1
+	case card.Face <= 6:
+		card.Face = 4
+	default:
+		card.Face = 7
+	}
+	return card
+}
+
+func hiddenFaceRepresentative(face int) int {
+	switch {
+	case face <= 0:
+		return 0
+	case face <= 3:
+		return 1
+	case face <= 6:
+		return 4
+	default:
+		return 7
+	}
+}
+
+func faceRange(face int) string {
+	switch {
+	case face <= 3:
+		return "1-3"
+	case face <= 6:
+		return "4-6"
+	default:
+		return "7-9"
+	}
 }
 
 func (s *webServer) fillDraftView(result *webView) {
@@ -2057,7 +2349,10 @@ func (s *webServer) fillDraftView(result *webView) {
 	}
 	seat, ok := draft.CurrentSeat()
 	if ok {
-		result.DraftHand, result.DraftPicked, result.DraftOpponentCount = draftPrivateView(draft, seat)
+		hand, picked, opponentCount := draftPrivateView(draft, seat)
+		result.DraftHand = webFaceCards(hand)
+		result.DraftPicked = webFaceCards(picked)
+		result.DraftOpponentCount = opponentCount
 		result.DraftPickNumber = draft.CurrentPick + 1
 		result.DraftPickTotal = len(draft.PickOrder)
 	}
@@ -2322,4 +2617,14 @@ func writeError(w http.ResponseWriter, status int, err error) {
 	writeJSON(w, status, map[string]string{"error": err.Error()})
 }
 
-func cardPointer(card game.Card) *game.Card { return &card }
+func cardPointer(card game.Card) *webFaceCard {
+	return &webFaceCard{Card: card}
+}
+
+func webFaceCards(cards []game.Card) []webFaceCard {
+	result := make([]webFaceCard, len(cards))
+	for index, card := range cards {
+		result[index] = webFaceCard{Card: card}
+	}
+	return result
+}

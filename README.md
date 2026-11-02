@@ -178,8 +178,8 @@ colors can be disabled with `--no-color` or the `NO_COLOR`
 environment variable. Progression details and payout rules are in
 [economy](docs/economy.md).
 
-Print the economy configuration, including payouts, skills, chromas and
-bundles, as JSON:
+Print the economy configuration, including payouts, skills, and chromas, as
+JSON:
 
 ```sh
 GOWORK=off go -C backend run ./cmd/prisoners-of-war --dump-economy

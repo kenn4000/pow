@@ -22,14 +22,6 @@ type Chroma struct {
 	Rarity   string `json:"rarity"`
 	Cost     int64  `json:"cost"`
 	Currency string `json:"currency"`
-	Bundle   string `json:"bundle,omitempty"`
-}
-
-type Bundle struct {
-	ID         string   `json:"id"`
-	Name       string   `json:"name"`
-	ChromaIDs  []string `json:"chroma_ids"`
-	CostCrowns int64    `json:"cost_crowns"`
 }
 
 type Currency string
@@ -39,15 +31,7 @@ const (
 	Crowns Currency = "crowns"
 )
 
-var chromas = []Chroma{
-	{ID: "walnut", Name: "Walnut", Color: "brown", Skin: "shop/tribal/orange", HexColor: "#8a5a32", Rarity: "rare", Cost: 30, Currency: string(Crowns)},
-	{ID: "silver", Name: "Silver", Color: "silver", HexColor: "#d7dce2", Rarity: "rare", Cost: 30, Currency: string(Crowns)},
-	{ID: "rose-gold", Name: "Rose Gold", Color: "rose-gold", Skin: "shop/tribal/red", HexColor: "#c77b72", Rarity: "rare", Cost: 35, Currency: string(Crowns)},
-	{ID: "aurora", Name: "Aurora", Color: "aurora", Skin: "shop/tribal/purple", HexColor: "#9457d6", Rarity: "epic", Cost: 50, Currency: string(Crowns)},
-	{ID: "obsidian", Name: "Obsidian", Color: "obsidian", Skin: "shop/tribal/blue", HexColor: "#353e57", Rarity: "epic", Cost: 50, Currency: string(Crowns)},
-	{ID: "prismatic", Name: "Prismatic", Color: "prismatic", Skin: "shop/tribal/purple", HexColor: "#ba73ed", Rarity: "legendary", Cost: 80, Currency: string(Crowns)},
-	{ID: "ember-dog", Name: "Ember Dog", Color: "orange", Skin: "shop/tribal/orange", HexColor: "#ed782e", Rarity: "seasonal", Currency: "event"},
-}
+var chromas []Chroma
 
 type skinManifest struct {
 	ID          string `json:"id"`
@@ -70,12 +54,7 @@ func init() {
 	if err != nil {
 		panic(fmt.Errorf("load skin shop catalog: %w", err))
 	}
-	for _, added := range discovered {
-		if _, exists := FindChroma(added.ID); exists {
-			panic(fmt.Errorf("load skin shop catalog: duplicate chroma ID %q", added.ID))
-		}
-		chromas = append(chromas, added)
-	}
+	chromas = discovered
 }
 
 func loadSkinChromas(assets fs.FS) ([]Chroma, error) {
@@ -179,22 +158,8 @@ func readSkinManifest(assets fs.FS, skinPath, family, variant string) (Chroma, e
 	}, nil
 }
 
-var bundles = []Bundle{
-	{ID: "woodland", Name: "Woodland Bundle", ChromaIDs: []string{"emerald", "walnut"}, CostCrowns: 40},
-	{ID: "spectrum", Name: "Spectrum Bundle", ChromaIDs: []string{"amethyst", "tangerine", "silver"}, CostCrowns: 55},
-}
-
 func AllChromas() []Chroma {
 	return append([]Chroma(nil), chromas...)
-}
-
-func AllBundles() []Bundle {
-	result := make([]Bundle, len(bundles))
-	for i, bundle := range bundles {
-		result[i] = bundle
-		result[i].ChromaIDs = append([]string(nil), bundle.ChromaIDs...)
-	}
-	return result
 }
 
 func FindChroma(id string) (Chroma, bool) {
@@ -239,46 +204,91 @@ func BuyChroma(p *profile.Profile, id string) error {
 	return nil
 }
 
-func BuyBundle(p *profile.Profile, id string) error {
+func BuyChromaFamily(p *profile.Profile, family string) (int64, Currency, error) {
 	if p == nil {
-		return errors.New("profile is required")
+		return 0, "", errors.New("profile is required")
 	}
-	var bundle Bundle
-	found := false
-	for _, candidate := range bundles {
-		if candidate.ID == id {
-			bundle, found = candidate, true
-			break
+	family = strings.ToLower(strings.TrimSpace(family))
+	if family == "" {
+		return 0, "", errors.New("chroma family is required")
+	}
+
+	var purchasable []Chroma
+	familyFound := false
+	for _, chroma := range chromas {
+		if chromaFamilyKey(chroma) != family {
+			continue
+		}
+		familyFound = true
+		switch Currency(chroma.Currency) {
+		case Marks, Crowns:
+			purchasable = append(purchasable, chroma)
+		case Currency("event"):
+		default:
+			return 0, "", fmt.Errorf("unsupported currency %q for chroma %q", chroma.Currency, chroma.ID)
 		}
 	}
-	if !found {
-		return fmt.Errorf("unknown bundle %q", id)
+	if !familyFound {
+		return 0, "", fmt.Errorf("unknown chroma family %q", family)
 	}
-	if p.PurchasedBundles[id] {
-		return nil
+	if len(purchasable) < 2 {
+		return 0, "", errors.New("family does not have multiple purchasable chromas")
 	}
-	bundleChromas := make([]Chroma, 0, len(bundle.ChromaIDs))
-	for _, chromaID := range bundle.ChromaIDs {
-		chroma, ok := FindChroma(chromaID)
-		if !ok {
-			return fmt.Errorf("bundle %q references unknown chroma %q", id, chromaID)
+
+	currency := Currency(purchasable[0].Currency)
+	var fullPrice int64
+	for _, chroma := range purchasable {
+		if Currency(chroma.Currency) != currency {
+			return 0, "", fmt.Errorf("family %q has chromas with mixed currencies", family)
 		}
-		bundleChromas = append(bundleChromas, chroma)
+		if chroma.Cost <= 0 {
+			return 0, "", fmt.Errorf("chroma %q has an invalid price", chroma.ID)
+		}
+		if p.OwnedChromas[chroma.ID] {
+			return 0, "", errors.New("Buy All is only available when no family chromas are owned")
+		}
+		fullPrice += chroma.Cost
 	}
-	if p.Crowns < bundle.CostCrowns {
-		return fmt.Errorf("not enough Crowns: need %d", bundle.CostCrowns)
+	cost := (fullPrice*4 + 2) / 5
+
+	switch currency {
+	case Marks:
+		if p.Marks < cost {
+			return 0, "", fmt.Errorf("not enough Marks: need %d", cost)
+		}
+		p.Marks -= cost
+	case Crowns:
+		if p.Crowns < cost {
+			return 0, "", fmt.Errorf("not enough Crowns: need %d", cost)
+		}
+		p.Crowns -= cost
+	default:
+		return 0, "", fmt.Errorf("unsupported currency %q for chroma family %q", currency, family)
 	}
-	p.Crowns -= bundle.CostCrowns
-	p.PurchasedBundles[id] = true
-	for _, chroma := range bundleChromas {
-		chromaID := chroma.ID
-		if !p.OwnedChromas[chromaID] {
-			p.OwnedChromas[chromaID] = true
-			p.SeenChromas[chromaID] = false
-			recordPurchase(p, chroma)
+
+	if p.OwnedChromas == nil {
+		p.OwnedChromas = make(map[string]bool)
+	}
+	if p.SeenChromas == nil {
+		p.SeenChromas = make(map[string]bool)
+	}
+	for _, chroma := range purchasable {
+		p.OwnedChromas[chroma.ID] = true
+		p.SeenChromas[chroma.ID] = false
+		recordPurchase(p, chroma)
+	}
+	return cost, currency, nil
+}
+
+func chromaFamilyKey(chroma Chroma) string {
+	skinPath := strings.ReplaceAll(chroma.Skin, "\\", "/")
+	parts := strings.Split(skinPath, "/")
+	for i, part := range parts {
+		if part == "shop" && i+1 < len(parts) {
+			return strings.ToLower(parts[i+1])
 		}
 	}
-	return nil
+	return strings.ToLower(strings.TrimSpace(chroma.Name))
 }
 
 func RedeemChromaPick(p *profile.Profile, chromaID string) error {
@@ -314,16 +324,30 @@ func AssignChroma(p *profile.Profile, suit, chromaID string) error {
 	if !ok || !p.OwnedChromas[chromaID] {
 		return fmt.Errorf("chroma %q is not owned", chromaID)
 	}
+	conflictingSuit := ""
 	for otherSuit, assigned := range p.AssignedChromas {
 		if otherSuit != suit {
 			other, found := FindChroma(assigned)
 			if found && other.Color == chroma.Color {
-				return fmt.Errorf("color %q is already assigned to suit %s", chroma.Color, otherSuit)
+				if conflictingSuit != "" {
+					return fmt.Errorf("color %q is already assigned to multiple suits", chroma.Color)
+				}
+				conflictingSuit = otherSuit
 			}
 			if !found && assigned == chroma.Color {
-				return fmt.Errorf("color %q is already assigned to suit %s", chroma.Color, otherSuit)
+				if conflictingSuit != "" {
+					return fmt.Errorf("color %q is already assigned to multiple suits", chroma.Color)
+				}
+				conflictingSuit = otherSuit
 			}
 		}
+	}
+	if conflictingSuit != "" {
+		currentAppearance := p.AssignedChromas[suit]
+		if currentAppearance == "" {
+			return fmt.Errorf("suit %s has no appearance to swap", suit)
+		}
+		p.AssignedChromas[conflictingSuit] = currentAppearance
 	}
 	p.AssignedChromas[suit] = chroma.ID
 	return nil

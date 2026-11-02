@@ -42,6 +42,9 @@ func Start(p *profile.Profile, campaignID string) error {
 	if !ok {
 		return fmt.Errorf("unknown campaign %q", campaignID)
 	}
+	if campaign.Status != "" {
+		return fmt.Errorf("%s is %s", campaign.Name, campaign.Status)
+	}
 	if !IsUnlocked(p, campaignID) {
 		return fmt.Errorf("%s is locked", campaign.Name)
 	}
@@ -68,6 +71,9 @@ func CanPlayMission(p *profile.Profile, campaignID string, missionIndex int) boo
 	}
 	for _, mission := range campaign.Missions {
 		if mission.Index == missionIndex {
+			if mission.Disabled {
+				return false
+			}
 			if missionIndex <= progress.MissionsCompleted {
 				return true
 			}
@@ -96,6 +102,9 @@ func PlayNextMission(p *profile.Profile, campaignID string, ui MissionUI, rng *r
 	mission, ok := findMission(campaign, nextIndex)
 	if !ok {
 		return MissionResult{}, fmt.Errorf("%s has no remaining missions", campaign.Name)
+	}
+	if mission.Variant != "" {
+		return MissionResult{}, fmt.Errorf("%s missions must be launched from the web campaign", campaign.Name)
 	}
 	result, err := RunMission(p, mission, rng, ui)
 	if err != nil {
@@ -127,6 +136,9 @@ func CompleteMission(p *profile.Profile, campaignID string, missionIndex int, ca
 	mission, ok := findMission(campaign, missionIndex)
 	if !ok {
 		return MissionOutcome{}, fmt.Errorf("mission %d does not exist in %s", missionIndex, campaign.Name)
+	}
+	if mission.Disabled {
+		return MissionOutcome{}, fmt.Errorf("mission %d in %s is %s", missionIndex, campaign.Name, mission.Status)
 	}
 	progress := ensureProgress(p, campaign)
 	for _, completed := range progress.CompletedMissionIDs {

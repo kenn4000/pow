@@ -22,6 +22,9 @@ import (
 type sessionSnapshot struct {
 	State               game.GameState
 	Mode                string
+	Variant             string
+	Puzzle              *puzzleSession
+	Abandon             *abandonSession
 	WhitePlayer         int
 	Phase               string
 	Actor               int
@@ -53,14 +56,48 @@ func snapshotSession(s *webSession) *sessionSnapshot {
 	if s == nil {
 		return nil
 	}
-	return &sessionSnapshot{s.state, s.mode, s.whitePlayer, s.phase, s.actor, s.handoffTarget, s.handoffPhase, s.exchange, s.attacker, s.attackIndex, s.attackCard, s.lastAttack, s.lastDefense, s.lastOutcome, s.hasLastBattle, s.slots, s.message, s.winner, s.tiebreak, s.playerHeroID, s.opponentHeroID, s.profileError, s.payout, s.campaign, s.battles, s.initialAchievements, s.achievementUpdates}
+	return &sessionSnapshot{
+		State: s.state, Mode: s.mode, Variant: s.variant, Puzzle: s.puzzle, Abandon: s.abandon,
+		WhitePlayer: s.whitePlayer, Phase: s.phase, Actor: s.actor, HandoffTarget: s.handoffTarget,
+		HandoffPhase: s.handoffPhase, Exchange: s.exchange, Attacker: s.attacker,
+		AttackIndex: s.attackIndex, AttackCard: s.attackCard, LastAttack: s.lastAttack,
+		LastDefense: s.lastDefense, LastOutcome: s.lastOutcome, HasLastBattle: s.hasLastBattle,
+		Slots: s.slots, Message: s.message, Winner: s.winner, Tiebreak: s.tiebreak,
+		PlayerHeroID: s.playerHeroID, OpponentHeroID: s.opponentHeroID,
+		ProfileError: s.profileError, Payout: s.payout, Campaign: s.campaign, Battles: s.battles,
+		InitialAchievements: s.initialAchievements, AchievementUpdates: s.achievementUpdates,
+	}
 }
 
 func (s *sessionSnapshot) restore() *webSession {
 	if s == nil {
 		return nil
 	}
-	return &webSession{s.State, s.Mode, s.WhitePlayer, s.Phase, s.Actor, s.HandoffTarget, s.HandoffPhase, s.Exchange, s.Attacker, s.AttackIndex, s.AttackCard, s.LastAttack, s.LastDefense, s.LastOutcome, s.HasLastBattle, s.Slots, s.Message, s.Winner, s.Tiebreak, s.PlayerHeroID, s.OpponentHeroID, s.ProfileError, s.Payout, s.Campaign, s.Battles, s.InitialAchievements, s.AchievementUpdates}
+	variant := s.Variant
+	if variant == "" {
+		variant = "main"
+	}
+	if s.Abandon != nil && s.Abandon.BoardID == "" {
+		s.Abandon.BoardID = "board-01"
+		if s.Abandon.Target == 0 {
+			s.Abandon.Target = 54
+		}
+		if s.Abandon.Bounty == (game.Card{}) {
+			s.Abandon.Bounty = game.Card{Suit: game.Blade, Face: 9}
+		}
+		s.Abandon.CategorySuits = [3]game.Suit{game.Blade, game.Fang, game.Shield}
+	}
+	return &webSession{
+		state: s.State, mode: s.Mode, variant: variant, puzzle: s.Puzzle, abandon: s.Abandon,
+		whitePlayer: s.WhitePlayer, phase: s.Phase, actor: s.Actor, handoffTarget: s.HandoffTarget,
+		handoffPhase: s.HandoffPhase, exchange: s.Exchange, attacker: s.Attacker,
+		attackIndex: s.AttackIndex, attackCard: s.AttackCard, lastAttack: s.LastAttack,
+		lastDefense: s.LastDefense, lastOutcome: s.LastOutcome, hasLastBattle: s.HasLastBattle,
+		slots: s.Slots, message: s.Message, winner: s.Winner, tiebreak: s.Tiebreak,
+		playerHeroID: s.PlayerHeroID, opponentHeroID: s.OpponentHeroID,
+		profileError: s.ProfileError, payout: s.Payout, campaign: s.Campaign, battles: s.Battles,
+		initialAchievements: s.InitialAchievements, achievementUpdates: s.AchievementUpdates,
+	}
 }
 
 type playerSnapshot struct {
@@ -258,6 +295,9 @@ func saveGame(ctx context.Context, tx *sql.Tx, userID string, snapshot playerSna
 
 func completedGameRecord(current *webServer) ([]byte, error) {
 	session := current.session
+	if session.variant == "puzzler" || session.variant == "abandon" {
+		return nil, nil
+	}
 	if session.campaign != nil && session.campaign.Replay {
 		view := current.view()
 		return json.Marshal(profile.MatchRecord{At: time.Now().UTC(), PlayerScore: view.Players[0].Score, OppScore: view.Players[1].Score, Won: session.winner == 0})
@@ -269,7 +309,9 @@ func completedGameRecord(current *webServer) ([]byte, error) {
 }
 
 func attachMatchRecordID(current *webServer, id string) {
-	if current.session == nil || current.session.phase != "gameover" || len(current.playerProfile.MatchHistory) == 0 {
+	if current.session == nil || current.session.phase != "gameover" ||
+		current.session.variant == "puzzler" || current.session.variant == "abandon" ||
+		len(current.playerProfile.MatchHistory) == 0 {
 		return
 	}
 	if current.session.campaign != nil && current.session.campaign.Replay {

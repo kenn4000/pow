@@ -77,6 +77,8 @@ button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible
 .battle-help { position: relative; grid-area: help; font-size: 14px; padding: .7rem; border: 1px solid #344159; border-radius: 8px; line-height: 1.5; }
 .battle-help summary { cursor: pointer; }
 .board { display: grid; grid-template-columns: 1fr 1fr; grid-template-areas: 'track track' 'info info' 'battle players' 'actions players' 'help help'; align-content: start; align-items: start; gap: 14px; }
+#gameShell[data-variant="puzzler"] .board { grid-template-columns: minmax(0, 1fr); grid-template-areas: 'track' 'battle' 'players' 'help'; }
+#gameShell[data-variant="puzzler"] .actions { display: none; }
 .track { grid-area: track; }
 .match-info { grid-area: info; margin: 0; }
 .battle { grid-area: battle; }

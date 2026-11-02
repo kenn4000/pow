@@ -54,7 +54,6 @@ func dumpEconomyConfig(writer io.Writer) error {
 		"camp_draw_and_catalog": lootbox.AuditConfig(),
 		"skills":                skills.AllNodes(),
 		"chromas":               catalog.AllChromas(),
-		"bundles":               catalog.AllBundles(),
 		"achievements":          achievements.All(),
 		"achievement_sets":      achievements.AllSets(),
 	}
@@ -287,6 +286,11 @@ func (a *app) campaignsMenu(p *profile.Profile) error {
 			if !campaigns.IsUnlocked(p, campaign.ID) {
 				state = "Locked - complete prior campaign"
 			}
+			if campaign.Status != "" {
+				state = campaign.Status
+			} else if campaign.Variant != "" {
+				state = "Web campaign"
+			}
 			fmt.Printf("[%d] %s — %d/%d missions (%s)\n",
 				index+1, campaign.Name, completed, len(campaign.Missions), state)
 		}
@@ -304,6 +308,14 @@ func (a *app) campaignsMenu(p *profile.Profile) error {
 			continue
 		}
 		campaign := allCampaigns[index-1]
+		if campaign.Status != "" {
+			fmt.Println(campaign.Status)
+			continue
+		}
+		if campaign.Variant != "" {
+			fmt.Println("Play this campaign from the web campaign list.")
+			continue
+		}
 		if !campaigns.IsUnlocked(p, campaign.ID) {
 			fmt.Println("Complete Basic Training to unlock Advanced Training.")
 			continue
@@ -746,6 +758,9 @@ func (ui *campaignMissionUI) ChooseMissionTuning() (heroes.Tuning, error) {
 }
 
 func campaignMissionEnergyCost(p *profile.Profile, mission campaigns.Mission) int {
+	if mission.Disabled {
+		return 0
+	}
 	if mission.Index == 1 && skills.AggregateBonuses(p).CampaignFree {
 		return 0
 	}
@@ -1351,10 +1366,6 @@ func (a *app) showShopCatalog(p *profile.Profile) error {
 	if err := p.Save(); err != nil {
 		return err
 	}
-	for _, bundle := range catalog.AllBundles() {
-		fmt.Printf("bundle:%s — %s (%d Crowns; includes %s)\n",
-			bundle.ID, bundle.Name, bundle.CostCrowns, strings.Join(bundle.ChromaIDs, ", "))
-	}
 	if p.HeroBoxesAvailable > 0 {
 		fmt.Printf("[free-hero-box] Open a free Hero Box (%d available)\n", p.HeroBoxesAvailable)
 	}
@@ -1368,7 +1379,7 @@ func (a *app) showShopCatalog(p *profile.Profile) error {
 }
 
 func (a *app) chooseShopAction(p *profile.Profile) error {
-	answer, err := a.ask("Enter a chroma ID, bundle:<id>, hero-box, free-hero-box, buy-hero, pick, or blank to return: ")
+	answer, err := a.ask("Enter a chroma ID, hero-box, free-hero-box, buy-hero, pick, or blank to return: ")
 	if err != nil {
 		return err
 	}
@@ -1387,14 +1398,8 @@ func (a *app) chooseShopAction(p *profile.Profile) error {
 	if strings.EqualFold(answer, "pick") {
 		return a.redeemChromaMenu(p)
 	}
-	if strings.HasPrefix(answer, "bundle:") {
-		if err := catalog.BuyBundle(p, strings.TrimPrefix(answer, "bundle:")); err != nil {
-			return err
-		}
-	} else {
-		if err := catalog.BuyChroma(p, answer); err != nil {
-			return err
-		}
+	if err := catalog.BuyChroma(p, answer); err != nil {
+		return err
 		if chroma, ok := catalog.FindChroma(answer); ok {
 			fmt.Printf("Purchased %s (%s).\n", chroma.Name, chroma.Color)
 			suit, err := a.ask("Assign it to B (Scissors), F (Paper), S (Rock), or blank to skip: ")

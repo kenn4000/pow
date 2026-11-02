@@ -6,6 +6,7 @@ import (
 	"math/rand"
 	"net/http"
 	"net/http/httptest"
+	"path/filepath"
 	"testing"
 	"time"
 
@@ -92,7 +93,7 @@ func TestWebGameFlowRedactsHandsAndAutoPlaysThirdBattle(t *testing.T) {
 			if view.BattleAttack == nil || view.BattleDefend == nil || view.BattleOutcome == nil {
 				t.Fatal("battle result omitted its revealed cards or outcome")
 			}
-			outcome := game.ResolveWithModifiers(*view.BattleAttack, *view.BattleDefend, view.Modifiers)
+			outcome := game.ResolveWithModifiers(view.BattleAttack.Card, view.BattleDefend.Card, view.Modifiers)
 			if view.BattleOutcome.AttackerValue != outcome.AttackerValue ||
 				view.BattleOutcome.DefenderValue != outcome.DefenderValue ||
 				view.BattleOutcome.Winner != outcome.Winner {
@@ -263,6 +264,26 @@ func TestWebHeroSelectionRejectsLockedHeroes(t *testing.T) {
 	}
 }
 
+func TestSpecialVariantsRequireCampaignMission(t *testing.T) {
+	for _, variant := range []string{"puzzler", "abandon"} {
+		t.Run(variant, func(t *testing.T) {
+			web := &webServer{rng: rand.New(rand.NewSource(57)), defaultMode: "easy"}
+			request := httptest.NewRequest(http.MethodPost, "/api/new", bytes.NewBufferString(
+				`{"mode":"easy","variant":"`+variant+`","playerHeroId":"recruit"}`,
+			))
+			response := httptest.NewRecorder()
+			web.handleNewGame(response, request)
+			if response.Code != http.StatusBadRequest ||
+				!bytes.Contains(response.Body.Bytes(), []byte("only available as campaign missions")) {
+				t.Fatalf("special variant status/body = %d / %s", response.Code, response.Body.String())
+			}
+			if web.session != nil {
+				t.Fatalf("standalone %s request started a session", variant)
+			}
+		})
+	}
+}
+
 func sendWebRequest(t *testing.T, client *http.Client, url string, body any) webView {
 	t.Helper()
 	data, err := json.Marshal(body)
@@ -374,7 +395,7 @@ func TestWebDashboardFeatureActionsUseTemporaryPreviewProfile(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	p.Marks = 500
+	p.Marks = 1000
 	p.AchievementTiers["aggressor"] = 1
 	web := &webServer{rng: rand.New(rand.NewSource(71)), playerProfile: p}
 
@@ -436,7 +457,7 @@ func TestWebDashboardFeatureActionsUseTemporaryPreviewProfile(t *testing.T) {
 	if shopResponse.Code != http.StatusOK {
 		t.Fatalf("chroma purchase status = %d: %s", shopResponse.Code, shopResponse.Body.String())
 	}
-	if p.Marks != 500 || web.previewProfile.Marks != previewMarksBeforeShop-100 ||
+	if p.Marks != 1000 || web.previewProfile.Marks != previewMarksBeforeShop-600 ||
 		!web.previewProfile.OwnedChromas["conq-lime"] {
 		t.Fatalf("preview shop purchase affected wrong profile: saved=%d preview=%d", p.Marks, web.previewProfile.Marks)
 	}
@@ -459,6 +480,99 @@ func TestWebDashboardFeatureActionsUseTemporaryPreviewProfile(t *testing.T) {
 		map[string]string{"action": "select", "id": "recruit"})
 	if heroResponse.Code != http.StatusOK || p.DefaultHeroID != profile.DefaultHeroID {
 		t.Fatalf("hero selection response=%d saved default=%q: %s", heroResponse.Code, p.DefaultHeroID, heroResponse.Body.String())
+	}
+}
+
+func TestShopChromaPurchasePersistsCurrencyAndOwnership(t *testing.T) {
+	p, err := profile.New(time.Now())
+	if err != nil {
+		t.Fatal(err)
+	}
+	p.Marks = 600
+	profilePath := filepath.Join(t.TempDir(), "profile.json")
+	p.SetSaveHandler(func(saved *profile.Profile) error { return saved.SaveTo(profilePath) })
+	web := &webServer{playerProfile: p, rng: rand.New(rand.NewSource(72))}
+
+	response := callDashboardHandler(t, web.handleShop, http.MethodPost, "/api/shop",
+		map[string]string{"action": "buy-chroma", "id": "conq-lime"})
+	if response.Code != http.StatusOK {
+		t.Fatalf("chroma purchase status = %d: %s", response.Code, response.Body.String())
+	}
+	var page webShopPage
+	if err := json.Unmarshal(response.Body.Bytes(), &page); err != nil {
+		t.Fatal(err)
+	}
+	if p.Marks != 0 || page.Dashboard.Marks != 0 || !p.OwnedChromas["conq-lime"] {
+		t.Fatalf("purchase did not update currency and ownership: marks=%d owned=%t dashboard=%+v",
+			p.Marks, p.OwnedChromas["conq-lime"], page.Dashboard)
+	}
+	shopHasOwnedChroma := false
+	for _, item := range page.Chromas {
+		if item.Chroma.ID == "conq-lime" {
+			shopHasOwnedChroma = item.Owned
+			break
+		}
+	}
+	if !shopHasOwnedChroma {
+		t.Fatal("shop response did not mark the purchased chroma as owned")
+	}
+	dashboardHasOwnedChroma := false
+	for _, chroma := range page.Dashboard.OwnedChromaDetails {
+		if chroma.ID == "conq-lime" {
+			dashboardHasOwnedChroma = true
+			break
+		}
+	}
+	if !dashboardHasOwnedChroma {
+		t.Fatal("shop response did not include the purchased chroma in gameplay appearance choices")
+	}
+	if page.Dashboard.EquippedChromas["B"].ID == "conq-lime" {
+		t.Fatal("purchasing a chroma should not automatically assign it to a suit")
+	}
+	saved, err := profile.LoadProfileFrom(profilePath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if saved.Marks != 0 || !saved.OwnedChromas["conq-lime"] {
+		t.Fatalf("saved purchase state = marks:%d owned:%t", saved.Marks, saved.OwnedChromas["conq-lime"])
+	}
+}
+
+func TestShopChromaFamilyPurchasePersistsDiscountAndOwnership(t *testing.T) {
+	p, err := profile.New(time.Now())
+	if err != nil {
+		t.Fatal(err)
+	}
+	p.Marks = 4000
+	profilePath := filepath.Join(t.TempDir(), "profile.json")
+	p.SetSaveHandler(func(saved *profile.Profile) error { return saved.SaveTo(profilePath) })
+	web := &webServer{playerProfile: p, rng: rand.New(rand.NewSource(73))}
+
+	response := callDashboardHandler(t, web.handleShop, http.MethodPost, "/api/shop",
+		map[string]string{"action": "buy-chroma-family", "id": "alien"})
+	if response.Code != http.StatusOK {
+		t.Fatalf("family purchase status = %d: %s", response.Code, response.Body.String())
+	}
+	var page webShopPage
+	if err := json.Unmarshal(response.Body.Bytes(), &page); err != nil {
+		t.Fatal(err)
+	}
+	if p.Marks != page.Dashboard.Marks || p.TotalChromasPurchased != 3 {
+		t.Fatalf("family purchase did not apply discount and ownership: marks=%d purchased=%d dashboard=%+v",
+			p.Marks, p.TotalChromasPurchased, page.Dashboard)
+	}
+	for _, id := range []string{"alien-blue", "alien-red", "alien-yellow"} {
+		if !p.OwnedChromas[id] {
+			t.Errorf("family purchase did not grant %q", id)
+		}
+	}
+	saved, err := profile.LoadProfileFrom(profilePath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if saved.Marks != p.Marks || saved.TotalChromasPurchased != 3 || !saved.OwnedChromas["alien-yellow"] {
+		t.Fatalf("saved family purchase = marks:%d purchased:%d alien-yellow:%t",
+			saved.Marks, saved.TotalChromasPurchased, saved.OwnedChromas["alien-yellow"])
 	}
 }
 
@@ -570,7 +684,7 @@ func TestWebProfileCampaignAndHistoryPagesUseProfileData(t *testing.T) {
 	if err := json.Unmarshal(campaignResponse.Body.Bytes(), &campaignPage); err != nil {
 		t.Fatal(err)
 	}
-	if campaignResponse.Code != http.StatusOK || len(campaignPage.Campaigns) != 2 {
+	if campaignResponse.Code != http.StatusOK || len(campaignPage.Campaigns) != 14 {
 		t.Fatalf("campaign page status=%d campaigns=%d",
 			campaignResponse.Code, len(campaignPage.Campaigns))
 	}

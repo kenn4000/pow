@@ -777,8 +777,7 @@ func (a *app) ansiSuitColor(suit game.Suit) string {
 		"red": "\033[31m", "crimson": "\033[31m", "blue": "\033[34m", "cobalt": "\033[34m",
 		"yellow": "\033[33m", "sunflower": "\033[33m", "green": "\033[32m", "emerald": "\033[32m",
 		"orange": "\033[33m", "tangerine": "\033[33m", "purple": "\033[35m", "amethyst": "\033[35m",
-		"brown": "\033[33m", "walnut": "\033[33m", "silver": "\033[37m", "rose-gold": "\033[35m",
-		"aurora": "\033[36m", "obsidian": "\033[90m", "prismatic": "\033[96m",
+		"brown": "\033[33m", "silver": "\033[37m",
 	}[color]
 	if !ok {
 		return "\033[37m"

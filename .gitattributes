@@ -1,0 +1,2 @@
+pow-server.exe filter=lfs diff=lfs merge=lfs -text
+prisonersofwar.exe filter=lfs diff=lfs merge=lfs -text

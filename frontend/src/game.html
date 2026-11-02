@@ -62,6 +62,9 @@
       padding: 12px; background: transparent; scrollbar-color: #344159 transparent; scrollbar-width: thin;
     }
     .track { display: grid; grid-template-columns: repeat(10, minmax(0, 1fr)); align-items: start; gap: 5px; }
+    .track.abandon-track { grid-template-columns: repeat(5, minmax(0, 1fr)); }
+    .track.puzzler-track { grid-template-columns: repeat(var(--puzzler-columns, 5), minmax(0, 1fr)); }
+    .puzzler-pair-column { display: grid; grid-template-columns: minmax(0, 1fr); gap: 5px; min-width: 0; }
     .bounty-column { display: grid; grid-column: span 1; grid-template-columns: minmax(0, 1fr); gap: 5px; min-width: 0; }
     .track-cell { min-width: 0; height: clamp(96px, 11vw, 130px); display: flex; align-items: center; justify-content: center; position: relative; border: 2px solid #3d4b63; border-radius: 9px; background: #182133; }
     .track-cell.bounty { border: 3px solid var(--bounty-border-color, var(--gold)); background: #2b2614; }
@@ -73,6 +76,8 @@
     .track-cell .card .face { font-size: clamp(18px, 3vw, 32px); }
     .jailed-card { display: flex; flex-direction: column; align-items: center; justify-content: center; width: 100%; height: 100%; }
     .jailed-card .card { width: min(64px, calc(100% - 8px)); height: calc(100% - 14px); }
+    .jailed-card.abandon-pair .card { outline: 2px solid #f6d46f; outline-offset: -2px; border-radius: 8px; }
+    .puzzler-score { display: block; min-height: 14px; color: #fff; font-size: clamp(9px, 1vw, 12px); font-weight: 900; line-height: 14px; text-align: center; white-space: nowrap; }
     .jailed-card { animation: capture-drop .35s ease-out both; }
     @keyframes capture-drop { from { opacity: 0; transform: translateY(-12px) scale(.9); } to { opacity: 1; transform: translateY(0) scale(1); } }
     .capture-face { height: 14px; color: #fff; font-size: clamp(10px, 1.2vw, 13px); font-weight: 900; line-height: 14px; text-align: center; }
@@ -123,6 +128,9 @@
     .card.back { cursor: default; border-color: #e2e4df; background: repeating-linear-gradient(135deg, #323a39 0 7px, #414b48 7px 14px); }
     .card.back::after { content: "POW"; color: #f0c75e; font-size: 11px; font-weight: 800; letter-spacing: .16em; }
     .card.back .face { display: none; }
+    button.card.back { cursor: pointer; }
+    .card-range { color: #f5d875; font-size: 8px; font-weight: 800; letter-spacing: .04em; }
+    .card.skin-card .card-range { position: absolute; right: 0; bottom: -12px; left: 0; text-align: center; }
     .match-info { display: grid; grid-template-columns: minmax(0, 1fr) minmax(180px, 1.2fr) minmax(0, 1fr); align-items: center; gap: clamp(8px, 2vw, 24px); margin: 16px 0; }
     .match-info[hidden] { display: none; }
     .match-side { min-width: 0; }
@@ -149,6 +157,32 @@
     .battle-result.lose { background: #2a3347; color: #aeb8c9; }
     .battle-result.clash { background: #3b2f5c; color: #e5dcff; }
     .battle-card-lost { opacity: .55; filter: grayscale(.4); }
+    .battle.variant-screen { display: block; min-height: max-content; padding: 14px; }
+    .variant-overview { display: grid; grid-template-columns: auto minmax(0, 1fr); align-items: center; gap: 12px; }
+    .variant-overview.abandon-overview { grid-template-columns: minmax(0, 1fr); }
+    .variant-overview.puzzler-overview { grid-template-columns: minmax(0, 1fr); }
+    .variant-overview .card { width: clamp(58px, 16vw, 78px); height: clamp(78px, 22vw, 104px); }
+    .variant-overview h2, .variant-panel h2 { margin: 0 0 5px; color: #f0d477; font: 700 15px Georgia, "Times New Roman", serif; }
+    .variant-overview p, .variant-panel p { margin: 4px 0; color: #d3d9e4; font-size: 12px; }
+    .variant-panel { margin-top: 12px; padding: 10px; border: 1px solid #33415a; border-radius: 10px; background: #0c1220a8; }
+    .variant-card-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); justify-items: center; gap: 12px 8px; padding: 15px 3px 6px; }
+    .variant-card-grid .card { width: clamp(62px, 17vw, 82px); height: clamp(84px, 23vw, 108px); }
+    .variant-card-grid .card .face { font-size: clamp(25px, 7vw, 38px); }
+    .variant-card-grid .card-range { position: absolute; right: 0; bottom: -16px; left: 0; color: #f5d875; font-size: 9px; font-weight: 800; text-align: center; }
+    .variant-card-grid .card:disabled { cursor: default; opacity: .62; }
+    .variant-card-grid .card.used { opacity: .45; filter: grayscale(.8); }
+    .variant-score { color: #f6d46f !important; font-size: 14px !important; font-weight: 800; }
+    .variant-results { display: flex; flex-wrap: wrap; align-items: center; justify-content: center; gap: 8px; }
+    .variant-pair { display: grid; justify-items: center; gap: 4px; min-width: 62px; color: #d3d9e4; font-size: 10px; text-align: center; }
+    .variant-pair .card { width: 48px; height: 64px; }
+    .abandon-board { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); justify-items: center; gap: 12px 8px; margin-top: 14px; }
+    .abandon-board .card { width: clamp(62px, 17vw, 82px); height: clamp(84px, 23vw, 108px); }
+    .abandon-board .card.used { opacity: .42; filter: grayscale(.85); }
+    .abandon-board-item { display: flex; flex-direction: column; align-items: center; gap: 4px; min-width: 0; }
+    .abandon-card-penalty { color: #fff; font-size: 13px; font-weight: 900; }
+    .suit-cycle.abandon-suit-cycle { width: min(190px, 100%); margin: 8px auto 0; }
+    .suit-cycle.puzzle-suit-cycle { width: min(190px, 100%); margin: 8px auto 0; }
+    .variant-status { color: #f3d982 !important; font-weight: 800; }
     .battle-vs.clash { color: #c4b5fd; }
     .battle-player { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 6px; min-width: 0; }
     .battle-player-name { max-width: 100%; color: #e4e8e4; font-size: 12px; text-align: center; text-transform: uppercase; letter-spacing: .08em; }
@@ -200,6 +234,7 @@
     .empty-row { align-self: center; color: #d0d6d1; font-size: 12px; font-style: italic; }
     .chosen { outline: 3px solid var(--gold); outline-offset: 2px; transform: translateY(-4px); }
     .actions { display: flex; justify-content: center; flex-wrap: wrap; gap: 10px; margin-top: 17px; }
+    .puzzle-actions { display: flex; justify-content: center; flex-wrap: wrap; gap: 10px; margin-top: 12px; }
     .action {
       min-height: 43px; padding: 0 20px; border: 1px solid #f4d881; border-radius: 8px;
       background: #f0c75e; color: #262a29; font-weight: 800; cursor: pointer;
@@ -238,6 +273,8 @@
       background: transparent; box-shadow: 0 4px 12px #0006;
     }
     .suit-node img { display: block; width: 100%; height: 100%; border-radius: 50%; object-fit: contain; }
+    .suit-node .card { width: 100%; height: 100%; min-width: 0; min-height: 0; border: 0; border-radius: 50%; box-shadow: none; }
+    .suit-node .card-art { object-fit: cover; }
     .suit-node:hover { filter: brightness(1.14); }
     .suit-node:focus-visible { outline: 3px solid var(--gold); outline-offset: 3px; }
     .color-menu {
@@ -262,10 +299,30 @@
     .rotate-colors:hover { background: #59625d; }
     .rotate-colors:focus-visible { outline: 3px solid var(--gold); outline-offset: 3px; }
     .rotate-colors svg { width: 100%; height: 100%; fill: currentColor; }
+    .rotate-colors:disabled { cursor: default; opacity: .65; }
     .modal-backdrop { position: fixed; z-index: 5; inset: 0; display: grid; place-items: center; padding: 18px; background: #141817d9; }
     .modal { width: min(440px, 100%); padding: 27px; border: 1px solid #e6ce81; border-radius: 16px; background: #303735; box-shadow: 0 20px 70px #0008; text-align: center; }
     .modal h2 { margin: 0 0 10px; font-size: 25px; }
     .modal p { color: #d6ddd8; line-height: 1.5; }
+    .modal.skin-preview-modal { width: min(720px, 100%); max-height: calc(100vh - 36px); overflow-y: auto; }
+    .skin-preview-controls { display: flex; flex-wrap: wrap; align-items: end; gap: 10px; margin: 16px 0; text-align: left; }
+    .skin-preview-controls label { flex: 1 1 200px; }
+    .skin-preview-controls label { display: grid; gap: 5px; color: #e4e9e5; font-weight: 700; }
+    .skin-preview-controls select { min-width: 0; min-height: 40px; padding: 6px 9px; border: 1px solid #68756e; border-radius: 7px; background: #141a17; color: #f3f4ef; }
+    .skin-preview-gallery { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px; }
+    .skin-preview-card { min-width: 0; padding: 8px; border: 1px solid #56605a; border-radius: 9px; background: #202623; }
+    .skin-preview-card h3 { margin: 0 0 6px; color: #f3f4ef; font-size: 13px; }
+    .skin-preview-frame { display: grid; place-items: center; aspect-ratio: 3 / 4; overflow: hidden; border-radius: 6px; background: #111613; }
+    .skin-preview-frame img { width: 100%; height: 100%; object-fit: contain; }
+    .skin-preview-actions { display: flex; justify-content: center; margin-top: 16px; }
+    @media (max-width: 520px) {
+      .modal.skin-preview-modal { padding: 15px; }
+      .skin-preview-gallery { gap: 5px; }
+      .skin-preview-card { padding: 5px; }
+      .skin-preview-card h3 { font-size: 11px; }
+      .skin-preview-controls { display: grid; grid-template-columns: minmax(0, 1fr); }
+      .skin-preview-controls .action { width: 100%; }
+    }
     .confirmation-actions { display: flex; justify-content: center; gap: 10px; margin-top: 18px; }
     .confirmation-actions .action { flex: 1; }
     .payout-breakdown { margin: 16px 0; padding: 12px; border: 1px solid #4d593e; border-radius: 10px; background: #171e19; text-align: center; }
@@ -649,6 +706,7 @@
         <div id="battleLeft" class="battle-player"></div>
         <div id="battleVs" class="battle-vs">VS</div>
         <div id="battleRight" class="battle-player"></div>
+        <div id="variantContent" hidden></div>
       </section>
       <div id="statusHost">
         <p id="status" class="status" aria-live="polite">Choose a game mode to begin.</p>
@@ -685,14 +743,6 @@
       "Sky Blue": "var(--card-sky-blue)", Silver: "var(--card-silver)", Brown: "var(--card-brown)",
       Gray: "var(--card-gray)", Ruby: "var(--card-ruby)", White: "var(--card-white)"
     };
-    const chromaLooks = {
-      walnut: {filter:"saturate(.55) brightness(.7)"},
-      silver: {filter:"grayscale(1) brightness(1.3)"},
-      "rose-gold": {filter:"sepia(.4) saturate(.7) brightness(1.2)"},
-      aurora: {filter:"hue-rotate(30deg) saturate(1.4)"},
-      obsidian: {filter:"grayscale(.8) brightness(.6)"},
-      prismatic: {filter:"hue-rotate(90deg) saturate(2)"}
-    };
     const heroIconNames = {
       ascendant: "gorilla", anchor: "turtle", ascetic: "bureaucrat",
       herald: "bodybuilder", treasurer: "treasure"
@@ -709,7 +759,10 @@
     let achievementCategory = 'all';
     let pendingConfirmation = null;
     let setupMode = 'easy';
+    let setupVariant = 'main';
     let openSuitMenu = null;
+    let openAbandonSuitMenu = -1;
+    let openPuzzleSuitMenu = -1;
     let state = null;
     let activeMode = "";
     let showNewGameConfirmation = false;
@@ -718,6 +771,9 @@
     let showFeature = false;
     let currentFeature = "";
     let currentShopTab = "skins";
+    let shopPreviewChromaID = "";
+    let shopPreviewPoseIndex = 0;
+    let shopPreviewTimer = null;
     let currentSkillBranch = "battle-rewards";
     let featureFocusTarget = "";
     let featureData = null;
@@ -778,24 +834,33 @@
 
     function cardMarkup(item, options = {}) {
       const card = item.card || item;
+      const fogMasked = Boolean(item.faceHidden);
+      const faceRange = fogMasked ? String(item.faceRange || "") : "";
       const equipped = equippedChroma(card.suit);
       const appearance = options.appearance || (equipped ? chromaAppearance(equipped) : null);
       const color = appearance?.color || suitColors[card.suit];
       const skin = appearance?.skin || skinFolders[color] || skinFolders[defaultSuitColors[card.suit]];
       const tier = card.face <= 3 ? "small" : card.face <= 6 ? "med" : "large";
       const pose = ["idle", "attack", "win", "lose"].includes(options.pose) ? options.pose : "idle";
-      const selectable = Boolean(item.selectable);
-      const chosen = options.commit && selected.has(item.index);
+      const selectable = Boolean(item.selectable || options.selectable);
+      const chosen = Boolean(options.selectedIndex !== undefined && options.selectedIndex === item.index ||
+        options.commit && selected.has(item.index));
       const tag = selectable ? "button" : "div";
-      const attrs = selectable ? `type="button" data-index="${item.index}" aria-pressed="${chosen}"` : "";
+      const attrs = selectable ? `type="button" data-index="${item.index}" aria-pressed="${chosen}"${item.disabled || options.disabled ? " disabled" : ""}` : "";
       const face = options.face === undefined ? card.face : options.face;
-      const faceMarkup = options.hideFace ? "" : `<span class="face">${esc(face)}</span>`;
+      const hideFace = Boolean(options.hideFace || fogMasked || options.back);
+      const faceMarkup = hideFace ? "" : `<span class="face">${esc(face)}</span>`;
       const mirrored = options.mirror ? " mirrored" : "";
       const faceColor = options.faceColor || appearance?.hexColor || colorVars[color] || "var(--paper)";
-      const ariaLabel = `${suits[card.suit]} ${card.face}, ${color}${options.face !== undefined ? `, effective value ${face}` : ''}`;
-      return `<${tag} class="card skin-card${chosen ? " chosen" : ""}${mirrored}" style="--card-suit-color:${faceColor}" ${attrs} aria-label="${esc(ariaLabel)}">
-        <img class="card-art" style="${appearance?.filter ? `filter:${appearance.filter}` : ''}" src="${import.meta.env.BASE_URL}skins/${skin}/${tier}_${pose}.png?thumb=160" alt="" aria-hidden="true">
-        ${faceMarkup}
+      const ariaLabel = options.ariaLabel || (fogMasked
+        ? `${suits[card.suit]} card, face range ${faceRange || "unknown"}`
+        : options.back ? "Face-down card"
+          : `${suits[card.suit]} ${card.face}, ${color}${options.face !== undefined ? `, effective value ${face}` : ''}`);
+      const className = `card${options.back ? " back" : " skin-card"}${chosen ? " chosen" : ""}${mirrored}${options.used ? " used" : ""}`;
+      const rangeMarkup = fogMasked ? `<span class="card-range">Range ${esc(faceRange)}</span>` : "";
+      const art = options.back ? "" : `<img class="card-art" style="${appearance?.filter ? `filter:${appearance.filter}` : ''}" src="${import.meta.env.BASE_URL}skins/${skin}/${tier}_${pose}.png?thumb=160" alt="" aria-hidden="true">`;
+      return `<${tag} class="${className}" style="--card-suit-color:${faceColor}" ${attrs} aria-label="${esc(ariaLabel)}">
+        ${art}${faceMarkup}${rangeMarkup}
       </${tag}>`;
     }
 
@@ -845,88 +910,68 @@
       scheduleBattleAnimation(key, "values", 350);
     }
 
-    function renderSuitCycle() {
-      const container = document.getElementById("suitCycle");
-      const appearances = [];
-      for (let suit = 0; suit < suits.length; suit++) {
+    function renderSuitSelector(container, openIndex, onOpen) {
+      const nodes = suits.map((name, suit) => {
         const equipped = equippedChroma(suit);
         const appearance = equipped ? chromaAppearance(equipped) : null;
-        appearances[suit] = appearance;
         if (appearance) suitColors[suit] = appearance.color;
-      }
-      const locations = [
-        { suit: 0, location: "scissors" },
-        { suit: 1, location: "paper" },
-        { suit: 2, location: "rock" }
-      ];
-      container.innerHTML = `<svg class="suit-arrows" viewBox="0 0 400 300" aria-hidden="true">
-          <defs><marker id="suit-arrowhead" markerWidth="10" markerHeight="10" refX="8" refY="5" orient="auto">
-            <path d="M0,0 L10,5 L0,10 z" fill="#c5cbc7"></path>
-          </marker></defs>
-          <path class="connector" d="M145 141 L90 232"></path>
-          <path class="connector" d="M200 232 L310 232"></path>
-          <path class="connector" d="M255 141 L200 56"></path>
-          <path d="M178 96 L145 141"></path>
-          <path d="M140 232 L200 232"></path>
-          <path d="M288 187 L255 141"></path>
-        </svg>${locations.map(({ suit, location }) => {
-          const owned = state?.dashboard?.ownedChromaDetails || [];
-          const menu = openSuitMenu === suit
-            ? `<div class="color-menu" role="menu" aria-label="Choose an unused color">
-                ${owned.map(chroma => ({chroma, appearance: chromaAppearance(chroma)}))
-                  .filter(({appearance}) => appearance.color && !suitColors.includes(appearance.color))
-                  .map(({chroma, appearance}) =>
-                    `<button type="button" class="color-option" role="menuitem" data-suit-option="${suit}" data-chroma="${esc(chroma.id)}">
-                      <span class="color-option-swatch" style="background:${appearance.hexColor || colorVars[appearance.color] || 'var(--paper)'}"></span>${esc(chroma.name)}
-                    </button>`).join("")}
-              </div>`
-            : "";
-          const skin = appearances[suit]?.skin || skinFolders[suitColors[suit]];
-          return `<div class="suit-node-wrap ${location}${openSuitMenu === suit ? " menu-open" : ""}">
-            <button type="button" class="suit-node" data-suit-trigger="${suit}"
-              style="--suit-node-color:${appearances[suit]?.hexColor || colorVars[suitColors[suit]] || 'var(--paper)'}"
-              aria-label="${suits[suit]}, ${suitColors[suit]} color, open color menu" aria-haspopup="menu"
-              aria-expanded="${openSuitMenu === suit}">
-              <img src="${import.meta.env.BASE_URL}skins/${skin}/large_attack.png?v=3" alt="" aria-hidden="true">
-            </button>
-            ${menu}
-          </div>`;
-        }).join("")}<button type="button" class="rotate-colors" data-rotate-colors
-          aria-label="Rotate colors counterclockwise" title="Rotate colors counterclockwise">
-          <svg viewBox="0 0 24 24" aria-hidden="true">
-            <path d="M7.11 8.53A5.99 5.99 0 0 1 12 6c3.31 0 6 2.69 6 6s-2.69 6-6 6a5.99 5.99 0 0 1-5.65-4H4.26A8 8 0 0 0 12 20c4.42 0 8-3.58 8-8s-3.58-8-8-8c-2.21 0-4.21.9-5.66 2.34L4 4v6h6L7.11 8.53z"></path>
-          </svg>
-        </button>`;
-      container.onclick = async event => {
-        event.stopPropagation();
-        if (event.target.closest("[data-rotate-colors]")) {
-          await saveSuitAppearance({action:'rotate-colors'});
-          return;
-        }
-        const option = event.target.closest("[data-suit-option]");
-        if (option) {
-          const suit = Number(option.dataset.suitOption);
-          const chromaID = option.dataset.chroma;
+        const color = appearance?.hexColor || colorVars[appearance?.color || suitColors[suit]] || "var(--paper)";
+        return {
+          color,
+          ariaLabel: `${name}, ${appearance?.color || suitColors[suit]} color, open color menu`,
+          content: `<img src="${import.meta.env.BASE_URL}skins/${appearance?.skin || skinFolders[suitColors[suit]]}/large_attack.png?v=3" alt="" aria-hidden="true">`
+        };
+      });
+      renderSuitCycleWidget(container, {
+        nodes, openIndex, canChange: true,
+        menuLabel: () => "Choose an owned skin",
+        options: suit => (state?.dashboard?.ownedChromaDetails || [])
+          .map(chroma => ({ chroma, appearance: chromaAppearance(chroma) }))
+          .filter(({chroma}) => chroma.id !== equippedChroma(suit)?.id)
+          .map(({chroma, appearance}) => ({
+            label: chroma.name, value: chroma.id,
+            swatch: appearance.hexColor || colorVars[appearance.color] || "var(--paper)"
+          })),
+        rotateLabel: "Rotate colors counterclockwise",
+        onOpen,
+        onSelect: async (suit, chromaID) => {
           const chroma = (state?.dashboard?.ownedChromaDetails || []).find(item => item.id === chromaID);
           const look = chroma && chromaAppearance(chroma);
           if (!Number.isInteger(suit) || suit < 0 || suit >= suits.length ||
-              !look || suitColors.includes(look.color)) return;
+              !look) return;
           await saveSuitAppearance({action:'assign-chroma',suit:['B','F','S'][suit],id:chromaID});
-          return;
-        }
-        const trigger = event.target.closest("[data-suit-trigger]");
-        if (trigger) {
-          const suit = Number(trigger.dataset.suitTrigger);
-          openSuitMenu = openSuitMenu === suit ? null : suit;
-          renderSuitCycle();
-          if (openSuitMenu !== null) {
-            container.querySelector(".color-option")?.focus();
-          }
-          return;
-        }
-        openSuitMenu = null;
+        },
+        onRotate: () => saveSuitAppearance({action:'rotate-colors'})
+      });
+    }
+
+    function renderSuitCycle() {
+      const container = document.getElementById("suitCycle");
+      renderSuitSelector(container, openSuitMenu, index => {
+        openSuitMenu = index < 0 ? null : index;
         renderSuitCycle();
-      };
+        if (openSuitMenu !== null) container.querySelector(".color-option")?.focus();
+      });
+    }
+
+    function renderAbandonSuitCycle() {
+      const container = document.getElementById("abandonSuitCycle");
+      if (!container) return;
+      renderSuitSelector(container, openAbandonSuitMenu, index => {
+        openAbandonSuitMenu = index;
+        renderAbandonSuitCycle();
+        if (openAbandonSuitMenu >= 0) container.querySelector(".color-option")?.focus();
+      });
+    }
+
+    function renderPuzzleSuitCycle() {
+      const container = document.getElementById("puzzleSuitCycle");
+      if (!container) return;
+      renderSuitSelector(container, openPuzzleSuitMenu, index => {
+        openPuzzleSuitMenu = index;
+        renderPuzzleSuitCycle();
+        if (openPuzzleSuitMenu >= 0) container.querySelector(".color-option")?.focus();
+      });
     }
 
     document.addEventListener("click", event => {
@@ -934,10 +979,87 @@
         openSuitMenu = null;
         renderSuitCycle();
       }
+      if (openAbandonSuitMenu >= 0 && !event.target.closest("#abandonSuitCycle")) {
+        openAbandonSuitMenu = -1;
+        if (state?.variant === "abandon") renderAbandonSuitCycle();
+      }
+      if (openPuzzleSuitMenu >= 0 && !event.target.closest("#puzzleSuitCycle")) {
+        openPuzzleSuitMenu = -1;
+        if (state?.variant === "puzzler") renderPuzzleSuitCycle();
+      }
     });
 
     function backs(count) {
       return count > 0 ? '<div class="card back" aria-label="Hidden cards"></div>' : "";
+    }
+
+    function renderPuzzleBattle() {
+      const puzzle = state.puzzle || {};
+      const direction = String(puzzle.direction || puzzle.expectedSolver || "High");
+      const highLow = /low/i.test(direction) ? "Low" : "High";
+      const status = puzzle.complete
+        ? puzzle.won ? `${highLow} · Puzzle won` : `${highLow} · Puzzle lost`
+        : hasSelectedIndex(puzzle.selectedIndex)
+          ? `${highLow} · Select a second card`
+          : `${highLow} · Choose a card`;
+      const suitSelector = `<div id="puzzleSuitCycle" class="suit-cycle puzzle-suit-cycle"
+        role="group" aria-label="Suit colors and appearance selectors"></div>`;
+      const completionMessage = state.campaign?.result ||
+        `Puzzle complete — you ${puzzle.won ? "win!" : "lose."} ${highLow} target.`;
+      document.getElementById("variantContent").innerHTML = `<div class="variant-overview puzzler-overview">
+        <div><h2>${esc(puzzle.name || "Puzzler")}</h2>
+          <p>Target: ${esc(puzzle.target ?? "—")}</p>
+          <p class="variant-score">Score: ${esc(puzzle.score ?? 0)}</p>
+          <p class="variant-status">${esc(status)}</p>
+          ${suitSelector}
+        </div>
+      </div>
+      ${puzzle.complete ? `<p class="variant-panel variant-status" role="status">${esc(completionMessage)}</p>` : ""}`;
+      renderPuzzleSuitCycle();
+      const puzzleActions = document.createElement("div");
+      puzzleActions.className = "puzzle-actions";
+      appendMissionActions(puzzleActions,
+        () => startMission(state.campaign.id, state.campaign.index));
+      document.getElementById("variantContent").append(puzzleActions);
+    }
+
+    function renderAbandonBattle() {
+      const abandon = state.abandon || {};
+      const suitSelector = `<div id="abandonSuitCycle" class="suit-cycle abandon-suit-cycle"
+        role="group" aria-label="Suit colors and appearance selectors"></div>`;
+      const status = abandon.complete
+        ? abandon.won ? "Board complete — you win!" : "Board complete — you lose."
+        : "In progress";
+      document.getElementById("variantContent").innerHTML = `<div class="variant-overview abandon-overview">
+        <div><h2>Abandon</h2>
+          <p>Target: ${esc(abandon.target ?? "—")}</p>
+          <p class="variant-score">Running score: ${esc(abandon.score ?? 0)}</p>
+          <p class="variant-status">${esc(status)}</p>
+          ${abandon.complete && state.campaign?.result ? `<p class="variant-panel variant-status" role="status">${esc(state.campaign.result)}</p>` : ""}
+          ${suitSelector}
+        </div>
+      </div>`;
+      renderAbandonSuitCycle();
+      if (abandon.complete && state.campaign) {
+        const missionActions = document.createElement("div");
+        missionActions.className = "puzzle-actions";
+        appendMissionActions(missionActions, () => startMission(state.campaign.id, state.campaign.index));
+        document.getElementById("variantContent").append(missionActions);
+      }
+    }
+
+    function campaignMissionSucceeded() {
+      return Boolean(state?.campaign?.result?.startsWith("Mission complete!"));
+    }
+
+    function appendMissionActions(container, restart) {
+      container.append(makeButton("Restart", restart, "secondary"));
+      container.append(makeButton("Home", openDashboard, "secondary"));
+      const campaign = state?.campaign;
+      if (campaign && campaignMissionSucceeded() && !campaign.result.includes("Campaign complete")) {
+        container.append(makeButton("Next Mission",
+          () => startMission(campaign.id, campaign.index + 1), "primary"));
+      }
     }
 
     function connectionError(error) {
@@ -955,10 +1077,78 @@
 
     function renderTrack() {
       const track = document.getElementById("track");
+      if (state?.variant === "puzzler") {
+        track.classList.remove("abandon-track");
+        track.classList.add("puzzler-track");
+        const puzzle = state.puzzle || {};
+        const bountySuit = Number(puzzle.bountySuit);
+        const pairResults = Array.isArray(puzzle.pairResults) ? puzzle.pairResults : [];
+        const pairCount = Math.floor((puzzle.cards || []).length / 2);
+        track.style.setProperty("--puzzler-columns", String(pairCount + 1));
+        const bounty = `<div class="bounty-column">
+          <div class="track-cell bounty" style="--bounty-border-color:${suitColorValue(bountySuit)}">
+            ${cardMarkup(state.bounty || { suit: bountySuit, face: 1 }, { pose: "win", hideFace: true })}
+          </div>
+          <span class="bounty-value" style="color:${suitColorValue(bountySuit)}">Bounty ${formatModifier(Number(state.modifiers?.bounty ?? 1))}</span>
+        </div>`;
+        const pairs = Array.from({ length: pairCount }, (_, index) => {
+          const result = pairResults[index];
+          const captured = result?.captured;
+          const score = Number(result?.score || 0);
+          const content = captured
+            ? `<div class="jailed-card puzzler-prisoner">
+                ${cardMarkup({ ...captured }, { pose: "lose", hideFace: true })}
+                <span class="capture-face" style="color:${suitColorValue(captured.suit)}">${esc(captured.face)}</span>
+              </div>`
+            : result ? `<span class="cell-empty">CLASH</span>`
+              : `<span class="cell-empty">${String(index + 1).padStart(2, "0")}</span>`;
+          const label = captured
+            ? `Puzzle pair ${index + 1}, captured ${suits[captured.suit]} ${captured.face}, ${formatModifier(score)} points`
+            : result ? `Puzzle pair ${index + 1}, tie, ${formatModifier(score)} points`
+              : `Puzzle pair ${index + 1}, pending`;
+          const scoreLabel = result
+            ? `<span class="puzzler-score" aria-label="Score addition ${formatModifier(score)}">${formatModifier(score)}</span>`
+            : `<span class="puzzler-score" aria-hidden="true"></span>`;
+          return `<div class="puzzler-pair-column">
+            <div class="track-cell" aria-label="${esc(label)}">${content}</div>
+            ${scoreLabel}
+          </div>`;
+        }).join("");
+        track.innerHTML = bounty + pairs;
+        return;
+      }
+      track.classList.remove("puzzler-track");
+      track.style.removeProperty("--puzzler-columns");
       if (!state || !state.started) {
+        track.classList.remove("abandon-track");
         track.innerHTML = "";
         return;
       }
+      if (state.variant === "abandon") {
+        track.classList.add("abandon-track");
+        const bounty = `<div class="bounty-column">
+          <div class="track-cell bounty" style="--bounty-border-color:${suitColorValue(state.bounty.suit)}">
+            ${cardMarkup(state.bounty, { pose: "win", hideFace: true })}
+          </div>
+          <span class="bounty-value" style="color:${suitColorValue(state.bounty.suit)}">Bounty ${formatModifier(Number(state.modifiers?.bounty || 0))}</span>
+        </div>`;
+        const results = Array.isArray(state.abandon?.pairResults) ? state.abandon.pairResults : [];
+        const prisoners = Array.from({ length: 4 }, (_, index) => {
+          const result = results[index];
+          const score = Number(result?.score || 0);
+          const card = result?.displayCard;
+          const content = card
+            ? `<div class="jailed-card${result.isPair ? " abandon-pair" : ""}">
+                ${cardMarkup({ ...card }, { pose: "win", hideFace: true })}
+                <span class="capture-face" aria-label="Pair score ${formatModifier(score)}">${formatModifier(score)}</span>
+              </div>`
+            : `<span class="cell-empty">${String(index + 1).padStart(2, "0")}</span>`;
+          return `<div class="track-cell" aria-label="${card ? `Prisoner pair ${index + 1}, ${formatModifier(score)} points` : `Prisoner pair ${index + 1}, empty`}">${content}</div>`;
+        }).join("");
+        track.innerHTML = bounty + prisoners;
+        return;
+      }
+      track.classList.remove("abandon-track");
       const bounty = `<div class="bounty-column">
         <div class="track-cell bounty" style="--bounty-border-color:${suitColorValue(state.bounty.suit)}">
           ${cardMarkup(state.bounty, { pose: "win", hideFace: true })}
@@ -978,7 +1168,7 @@
               ? '<span class="cell-empty" aria-label="Battle resolving"></span>'
               : cell.card
               ? `<div class="jailed-card">${cardMarkup(cell.card, { pose: "lose", hideFace: true })}
-                  <span class="capture-face" style="color:${suitColorValue(cell.card.suit)}">${cell.card.face}</span>
+                  <span class="capture-face" style="color:${suitColorValue(cell.card.suit)}">${esc(cell.card.faceHidden ? cell.card.faceRange || "Hidden" : cell.card.face)}</span>
                 </div>`
               : `<span class="cell-empty">${cell.clash ? "CLASH" : String(slotIndex + 1).padStart(2, "0")}</span>`;
             return `<div class="track-cell ${resolvingSlot ? "" : border}">${content}</div>`;
@@ -994,6 +1184,10 @@
 
     function formatModifier(value) {
       return value > 0 ? `+${value}` : String(value);
+    }
+
+    function hasSelectedIndex(index) {
+      return index !== null && index !== undefined && Number.isInteger(Number(index)) && Number(index) >= 0;
     }
 
     function heroPanelMarkup(player, heroName, heroID) {
@@ -1020,6 +1214,10 @@
 
     function renderMatchInfo() {
       const info = document.getElementById("matchInfo");
+      if (["puzzler", "abandon"].includes(state?.variant)) {
+        info.hidden = true;
+        return;
+      }
       if (!state || !state.started) {
         info.hidden = true;
         return;
@@ -1053,6 +1251,53 @@
       }
       if (!state || !state.started) {
         container.innerHTML = "";
+        return;
+      }
+      if (state.variant === "puzzler") {
+        const puzzle = state.puzzle || {};
+        const cards = puzzle.cards || [];
+        container.innerHTML = `<article class="player-panel">
+          <div class="player-heading"><h2>${esc(puzzle.name || "Puzzle cards")}</h2><span>${cards.length} cards</span></div>
+          <div class="variant-card-grid" role="group" aria-label="Puzzle cards">
+            ${cards.map(card => cardMarkup({ ...card, selectable: !puzzle.complete && !card.used, disabled: card.used || puzzle.complete },
+              { selectedIndex: puzzle.selectedIndex, used: card.used })).join("")}
+          </div>
+        </article>`;
+        container.querySelectorAll(".card[data-index]").forEach(button => {
+          button.addEventListener("click", () => act("puzzle-pick", { index: Number(button.dataset.index) }));
+        });
+        return;
+      }
+      if (state.variant === "abandon") {
+        const abandon = state.abandon || {};
+        const board = abandon.board || [];
+        container.innerHTML = `<article class="player-panel">
+          <div class="player-heading"><h2>Abandon board</h2><span>${board.length} cards</span></div>
+          <div class="abandon-board" role="group" aria-label="Abandon cards">
+            ${board.map(item => `<div class="abandon-board-item">
+              ${item.penalty !== undefined && item.penalty !== null ? `<span class="abandon-card-penalty">${formatModifier(Number(item.penalty))}</span>` : ""}
+              ${cardMarkup({
+              ...item,
+              selectable: !abandon.complete && !item.used,
+              disabled: abandon.complete || item.used
+            }, {
+              back: !item.revealed,
+              ariaLabel: !item.revealed ? `Face-down card ${Number(item.index) + 1}` : "",
+              selectedIndex: abandon.selectedIndex,
+              used: item.used
+            })}</div>`).join("")}
+          </div>
+        </article>`;
+        container.querySelectorAll(".card[data-index]").forEach(button => {
+          button.addEventListener("click", () => {
+            const index = Number(button.dataset.index);
+            if (!hasSelectedIndex(abandon.selectedIndex)) {
+              act("abandon-select", { index });
+            } else {
+              act("abandon-pair-board", { index });
+            }
+          });
+        });
         return;
       }
       if (state.phase === "handoff") {
@@ -1126,6 +1371,26 @@
 
     function renderBattle() {
       const battle = document.querySelector(".battle");
+      const variantContent = document.getElementById("variantContent");
+      const left = document.getElementById("battleLeft");
+      const right = document.getElementById("battleRight");
+      const versus = document.getElementById("battleVs");
+      if (state?.variant === "puzzler" || state?.variant === "abandon") {
+        battle.classList.add("variant-screen");
+        battle.classList.remove("drafting");
+        left.hidden = true;
+        right.hidden = true;
+        versus.hidden = true;
+        variantContent.hidden = false;
+        if (state.variant === "puzzler") renderPuzzleBattle();
+        else renderAbandonBattle();
+        return;
+      }
+      variantContent.hidden = true;
+      left.hidden = false;
+      right.hidden = false;
+      versus.hidden = false;
+      battle.classList.remove("variant-screen");
       battle.classList.toggle("drafting", state?.phase === "draft");
       if (state?.phase === "draft") {
         const cards = (state.draftPool || []).map(item => cardMarkup(item)).join("");
@@ -1134,7 +1399,6 @@
           <div class="draft-card-pool">${cards}</div>
         </div>`;
         document.getElementById("battleRight").innerHTML = "";
-        const versus = document.getElementById("battleVs");
         versus.classList.remove("exploding", "clash");
         versus.textContent = `PICK ${state.draftPickNumber}/${state.draftPickTotal}`;
         document.getElementById("battleLeft").querySelectorAll(".card[data-index]").forEach(button => {
@@ -1142,6 +1406,21 @@
             if (state.phase === "draft") act("draft-pick", {index: Number(button.dataset.index)});
           });
         });
+        return;
+      }
+      if (state?.variant === "fog") {
+        const attacker = state.players?.[state.attacker];
+        const defender = state.players?.[1 - state.attacker];
+        const attack = state.battleAttack
+          ? cardMarkup(state.battleAttack, { pose: "attack", hideFace: true })
+          : '<div class="battle-empty"></div>';
+        const defend = state.battleDefend
+          ? cardMarkup(state.battleDefend, { pose: "attack", mirror: true, hideFace: true })
+          : '<div class="battle-empty"></div>';
+        left.innerHTML = `<span class="battle-player-name">${esc(attacker ? playerLabel(attacker) : "Attacker")} attacks</span>${attack}`;
+        right.innerHTML = `<span class="battle-player-name">${esc(defender ? playerLabel(defender) : "Defender")} defends</span>${defend}`;
+        versus.classList.remove("exploding", "clash");
+        versus.textContent = "VS";
         return;
       }
       const animation = battleAnimation && battleAnimation.key === battleAnimationKey()
@@ -1187,7 +1466,6 @@
         `<span class="battle-player-name">${esc(attackerName)} ${attackerName === 'You' ? 'attack' : 'attacks'}</span><div class="battle-card-line${lost(0)}"><div class="battle-card-wrap">${attack}</div>${state?.battleAttack ? `<span class="battle-face" style="color:${attackNumberColor}">${attackFace}</span>` : ""}</div>${badge(0)}`;
       document.getElementById("battleRight").innerHTML =
         `<span class="battle-player-name">${esc(defenderName)} ${defenderName === 'You' ? 'defend' : 'defends'}</span><div class="battle-card-line${lost(1)}"><span class="battle-face" style="color:${defendNumberColor}">${defendFace}</span><div class="battle-card-wrap">${defend}</div></div>${badge(1)}`;
-      const versus = document.getElementById("battleVs");
       versus.classList.toggle("exploding", Boolean(animation && animation.stage === "impact"));
       versus.classList.toggle("clash", Boolean(showResult && resolved.winner === -1));
       versus.textContent = showResult && resolved.winner === -1 ? "=" : "VS";
@@ -1197,7 +1475,21 @@
       if (lifecycle.signal.aborted) return;
       const actions = document.getElementById("actions");
       actions.innerHTML = "";
-      if (!state || !state.started || state.phase === "gameover") return;
+      if (!state || !state.started) return;
+      if (state.variant === "puzzler") return;
+      if (state.variant === "abandon") {
+        if (state.campaign && state.abandon?.complete) return;
+        actions.append(makeButton("Home", openDashboard, "secondary"));
+        if (state.variant === "abandon" && !state.abandon?.complete &&
+            hasSelectedIndex(state.abandon?.selectedIndex)) {
+          const drawTokens = Number(state.abandon.drawTokens || 0);
+          const draw = makeButton(`Draw from Deck (${drawTokens})`, () => act("abandon-pair-draw"), "primary");
+          draw.disabled = actionInProgress || !(state.abandon.drawTokens > 0) || !(state.abandon.drawPileCount > 0);
+          actions.append(draw);
+        }
+        return;
+      }
+      if (state.phase === "gameover") return;
       actions.append(makeButton("Home", openDashboard, "secondary"));
       if (state.phase === "commit" && (state.mode === "hvh" || state.actor === 0)) {
         const commit = makeButton(`Lock in pile · ${selected.size}/3 selected`, () => act("commit", { cards: [...selected] }), "primary");
@@ -1219,14 +1511,27 @@
       renderModal();
     }
 
+    function updateSetupModal(modal) {
+      modal.querySelector("#opponentHeroLabel").hidden = setupMode !== "hvh";
+      modal.querySelector("#modeDescription").textContent = modeDescription(setupMode, setupVariant);
+      const start = modal.querySelector("#startMatchButton");
+      start.dataset.mode = setupMode;
+      start.dataset.variant = setupVariant;
+      start.textContent = startLabel(setupMode, setupVariant);
+      start.disabled = false;
+    }
+
     function renderModal() {
       const modal = document.getElementById("modal");
       if (pendingConfirmation) {
         modal.classList.remove('hidden');
-        modal.innerHTML = `<section class="modal"><h2>${esc(pendingConfirmation.title)}</h2><p>${esc(pendingConfirmation.description)}</p><div class="confirmation-actions"><button class="action secondary" id="declineConfirmation">Cancel</button><button class="action primary" id="acceptConfirmation">Confirm</button></div></section>`;
+        modal.innerHTML = `<section class="modal" role="dialog" aria-modal="true" aria-labelledby="confirmationTitle"><h2 id="confirmationTitle">${esc(pendingConfirmation.title)}</h2><p>${esc(pendingConfirmation.description)}</p><div class="confirmation-actions"><button class="action secondary" id="declineConfirmation">Cancel</button><button class="action primary" id="acceptConfirmation">${esc(pendingConfirmation.acceptLabel)}</button></div></section>`;
         modal.querySelector('#declineConfirmation').onclick = () => settleConfirmation(false);
         modal.querySelector('#acceptConfirmation').onclick = () => settleConfirmation(true);
         return;
+      }
+      if (shopPreviewChromaID && showFeature && currentFeature === "shop" && featureData) {
+        if (renderShopPreviewModal(modal)) return;
       }
       if (showDashboard || showFeature) {
         modal.classList.add("hidden");
@@ -1234,6 +1539,7 @@
         return;
       }
       if (showModeSelection || !state || !state.started) {
+        if (setupVariant === "puzzler" || setupVariant === "abandon") setupVariant = "main";
         const heroOption = hero =>
           `<option value="${esc(hero.id)}"${hero.id === state.defaultHeroId ? " selected" : ""}${hero.unlocked ? "" : " disabled"}>${esc(hero.name)}</option>`;
         const setupHeroes = (state && state.heroes) || [];
@@ -1246,9 +1552,12 @@
           <p>Three rounds. Scissors beats Paper, Paper beats Rock, Rock beats Scissors. Capture prisoners to score.</p>
           ${state?.started && state.phase !== 'gameover' ? '<p>Your current match stays saved until you start a replacement. Starting a mode archives the unfinished match.</p>' : ''}
           ${state?.opponentHint ? `<p>Your opponent last played: ${esc(state.opponentHint)}</p>` : ""}
-          <label class="hero-select">Match mode<select id="matchMode">${[['easy','Human vs AI · Easy'],['normal','Human vs AI · Normal'],['hard','Human vs AI · Hard'],['hvh','Human vs Human']].map(([id,label]) => `<option value="${id}"${setupMode === id ? ' selected' : ''}>${label}</option>`).join('')}</select></label>
-          <p id="modeDescription">${esc(modeDescription(setupMode))}</p>
-          <label class="hero-select">Your hero
+          <label class="hero-select">Game mode<select id="matchVariant">${[
+            ["main", "Main Game"], ["fog", "Fog of War"]
+          ].map(([id, label]) => `<option value="${id}"${setupVariant === id ? " selected" : ""}>${label}</option>`).join("")}</select></label>
+          <label id="matchModeLabel" class="hero-select">Match mode<select id="matchMode">${[['easy','Human vs AI · Easy'],['normal','Human vs AI · Normal'],['hard','Human vs AI · Hard'],['hvh','Human vs Human']].map(([id,label]) => `<option value="${id}"${setupMode === id ? ' selected' : ''}>${label}</option>`).join('')}</select></label>
+          <p id="modeDescription">${esc(modeDescription(setupMode, setupVariant))}</p>
+          <label id="playerHeroLabel" class="hero-select">Your hero
             <select id="playerHero">${options}</select>
           </label>
           <div id="heroSetupDetails">${heroDetails((state?.heroes || []).find(hero => hero.id === state?.defaultHeroId))}</div>
@@ -1256,13 +1565,16 @@
             <select id="opponentHero">${options}</select>
           </label>
           <div class="mode-list">
-            <button class="action primary" id="startMatchButton" data-mode="${setupMode}">Start ${modeName(setupMode)} match</button>
+            <button class="action primary" id="startMatchButton" data-mode="${setupMode}" data-variant="${setupVariant}">${esc(startLabel(setupMode, setupVariant))}</button>
             <button class="action secondary" id="backToDashboard">Cancel</button>
             <a href="#/cards">Learn the rules and inspect cards</a>
           </div>
         </section>`;
         modal.querySelectorAll("[data-mode]").forEach(button => {
-          button.addEventListener("click", () => startNewGame(button.dataset.mode));
+          button.addEventListener("click", () => startNewGame(
+            button.dataset.mode,
+            button.dataset.variant
+          ));
         });
         modal.querySelector("#backToDashboard").addEventListener("click", () => navigateGame(state?.started ? 'battle' : 'home'));
         modal.querySelector('#playerHero').addEventListener('change', event => {
@@ -1270,12 +1582,18 @@
         });
         modal.querySelector('#matchMode').addEventListener('change', event => {
           setupMode = event.target.value;
-          modal.querySelector('#opponentHeroLabel').hidden = setupMode !== 'hvh';
-          modal.querySelector('#modeDescription').textContent = modeDescription(setupMode);
-          const start = modal.querySelector('#startMatchButton');
-          start.dataset.mode = setupMode;
-          start.textContent = `Start ${modeName(setupMode)} match`;
+          updateSetupModal(modal);
         });
+        modal.querySelector('#matchVariant').addEventListener('change', event => {
+          setupVariant = event.target.value;
+          updateSetupModal(modal);
+        });
+        updateSetupModal(modal);
+        return;
+      }
+      if (["puzzler", "abandon"].includes(state?.variant) && !showNewGameConfirmation) {
+        modal.classList.add("hidden");
+        modal.innerHTML = "";
         return;
       }
       if (state.phase === "handoff") {
@@ -1290,7 +1608,7 @@
         modal.classList.remove("hidden");
         modal.innerHTML = `<section class="modal" role="dialog" aria-modal="true" aria-labelledby="newGameTitle">
           <h2 id="newGameTitle">Start a new game?</h2>
-          <p>The unfinished match will be archived. This starts a new ${esc(modeName(activeMode))} match.</p>
+          <p>The unfinished match will be archived. This starts a new ${esc(startLabel(activeMode, state?.variant || "main"))}.</p>
           <div class="confirmation-actions">
             <button type="button" class="action secondary" id="cancelNewGameButton">Cancel</button>
             <button type="button" class="action primary" id="confirmNewGameButton">Start new game</button>
@@ -1332,24 +1650,26 @@
           <h2>${esc(heading)}</h2>
           <p>Final score: <strong>${state.players[0].score} – ${state.players[1].score}</strong> (${state.mode === 'hvh' ? 'Player 1–Player 2' : 'You–Opponent'})</p>
           ${tiebreakDetails}
-          ${state.campaign ? `<p>${esc(state.campaign.result || '')}</p><a href="#/campaigns">Return to Campaigns</a>` : payoutDetails}
+          ${state.campaign ? `<p>${esc(state.campaign.result || '')}</p>` : payoutDetails}
           ${state.dashboard ? `<dl class="result-summary">
             <div><dt>Balance</dt><dd>${currencyAmountMarkup(state.dashboard.marks, "Marks")} · ${currencyAmountMarkup(state.dashboard.crowns, "Crowns")}</dd></div>
             <div><dt>Camp Draw</dt><dd>${state.dashboard.winsSinceCampDraw} / ${state.dashboard.winsPerCampDraw} wins</dd></div>
             <div><dt>Achievements</dt><dd>${state.dashboard.unseenAchievements > 0 ? `<a href="#/achievements">${state.dashboard.unseenAchievements} new ${state.dashboard.unseenAchievements === 1 ? "update" : "updates"}</a>` : "No new updates"}</dd></div>
           </dl>` : ''}
-          <div class="confirmation-actions">
-            <button type="button" class="action secondary" id="homeButton">Home</button>
-            <button type="button" class="action primary" id="rematchButton" data-initial-focus>Rematch</button>
-            <button type="button" class="action secondary" id="chooseModeButton">Choose mode</button>
-          </div>
+          <div class="confirmation-actions" id="resultActions"></div>
           <a href="#/saved-games${state.gameId ? `/${state.gameId}` : ''}">Review saved match</a>
           <details class="score-details"><summary>Achievement changes since match start</summary>${state.achievementUpdates?.length ? `<ul>${state.achievementUpdates.map(update => `<li>${currencyTextMarkup(update)}</li>`).join('')}</ul>` : '<p>No new achievement tiers were awarded during this match.</p>'}</details>
           ${scoreBreakdownMarkup()}
         </section>`;
-        modal.querySelector("#homeButton").addEventListener("click", openDashboard);
-        modal.querySelector("#rematchButton").addEventListener("click", () => startNewGame());
-        modal.querySelector('#chooseModeButton').addEventListener('click', chooseMatchMode);
+        const resultActions = modal.querySelector("#resultActions");
+        if (state.campaign) {
+          appendMissionActions(resultActions,
+            () => startMission(state.campaign.id, state.campaign.index));
+        } else {
+          resultActions.append(makeButton("Home", openDashboard, "secondary"));
+          resultActions.append(makeButton("Rematch", () => startNewGame(), "primary"));
+          resultActions.append(makeButton("Choose mode", chooseMatchMode, "secondary"));
+        }
       } else {
         modal.classList.add("hidden");
         modal.innerHTML = "";
@@ -1477,6 +1797,7 @@
     }
 
     async function openFeature(feature) {
+      if (shopPreviewChromaID) stopShopPreview();
       const endpoints = {
         "camp-draw": "/api/camp-draw",
         achievements: "/api/achievements",
@@ -1745,45 +2066,101 @@
       return content;
     }
 
+    function chromaFamilyKey(chroma) {
+      const path = String(chroma?.skin || "").replaceAll("\\", "/").split("/").filter(Boolean);
+      const shopIndex = path.indexOf("shop");
+      return (shopIndex >= 0 ? path[shopIndex + 1] : path[path.length - 2])?.toLowerCase()
+        || String(chroma?.name || chroma?.id || "").toLowerCase();
+    }
+
+    function chromaFamilyName(chroma) {
+      const namePrefix = String(chroma?.name || "").split("(")[0].trim();
+      if (String(chroma?.name || "").includes("(") && namePrefix) return namePrefix;
+      return chromaFamilyKey(chroma).split(/[-_\s]+/).filter(Boolean)
+        .map(part => part[0].toUpperCase() + part.slice(1)).join(" ");
+    }
+
+    function chromaColorName(chroma) {
+      return chromaAppearance(chroma).color || String(chroma?.color || "Default");
+    }
+
+    function chromaVariantLabel(item, variants) {
+      const color = chromaColorName(item.chroma);
+      const duplicateColor = variants.some(other => other !== item
+        && chromaColorName(other.chroma).toLowerCase() === color.toLowerCase());
+      const availability = item.chroma.currency === "event" ? " · Event-only" : "";
+      return `${color}${duplicateColor || availability ? ` · ${item.chroma.name}${availability}` : ""}`;
+    }
+
+    function chromaCurrencyName(chroma) {
+      return currencyDisplayName(chroma.currency);
+    }
+
+    function currencyDisplayName(currency) {
+      return currency === "marks" ? "Marks" : "Crowns";
+    }
+
+    function canAffordCurrency(dashboard, cost, currency) {
+      return currency === "marks" ? dashboard.marks >= cost : dashboard.crowns >= cost;
+    }
+
+    function canAffordChroma(page, chroma) {
+      return canAffordCurrency(page.dashboard, chroma.cost, chroma.currency);
+    }
+
+    function shopFamilyItems(page, familyKey) {
+      return (page.chromas || []).filter(item => chromaFamilyKey(item.chroma) === familyKey)
+        .sort((first, second) =>
+          chromaColorName(first.chroma).localeCompare(chromaColorName(second.chroma), undefined, { sensitivity: "base" }));
+    }
+
+    function shopFamilyCurrency(items) {
+      return items.find(item => item.chroma.currency === "marks")?.chroma.currency
+        || items.find(item => item.chroma.currency === "crowns")?.chroma.currency
+        || "event";
+    }
+
+    function familyBuyAllQuote(page, familyKey) {
+      const purchasable = shopFamilyItems(page, familyKey).filter(item =>
+        item.chroma.currency === "marks" || item.chroma.currency === "crowns");
+      if (purchasable.length < 2) return null;
+      const currencies = new Set(purchasable.map(item => item.chroma.currency));
+      if (currencies.size !== 1) return null;
+      if (purchasable.some(item => item.owned)) return null;
+      const total = purchasable.reduce((sum, item) => sum + item.chroma.cost, 0);
+      return { cost: Math.round(total * 0.8), currency: purchasable[0].chroma.currency, count: purchasable.length };
+    }
+
     function renderShopSkins(page) {
-      const chromas = (page.chromas || []).map(item => {
+      const groups = new Map();
+      for (const item of page.chromas || []) {
         const chroma = item.chroma;
-        const currency = chroma.currency === "marks" ? "Marks" : "Crowns";
-        const canAfford = chroma.currency === "marks"
-          ? page.dashboard.marks >= chroma.cost
-          : page.dashboard.crowns >= chroma.cost;
-        const eventOnly = chroma.currency === "event";
-        return `<article class="feature-item shop-product${item.owned ? " is-owned" : ""}">
-           <h3>${esc(chroma.name)}${item.owned ? ' <span class="owned-chip">Owned</span>' : ""}</h3>
-           ${chromaPreview(chroma)}
-          <p><span class="rarity-chip rarity-${esc(String(chroma.rarity || "").toLowerCase())}">${esc(chroma.rarity)}</span> ${esc(chroma.color)}</p>
-           ${item.owned ? '<p class="product-owned">In your collection</p>' : `<p class="product-price">${eventOnly ? "Seasonal reward · not currently offered for direct purchase" : `${chroma.cost} ${currency}`}</p>`}
-           <div class="product-actions">
-           ${!item.owned && !eventOnly ? affordability(chroma.cost, chroma.currency === 'marks' ? page.dashboard.marks : page.dashboard.crowns, currency) : ''}
-          ${!item.owned && !eventOnly
-            ? featureActionButton(`Buy for ${chroma.cost} ${currency}`, "buy-chroma", `data-id="${esc(chroma.id)}"`, !canAfford)
-             : ""}
-           ${item.owned ? `<details><summary>Assign to a suit</summary><p>Changes card artwork, not suit rules.</p><label>Apply to suit<select data-chroma-suit="${esc(chroma.id)}">${suits.map((suit, i) => `<option value="${['B','F','S'][i]}">${suit}</option>`).join('')}</select></label>${featureActionButton('Apply chroma', 'assign-chroma', `data-id="${esc(chroma.id)}"`)}</details>` : ''}
-           </div>
-        </article>`;
-      }).join("");
-      const bundles = (page.bundles || []).map(item => `<article class="feature-item${item.owned ? " is-owned" : ""}">
-        <h3>${esc(item.bundle.name)}${item.owned ? ' <span class="owned-chip">Owned</span>' : ""}</h3>
-         <p>${esc(item.bundle.chroma_ids.map(id => page.chromas.find(item => item.chroma.id === id)?.chroma.name || id).join(", "))}</p>
-         ${item.bundle.chroma_ids.map(id => chromaPreview(page.chromas.find(item => item.chroma.id === id)?.chroma)).join('')}
-         ${item.owned ? '<p class="product-owned">In your collection</p>' : `<p class="product-price">${item.bundle.cost_crowns} Crowns</p>`}
-         ${!item.owned ? affordability(item.bundle.cost_crowns, page.dashboard.crowns, 'Crowns') : ''}
-        ${!item.owned ? featureActionButton(`Buy bundle · ${item.bundle.cost_crowns} Crowns`, "buy-bundle",
-          `data-id="${esc(item.bundle.id)}"`, page.dashboard.crowns < item.bundle.cost_crowns) : ""}
-      </article>`).join("");
+        const key = chromaFamilyKey(chroma);
+        if (!groups.has(key)) groups.set(key, { name: chromaFamilyName(chroma), items: [] });
+        groups.get(key).items.push(item);
+      }
+      const chromas = [...groups.values()].sort((first, second) =>
+        ({ marks: 0, crowns: 1, event: 2 }[shopFamilyCurrency(first.items)])
+          - ({ marks: 0, crowns: 1, event: 2 }[shopFamilyCurrency(second.items)])
+        || first.name.localeCompare(second.name, undefined, { sensitivity: "base" }))
+        .map(group => {
+          const items = shopFamilyItems(page, chromaFamilyKey(group.items[0].chroma));
+          const representative = items[0];
+          const ownedCount = items.filter(item => item.owned).length;
+          return `<article class="feature-item shop-product shop-family-tile${ownedCount === items.length ? " is-owned" : ""}">
+            <h3>${esc(group.name)}</h3>
+            ${chromaPreview(representative.chroma)}
+            <p>${items.length} colors · ${ownedCount} owned</p>
+            <div class="product-actions">${featureActionButton("Preview colors", "preview-chroma", `data-id="${esc(representative.chroma.id)}"`)}</div>
+          </article>`;
+        }).join("");
       const chromaPick = page.chromaPickTokens > 0
         ? `<article class="feature-item"><h3>Pick Any Chroma · ${page.chromaPickTokens} token(s)</h3>
           <select id="chromaPickChoice">${(page.chromas || []).filter(item => !item.owned).map(item =>
             `<option value="${esc(item.chroma.id)}">${esc(item.chroma.name)}</option>`).join("")}</select>
           ${featureActionButton("Redeem token", "redeem-pick")}</article>`
         : "";
-      return `<section class="feature-section"><h2>Chroma Catalog</h2><p>Preview each appearance before buying. Earn Marks and Crowns through matches, campaigns and achievements.</p><div class="feature-list">${chromas}</div></section>
-        <section class="feature-section"><h2>Bundles</h2><div class="feature-list">${bundles}</div></section>
+      return `<section class="feature-section"><h2>Chroma Catalog</h2><p>Preview each family, then choose a color to purchase. Earn Marks and Crowns through matches, campaigns and achievements.</p><div class="feature-list">${chromas}</div></section>
         ${chromaPick ? `<section class="feature-section"><h2>Chroma Tokens</h2><div class="feature-list">${chromaPick}</div></section>` : ""}`;
     }
 
@@ -1928,13 +2305,15 @@
 
     function renderCampaignsFeature(page) {
       const campaigns = (page.campaigns || []).map(campaign => {
+        const comingSoon = campaign.comingSoon === true;
         const percent = campaign.totalMissions > 0
           ? Math.round(campaign.missionsCompleted * 100 / campaign.totalMissions)
           : 0;
-        const status = campaign.completed ? "Complete"
+        const status = comingSoon ? "Coming Soon"
+          : campaign.completed ? "Complete"
           : !campaign.unlocked ? "Locked"
             : campaign.started ? "In progress" : "Available";
-        const missions = (campaign.missions || []).map(mission => {
+        const missions = (comingSoon ? [] : campaign.missions || []).map(mission => {
           const state = mission.completed ? ["done", "Completed"] : mission.canPlay ? ["next", "Next"] : ["locked", "Locked"];
           return `<details class="feature-item mission mission-${state[0]}"${mission.canPlay && !mission.completed ? ' open' : ''}>
           <summary><span class="mission-title">${esc(mission.index)}. ${esc(mission.name)}</span><span class="mission-chip ${state[0]}">${state[1]}</span></summary>
@@ -1948,10 +2327,10 @@
         return `<article class="feature-item campaign-card">
           <h3>${esc(campaign.name)} · ${esc(status)}</h3>
           <p>${esc(campaign.description)}</p>
-           ${campaign.requires ? `<p>Requires: complete ${esc(page.campaigns.find(item => item.id === campaign.requires)?.name || campaign.requires)}</p>` : ""}
+          ${comingSoon ? "" : `${campaign.requires ? `<p>Requires: complete ${esc(page.campaigns.find(item => item.id === campaign.requires)?.name || campaign.requires)}</p>` : ""}
           <p>${formatNumber(campaign.missionsCompleted)} / ${formatNumber(campaign.totalMissions)} missions</p>
           <div class="feature-progress"><span style="width:${percent}%"></span></div>
-           <details${campaign.unlocked && !campaign.completed ? ' open' : ''}><summary>${campaign.completed ? 'Review missions and practice' : campaign.unlocked ? 'Missions — play the next available challenge' : 'Preview locked missions'}</summary><div class="feature-list">${missions}</div></details>
+          ${missions ? `<details${campaign.unlocked && !campaign.completed ? ' open' : ''}><summary>${campaign.completed ? 'Review missions and practice' : campaign.unlocked ? 'Missions — play the next available challenge' : 'Preview locked missions'}</summary><div class="feature-list">${missions}</div></details>` : ""}`}
         </article>`;
       }).join("");
       return `<section class="feature-section"><h2>Campaign Progress</h2>
@@ -2074,6 +2453,8 @@
       const action = button.dataset.featureAction;
       if (action === 'retry-feature') { openFeature(currentFeature); return; }
       if (action === 'start-mission') { await startMission(button.dataset.campaign, Number(button.dataset.index)); return; }
+      if (action === "preview-chroma") { openShopPreview(button.dataset.id); return; }
+      if (action === "buy-chroma") { await purchaseChroma(button.dataset.id); return; }
       let path;
       let body;
       switch (action) {
@@ -2089,8 +2470,6 @@
           path = "/api/camp-draw";
           body = { action: "open-box", boxType: button.dataset.boxType };
           break;
-        case "buy-chroma":
-        case "buy-bundle":
         case "buy-hero":
         case "buy-box":
           if (!await confirmAction(`Purchase ${button.closest('article').querySelector('h3').textContent}?`, `${button.textContent.trim()}. Current balance: ${formatNumber(state.dashboard.marks)} Marks and ${formatNumber(state.dashboard.crowns)} Crowns.`)) return;
@@ -2223,11 +2602,18 @@
       renderDashboard();
       if (showFeature) renderFeatureScreen();
       document.getElementById("roundLabel").textContent = state && state.started
-        ? `Round ${state.round} · ${state.phase === 'draft' ? `Opening draft · mode ${state.draftMode} · pick ${state.draftPickNumber} of ${state.draftPickTotal}` : state.phase === 'commit' ? 'Choose your pile' : state.phase === 'handoff' ? 'Pass the screen' : state.phase === 'gameover' ? 'Match complete' : `Battle ${Math.min(state.exchange, 3)} of 3`}`
+        ? ["puzzler", "abandon"].includes(state.variant)
+          ? `${state.variant === "puzzler" ? "Puzzler" : "Abandon"} · ${state.puzzle?.complete || state.abandon?.complete ? "Complete" : "In progress"}`
+          : `Round ${state.round} · ${state.phase === 'draft' ? `Opening draft · mode ${state.draftMode} · pick ${state.draftPickNumber} of ${state.draftPickTotal}` : state.phase === 'commit' ? 'Choose your pile' : state.phase === 'handoff' ? 'Pass the screen' : state.phase === 'gameover' ? 'Match complete' : `Battle ${Math.min(state.exchange, 3)} of 3`}`
         : "Card battle";
-      setStatus(state && state.started ? playerMessage(state.message) : "Choose a game mode to begin.");
+      const currentStatus = state && state.started
+        ? playerMessage(state.message) || (state.variant === "puzzler"
+          ? "Choose a card to begin or continue the puzzle."
+          : state.variant === "abandon" ? "Select a board card to start a pairing." : "")
+        : "Choose a game mode to begin.";
+      setStatus(currentStatus);
       const topScore = document.getElementById("topScore");
-      if (state && state.started && state.players?.length === 2) {
+      if (state && state.started && !["puzzler", "abandon"].includes(state.variant) && state.players?.length === 2) {
         topScore.textContent = state.players.map(player => `${playerLabel(player)} ${player.score}`).join(" · ");
         topScore.setAttribute("aria-label", `Score: ${topScore.textContent}`);
         topScore.hidden = false;
@@ -2242,6 +2628,7 @@
       renderModal();
       document.getElementById('battleExplanation').innerHTML = battleExplanationMarkup();
       document.getElementById('gameShell').dataset.phase = state?.phase || '';
+      document.getElementById('gameShell').dataset.variant = state?.variant || 'main';
       syncModalAccessibility();
       bindPreviewImages();
       if (showFeature && featureData && featureFocusTarget) {
@@ -2253,7 +2640,7 @@
       window.document.title = `${title} · Prisoners of War`;
     }
 
-    async function startNewGame(mode) {
+    async function startNewGame(mode, variant) {
       if (actionInProgress) return;
       actionInProgress = true;
       try {
@@ -2263,8 +2650,10 @@
         selected.clear();
         const playerHero = document.getElementById("playerHero");
         const opponentHero = document.getElementById("opponentHero");
+        const gameVariant = variant || state?.variant || setupVariant || "main";
         const body = {
           mode: mode || activeMode || (state && state.mode) || "hvh",
+          variant: gameVariant,
           playerHeroId: playerHero ? playerHero.value : (state && (state.playerHeroId || state.defaultHeroId)) || "warden",
           opponentHeroId: opponentHero ? opponentHero.value : (state && state.opponentHeroId) || "",
           ...(state?.campaign && !mode ? { campaignId: state.campaign.id, missionIndex: state.campaign.index } : {})
@@ -2272,6 +2661,7 @@
         const next = await api("/api/new", body);
         state = next;
         activeMode = state.mode;
+        setupVariant = state.variant || gameVariant;
         selected.clear();
         navigateGame('battle');
         render();
@@ -2304,6 +2694,7 @@
     }
 
     async function openDashboard() {
+      if (shopPreviewChromaID) stopShopPreview();
       if (window.location.hash !== '#/home') { navigateGame('home'); return; }
       const version = ++navigationVersion;
       showDashboard = true;
@@ -2316,6 +2707,7 @@
         const data = await api("/api/state");
         if (version !== navigationVersion || lifecycle.signal.aborted) return;
         state = data;
+        setupVariant = state.variant || "main";
         render();
       } catch (error) {
         if (version !== navigationVersion || lifecycle.signal.aborted) return;
@@ -2329,6 +2721,7 @@
       try {
         state = await api("/api/state");
         activeMode = state.mode || "";
+        setupVariant = state.variant || "main";
         initialized = true;
         applyGameRoute();
         render();
@@ -2341,6 +2734,15 @@
 
     function modeName(mode) {
       return { hvh: 'Local two-player', easy: 'AI · Easy', normal: 'AI · Normal', hard: 'AI · Hard' }[mode] || 'Battle';
+    }
+
+    function startLabel(mode, variant) {
+      return {
+        main: `Start ${modeName(mode)} match`,
+        fog: `Start Fog of War (${modeName(mode)})`,
+        puzzler: "Start Puzzler",
+        abandon: "Start Abandon"
+      }[variant] || `Start ${modeName(mode)} match`;
     }
 
     function playerLabel(player) {
@@ -2388,7 +2790,10 @@
       }, 1500);
     }
 
-    function modeDescription(mode) {
+    function modeDescription(mode, variant = "main") {
+      if (variant === "fog") return "Fog of War: hidden opponents show only a face-value range. Choose your existing AI difficulty or local two-player mode.";
+      if (variant === "puzzler") return "Solve a selected card challenge. This is a solo game.";
+      if (variant === "abandon") return "Choose board cards, pair them with another board card or draw from the deck. This is a solo game.";
       return { easy: 'Recommended for learning. The AI makes random legal choices.', normal: 'The AI plans commitments and chooses strong defenses.', hard: 'The AI plans against sampled possibilities for unseen cards.', hvh: 'Two people sharing this device. Pass-screen prompts keep each hand private.' }[mode] || '';
     }
 
@@ -2402,6 +2807,9 @@
     function applyGameRoute() {
       if (!initialized || lifecycle.signal.aborted) return;
       const route = window.location.hash.replace(/^#\//, '') || 'home';
+      if (shopPreviewChromaID && route !== "shop" && route !== `shop/${currentShopTab}`) {
+        stopShopPreview();
+      }
       const notice = document.getElementById('routeNotice');
       if (notice && route !== 'home') notice.hidden = true;
       if (['saved-games', 'password', 'admin', 'cards'].includes(route)) return;
@@ -2463,21 +2871,23 @@
     }
 
     function chromaAppearance(chroma) {
-      const fallback = chromaLooks[chroma?.id] || {};
-      const rawColor = String(chroma?.color || '').trim() || 'blue';
+      const rawColor = String(chroma?.color || "").trim();
+      if (!rawColor) return null;
       const named = rawColor.split(/[\s_-]+/).filter(Boolean).map(part => part[0].toUpperCase() + part.slice(1)).join(' ');
-      const color = named.toLowerCase() === 'lime' ? 'Lime Green' : named;
+      const color = named.toLowerCase() === 'lime' ? 'Lime Green'
+        : named.toLowerCase() === 'skyblue' ? 'Sky Blue' : named;
       return {
         color,
-        skin: chroma?.skin || fallback.skin || skinFolders[color],
+        skin: chroma?.skin || skinFolders[color],
         hexColor: chroma?.hexColor || '',
-        filter: fallback.filter || ''
+        filter: ''
       };
     }
 
     function suitColorValue(suit) {
-      const appearance = chromaAppearance(equippedChroma(suit));
-      return appearance.hexColor || colorVars[appearance.color || suitColors[suit]] || "var(--paper)";
+      const equipped = equippedChroma(suit);
+      const appearance = equipped ? chromaAppearance(equipped) : null;
+      return appearance?.hexColor || colorVars[appearance?.color || suitColors[suit]] || "var(--paper)";
     }
 
     function equippedChroma(suit) { return state?.dashboard?.equippedChromas?.[['B','F','S'][suit]]; }
@@ -2487,9 +2897,16 @@
         const data = await api('/api/shop',body);
         state.dashboard = data.dashboard;
         openSuitMenu = null;
+        openAbandonSuitMenu = -1;
+        openPuzzleSuitMenu = -1;
         render();
         const index = ['B','F','S'].indexOf(body.suit);
-        document.querySelector(index >= 0 ? `[data-suit-trigger="${index}"]` : '[data-rotate-colors]')?.focus({preventScroll:true});
+        const cycle = state?.variant === "abandon" ? "#abandonSuitCycle"
+          : state?.variant === "puzzler" ? "#puzzleSuitCycle" : "#suitCycle";
+        const target = index >= 0
+          ? `${cycle} [data-suit-trigger="${index}"]`
+          : `${cycle} [data-rotate-colors]`;
+        document.querySelector(target)?.focus({preventScroll:true});
       } catch (error) { setStatus(connectionError(error),true); }
     }
 
@@ -2497,6 +2914,154 @@
       if (!chroma) return '';
       const look = chromaAppearance(chroma);
       return `<span class="chroma-preview-frame" data-preview-id="${esc(chroma.id)}"><span class="preview-placeholder" aria-hidden="true">Loading preview…</span><img class="chroma-preview" src="${import.meta.env.BASE_URL}skins/${look.skin || skinFolders[look.color]}/large_idle.png?thumb=160" style="filter:${look.filter || 'none'}" alt="${esc(chroma.name)} card artwork preview" loading="lazy" width="160" height="210"></span>`;
+    }
+
+    function stopShopPreview() {
+      window.clearInterval(shopPreviewTimer);
+      shopPreviewTimer = null;
+      shopPreviewChromaID = "";
+    }
+
+    function openShopPreview(chromaID) {
+      const item = (featureData?.chromas || []).find(entry => entry.chroma.id === chromaID);
+      if (!item) return;
+      shopPreviewChromaID = chromaID;
+      shopPreviewPoseIndex = 0;
+      window.clearInterval(shopPreviewTimer);
+      shopPreviewTimer = window.setInterval(() => {
+        shopPreviewPoseIndex = (shopPreviewPoseIndex + 1) % 4;
+        updateShopPreviewImages();
+      }, 1000);
+      renderModal();
+      syncModalAccessibility();
+    }
+
+    function changeShopPreviewChroma(chromaID) {
+      const current = (featureData?.chromas || []).find(entry => entry.chroma.id === shopPreviewChromaID);
+      const next = (featureData?.chromas || []).find(entry => entry.chroma.id === chromaID);
+      if (!current || !next || chromaFamilyKey(current.chroma) !== chromaFamilyKey(next.chroma)) return;
+      shopPreviewChromaID = chromaID;
+      shopPreviewPoseIndex = 0;
+      renderModal();
+      syncModalAccessibility();
+    }
+
+    function renderShopPreviewModal(modal) {
+      const item = (featureData?.chromas || []).find(entry => entry.chroma.id === shopPreviewChromaID);
+      if (!item) {
+        stopShopPreview();
+        return false;
+      }
+      const chroma = item.chroma;
+      const familyKey = chromaFamilyKey(chroma);
+      const familyName = chromaFamilyName(chroma);
+      const variants = shopFamilyItems(featureData, familyKey);
+      const currency = chromaCurrencyName(chroma);
+      const canBuy = !item.owned && chroma.currency !== "event" && canAffordChroma(featureData, chroma);
+      const buyAllQuote = familyBuyAllQuote(featureData, familyKey);
+      const canBuyAll = buyAllQuote && canAffordCurrency(featureData.dashboard, buyAllQuote.cost, buyAllQuote.currency);
+      const purchaseLabel = item.owned ? "Already owned"
+        : chroma.currency === "event" ? "Not for sale"
+          : `Buy · ${formatNumber(chroma.cost)} ${currency}`;
+      modal.classList.remove("hidden");
+      modal.innerHTML = `<section class="modal skin-preview-modal" role="dialog" aria-modal="true" aria-labelledby="shopPreviewTitle">
+        <h2 id="shopPreviewTitle">${esc(familyName)}</h2>
+        <div class="skin-preview-controls">
+          <label>Chroma color<select id="shopPreviewColor" data-initial-focus>
+            ${variants.map(entry => `<option value="${esc(entry.chroma.id)}"${entry.chroma.id === chroma.id ? " selected" : ""}>${esc(chromaVariantLabel(entry, variants))}</option>`).join("")}
+          </select></label>
+          <button type="button" class="action primary" id="shopPreviewBuy"${canBuy ? "" : " disabled"}>${esc(purchaseLabel)}</button>
+          ${buyAllQuote ? `<button type="button" class="action secondary" id="shopPreviewBuyAll" data-family="${esc(familyKey)}"${canBuyAll ? "" : " disabled"}>Buy all · 20% off (${formatNumber(buyAllQuote.cost)} ${currencyDisplayName(buyAllQuote.currency)})</button>` : ""}
+        </div>
+        <div class="skin-preview-gallery" aria-label="Skin artwork preview">
+          ${[["Small", "small"], ["Medium", "med"], ["Large", "large"]].map(([label, size]) => `<article class="skin-preview-card">
+            <h3>${label}</h3><div class="skin-preview-frame"><img data-shop-preview-size="${size}" alt="" aria-hidden="true"></div>
+          </article>`).join("")}
+        </div>
+        ${featureError ? `<p class="payout-error" role="alert">${esc(featureError)}</p>` : ""}
+        <div class="skin-preview-actions"><button type="button" class="action secondary" id="shopPreviewBack">Back to Shop</button></div>
+      </section>`;
+      modal.querySelector("#shopPreviewColor").addEventListener("change", event =>
+        changeShopPreviewChroma(event.target.value));
+      modal.querySelector("#shopPreviewBuy").addEventListener("click", () => purchaseChroma(chroma.id));
+      modal.querySelector("#shopPreviewBuyAll")?.addEventListener("click", () => purchaseChromaFamily(familyKey));
+      modal.querySelector("#shopPreviewBack").addEventListener("click", closeShopPreview);
+      updateShopPreviewImages();
+      return true;
+    }
+
+    function updateShopPreviewImages() {
+      const item = (featureData?.chromas || []).find(entry => entry.chroma.id === shopPreviewChromaID);
+      if (!item) return;
+      const look = chromaAppearance(item.chroma);
+      const pose = ["idle", "attack", "win", "lose"][shopPreviewPoseIndex];
+      for (const image of document.querySelectorAll("#modal [data-shop-preview-size]")) {
+        const size = image.dataset.shopPreviewSize;
+        image.src = `${import.meta.env.BASE_URL}skins/${look.skin || skinFolders[look.color]}/${size}_${pose}.png?v=3`;
+        image.style.filter = look.filter || "none";
+        image.alt = `${chromaFamilyName(item.chroma)} ${chromaColorName(item.chroma)} ${size} ${pose} artwork`;
+      }
+    }
+
+    function closeShopPreview() {
+      stopShopPreview();
+      renderModal();
+      syncModalAccessibility();
+    }
+
+    async function purchaseChroma(chromaID) {
+      if (featureActionInProgress) return;
+      const item = (featureData?.chromas || []).find(entry => entry.chroma.id === chromaID);
+      if (!item || item.owned || item.chroma.currency === "event" || !canAffordChroma(featureData, item.chroma)) return;
+      const chroma = item.chroma;
+      const confirmation = `Are you sure you want to spend ${formatNumber(chroma.cost)} ${chromaCurrencyName(chroma)} for ${chromaFamilyName(chroma)} ${chromaColorName(chroma)}?`;
+      featureActionInProgress = true;
+      const version = navigationVersion;
+      try {
+        if (!await confirmAction(confirmation, "This skin purchase is permanent.", "Yes")) return;
+        const data = await api("/api/shop", { action: "buy-chroma", id: chromaID });
+        if (version !== navigationVersion || lifecycle.signal.aborted) return;
+        featureData = data;
+        if (featureData.dashboard) state.dashboard = featureData.dashboard;
+        stopShopPreview();
+        featureError = "";
+        render();
+      } catch (error) {
+        if (version !== navigationVersion || lifecycle.signal.aborted) return;
+        featureError = connectionError(error);
+        render();
+      } finally {
+        featureActionInProgress = false;
+      }
+    }
+
+    async function purchaseChromaFamily(familyKey) {
+      if (featureActionInProgress) return;
+      const quote = familyBuyAllQuote(featureData, familyKey);
+      if (!quote || !canAffordCurrency(featureData.dashboard, quote.cost, quote.currency)) return;
+      const firstItem = shopFamilyItems(featureData, familyKey)[0];
+      if (!firstItem) return;
+      const familyName = chromaFamilyName(firstItem.chroma);
+      const currency = currencyDisplayName(quote.currency);
+      const confirmation = `Are you sure you want to spend ${formatNumber(quote.cost)} ${currency} for all ${familyName} colors at 20% off?`;
+      featureActionInProgress = true;
+      const version = navigationVersion;
+      try {
+        if (!await confirmAction(confirmation, "This skin purchase is permanent.", "Yes")) return;
+        const data = await api("/api/shop", { action: "buy-chroma-family", id: familyKey });
+        if (version !== navigationVersion || lifecycle.signal.aborted) return;
+        featureData = data;
+        if (featureData.dashboard) state.dashboard = featureData.dashboard;
+        stopShopPreview();
+        featureError = "";
+        render();
+      } catch (error) {
+        if (version !== navigationVersion || lifecycle.signal.aborted) return;
+        featureError = connectionError(error);
+        render();
+      } finally {
+        featureActionInProgress = false;
+      }
     }
 
     function bindPreviewImages() {
@@ -2509,8 +3074,8 @@
       }
     }
 
-    function confirmAction(title, description) {
-      return new Promise(resolve => { pendingConfirmation = {title, description, resolve}; renderModal(); syncModalAccessibility(); });
+    function confirmAction(title, description, acceptLabel = "Confirm") {
+      return new Promise(resolve => { pendingConfirmation = {title, description, acceptLabel, resolve}; renderModal(); syncModalAccessibility(); });
     }
 
     function settleConfirmation(accepted) {
@@ -2532,6 +3097,7 @@
         if (version !== navigationVersion || lifecycle.signal.aborted) return;
         state = data;
         activeMode = state.mode;
+        setupVariant = state.variant || "main";
         selected.clear();
         navigateGame('battle');
       } catch (error) {
@@ -2549,6 +3115,10 @@
     }
 
     function battleExplanationMarkup() {
+      if (state?.variant === "fog") {
+        return '<p>Fog of War hides exact face values for masked cards. Only the server-provided face range is shown; battle values and detailed outcomes are withheld.</p>';
+      }
+      if (state?.variant === "puzzler" || state?.variant === "abandon") return "";
       const rules = '<p>Scissors beats Paper · Paper beats Rock · Rock beats Scissors. Suit advantage doubles the shifted face, then applies Favored. Equal values clash. The winner captures the opponent’s card; their own is discarded.</p>';
       const outcome = state?.battleOutcome;
       const exchange = outcome ? `<p><strong>Last exchange:</strong> ${esc(campCardLabel(state.battleAttack))} → ${outcome.attackerValue} effective attack; ${esc(campCardLabel(state.battleDefend))} → ${outcome.defenderValue} effective defense. ${outcome.winner === -1 ? 'Equal values: clash.' : 'Higher effective value wins.'}</p>` : '';
@@ -2592,6 +3162,7 @@
       if (event.key === 'Escape') {
         event.preventDefault();
         if (pendingConfirmation) { settleConfirmation(false); return; }
+        if (shopPreviewChromaID) { closeShopPreview(); return; }
         if (state?.phase === 'handoff') return;
         if (showNewGameConfirmation) { showNewGameConfirmation = false; render(); }
         else navigateGame(state?.started && state.phase !== 'gameover' ? 'battle' : 'home');
@@ -2607,6 +3178,7 @@
       lifecycle.abort();
       if (pendingConfirmation) { pendingConfirmation.resolve(false); pendingConfirmation = null; }
       window.clearTimeout(battleAnimationTimer);
+      window.clearInterval(shopPreviewTimer);
       const account = window.document.querySelector('.account-bar');
       if (account) account.inert = false;
     }

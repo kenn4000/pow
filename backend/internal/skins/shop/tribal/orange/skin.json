@@ -2,7 +2,7 @@
   "id": "tangerine",
   "displayName": "Tribal (orange)",
   "hexColor": "#c76516",
-  "price": 15,
-  "currency": "crowns",
+  "price": 250,
+  "currency": "marks",
   "rarity": "uncommon"
 }

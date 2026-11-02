@@ -52,7 +52,6 @@ type Profile struct {
 	DisplayName               string                       `json:"display_name,omitempty"`
 	OwnedChromas              map[string]bool              `json:"owned_chromas"`
 	AssignedChromas           map[string]string            `json:"assigned_chromas"`
-	PurchasedBundles          map[string]bool              `json:"purchased_bundles"`
 	SeenChromas               map[string]bool              `json:"seen_chromas"`
 	MatchHistory              []MatchRecord                `json:"match_history"`
 	Achievements              map[string]bool              `json:"achievements"`
@@ -130,7 +129,6 @@ func New(now time.Time) (*Profile, error) {
 		SkillNodes:          make(map[string]bool),
 		OwnedChromas:        map[string]bool{"crimson": true, "cobalt": true, "sunflower": true},
 		AssignedChromas:     map[string]string{"B": "cobalt", "F": "sunflower", "S": "crimson"},
-		PurchasedBundles:    make(map[string]bool),
 		SeenChromas:         make(map[string]bool),
 		PendingBoxes:        make(map[string]int),
 		MatchHistory:        make([]MatchRecord, 0),
@@ -378,9 +376,6 @@ func normalizeResources(p *Profile) {
 	if p.AssignedChromas == nil {
 		p.AssignedChromas = make(map[string]string)
 	}
-	if p.PurchasedBundles == nil {
-		p.PurchasedBundles = make(map[string]bool)
-	}
 	if p.SeenChromas == nil {
 		p.SeenChromas = make(map[string]bool)
 	}
@@ -457,8 +452,20 @@ func defaultUnlockedHeroes() []string {
 
 func defaultCampaignProgress() map[string]*CampaignProgress {
 	return map[string]*CampaignProgress{
-		"basic":    {CampaignID: "basic", TotalMissions: 10, CompletedMissionIDs: []int{}},
-		"advanced": {CampaignID: "advanced", TotalMissions: 10, CompletedMissionIDs: []int{}},
+		"basic":     {CampaignID: "basic", TotalMissions: 10, CompletedMissionIDs: []int{}},
+		"advanced":  {CampaignID: "advanced", TotalMissions: 10, CompletedMissionIDs: []int{}},
+		"abandon":   {CampaignID: "abandon", TotalMissions: 15, CompletedMissionIDs: []int{}},
+		"puzzler":   {CampaignID: "puzzler", TotalMissions: 20, CompletedMissionIDs: []int{}},
+		"warden":    {CampaignID: "warden", TotalMissions: 1, CompletedMissionIDs: []int{}},
+		"hunter":    {CampaignID: "hunter", TotalMissions: 1, CompletedMissionIDs: []int{}},
+		"treasurer": {CampaignID: "treasurer", TotalMissions: 1, CompletedMissionIDs: []int{}},
+		"ascendant": {CampaignID: "ascendant", TotalMissions: 1, CompletedMissionIDs: []int{}},
+		"anchor":    {CampaignID: "anchor", TotalMissions: 1, CompletedMissionIDs: []int{}},
+		"gambler":   {CampaignID: "gambler", TotalMissions: 1, CompletedMissionIDs: []int{}},
+		"diplomat":  {CampaignID: "diplomat", TotalMissions: 1, CompletedMissionIDs: []int{}},
+		"ascetic":   {CampaignID: "ascetic", TotalMissions: 1, CompletedMissionIDs: []int{}},
+		"herald":    {CampaignID: "herald", TotalMissions: 1, CompletedMissionIDs: []int{}},
+		"hater":     {CampaignID: "hater", TotalMissions: 1, CompletedMissionIDs: []int{}},
 	}
 }
 

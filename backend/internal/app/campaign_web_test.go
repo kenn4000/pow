@@ -1,11 +1,18 @@
 package app
 
 import (
+	"bytes"
+	"encoding/json"
+	"fmt"
 	"math/rand"
+	"net/http"
+	"net/http/httptest"
 	"testing"
 	"time"
 
 	"prisonersofwar/internal/campaigns"
+	"prisonersofwar/internal/game"
+	"prisonersofwar/internal/heroes"
 	"prisonersofwar/internal/profile"
 )
 
@@ -59,6 +66,9 @@ func TestWebCampaignCompletionReplayAndSnapshots(t *testing.T) {
 	if err := web.prepareWebMission(actionRequest{CampaignID: "basic", MissionIndex: 1}); err != nil {
 		t.Fatal(err)
 	}
+	if web.session.variant != "main" || web.session.campaign.Variant != "main" {
+		t.Fatalf("standard campaign variant = %q / %q", web.session.variant, web.session.campaign.Variant)
+	}
 	if web.playerProfile.Energy != energy-1 {
 		t.Fatal("mission energy was not charged")
 	}
@@ -95,9 +105,213 @@ func TestWebCampaignCompletionReplayAndSnapshots(t *testing.T) {
 	}
 }
 
+func TestWebCampaignListingMapsSpecialCatalogAndDisablesHeroStubs(t *testing.T) {
+	web := campaignTestServer(t)
+	response := httptest.NewRecorder()
+	web.handleCampaigns(response, httptest.NewRequest(http.MethodGet, "/api/campaigns", nil))
+	if response.Code != http.StatusOK {
+		t.Fatalf("campaign listing status = %d: %s", response.Code, response.Body.String())
+	}
+	var page webCampaignPage
+	if err := json.Unmarshal(response.Body.Bytes(), &page); err != nil {
+		t.Fatal(err)
+	}
+	byID := make(map[string]webCampaignSummary, len(page.Campaigns))
+	for _, campaign := range page.Campaigns {
+		byID[campaign.ID] = campaign
+	}
+	abandon := byID["abandon"]
+	targets := []int{54, 58, 60, 61, 62, 63, 64, 65, 66, 67, 68, 70, 72, 75, 76}
+	if abandon.Variant != "abandon" || len(abandon.Missions) != len(targets) {
+		t.Fatalf("abandon campaign listing = %+v", abandon)
+	}
+	for index, mission := range abandon.Missions {
+		wantID := fmt.Sprintf("board-%02d", index+1)
+		if mission.Variant != "abandon" || mission.VariantID != wantID ||
+			mission.Target != targets[index] || mission.Name != fmt.Sprintf("Abandon Board %d", index+1) ||
+			!mission.Enabled || mission.RewardMarks != 400 {
+			t.Errorf("abandon API mission %d = %+v", index+1, mission)
+		}
+		if mission.CanPlay != (index == 0) {
+			t.Errorf("abandon mission %d canPlay = %v", index+1, mission.CanPlay)
+		}
+	}
+	puzzler := byID["puzzler"]
+	puzzleIDs := []string{
+		"gp6_balanced", "gp6_hunters_edge", "gp6_bounty_trap", "gp6_narrow_gate",
+		"gp6_bodybuilders_wall", "gp8_balanced", "gp8_bounty_climb", "gp8_forgiving",
+		"gp8_gamblers_puzzle", "gp8_tight", "gp10_balanced", "gp10_gorilla_threat",
+		"gp10_turtle_lead", "gp10_low_score", "gp10_everyone_solves", "gp12_balanced",
+		"gp12_dual_threat", "gp12_shift_dominant", "gp12_forgiving", "gp12_inverted",
+	}
+	if puzzler.Variant != "puzzler" || len(puzzler.Missions) != len(puzzleIDs) {
+		t.Fatalf("puzzler campaign listing = %+v", puzzler)
+	}
+	for index, mission := range puzzler.Missions {
+		if mission.VariantID != puzzleIDs[index] || mission.Variant != "puzzler" ||
+			mission.Target <= 0 || mission.CardCount <= 0 || mission.RewardMarks != 400 {
+			t.Errorf("puzzler API mission %d = %+v", index+1, mission)
+		}
+	}
+	for _, id := range []string{"warden", "hunter", "treasurer", "ascendant", "anchor", "gambler", "diplomat", "ascetic", "herald", "hater"} {
+		campaign := byID[id]
+		if campaign.ID == "" || campaign.Status != "Coming Soon" ||
+			campaign.Description != "Coming Soon" || len(campaign.Missions) != 1 {
+			t.Errorf("hero campaign %q metadata = %+v", id, campaign)
+			continue
+		}
+		mission := campaign.Missions[0]
+		if mission.Name != "Coming Soon" || mission.Description != "Coming Soon" ||
+			mission.Status != "Coming Soon" || mission.Enabled || mission.CanPlay {
+			t.Errorf("hero campaign %q mission = %+v", id, mission)
+		}
+		if err := web.prepareWebMission(actionRequest{CampaignID: id, MissionIndex: 1}); err == nil {
+			t.Errorf("Coming Soon campaign %q launched", id)
+		}
+	}
+}
+
+func TestSuccessfulSpecialCampaignMissionAwardsMarksOnlyOnce(t *testing.T) {
+	web := campaignTestServer(t)
+	beforeMarks, beforeEnergy := web.playerProfile.Marks, web.playerProfile.Energy
+	body, _ := json.Marshal(map[string]any{
+		"campaignId": "puzzler", "missionIndex": 1, "playerHeroId": "recruit",
+	})
+	response := httptest.NewRecorder()
+	web.handleNewGame(response, httptest.NewRequest(http.MethodPost, "/api/new", bytes.NewReader(body)))
+	if response.Code != http.StatusOK {
+		t.Fatalf("campaign launch status = %d: %s", response.Code, response.Body.String())
+	}
+	if web.session.variant != "puzzler" || web.session.campaign == nil ||
+		web.session.campaign.Variant != "puzzler" ||
+		web.session.campaign.VariantID != "gp6_balanced" {
+		t.Fatalf("campaign puzzle session context = %+v", web.session)
+	}
+	snapshotJSON, err := json.Marshal(snapshotSession(web.session))
+	if err != nil {
+		t.Fatal(err)
+	}
+	var persisted sessionSnapshot
+	if err := json.Unmarshal(snapshotJSON, &persisted); err != nil {
+		t.Fatal(err)
+	}
+	restored := persisted.restore()
+	if restored.campaign == nil || restored.campaign.Variant != "puzzler" ||
+		restored.campaign.VariantID != "gp6_balanced" {
+		t.Fatalf("campaign context was not persisted: %+v", restored.campaign)
+	}
+	hero, _ := heroes.ByID("recruit")
+	web.session.puzzle = newPuzzleSession(puzzleDefinition{
+		ID: "gp6_balanced", Cards: []game.Card{
+			{Suit: game.Shield, Face: 2}, {Suit: game.Shield, Face: 2},
+		},
+		Par: 0, Direction: "low",
+	}, hero)
+	for _, index := range []int{0, 1} {
+		if err := web.applyAction(actionRequest{Action: "puzzle-pick", Index: index}); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if web.session.phase != "gameover" || web.session.winner != 0 ||
+		!missionIsComplete(web.playerProfile.Campaigns["puzzler"], 1) ||
+		!campaigns.CanPlayMission(web.playerProfile, "puzzler", 2) {
+		t.Fatalf("successful puzzle did not advance campaign: phase=%s progress=%+v",
+			web.session.phase, web.playerProfile.Campaigns["puzzler"])
+	}
+	if web.playerProfile.Marks != beforeMarks+400 || web.playerProfile.Energy != beforeEnergy-1 {
+		t.Fatalf("puzzle campaign reward/energy = marks %d→%d, energy %d→%d",
+			beforeMarks, web.playerProfile.Marks, beforeEnergy, web.playerProfile.Energy)
+	}
+	if err := web.prepareWebMission(actionRequest{
+		CampaignID: "puzzler", MissionIndex: 1, PlayerHeroID: "recruit",
+	}); err != nil {
+		t.Fatal(err)
+	}
+	if !web.session.campaign.Replay {
+		t.Fatal("completed puzzle mission was not marked as a replay")
+	}
+	web.finishSpecialCampaignMission(true)
+	if web.playerProfile.Marks != beforeMarks+400 {
+		t.Fatalf("puzzle replay changed Marks to %d, want %d", web.playerProfile.Marks, beforeMarks+400)
+	}
+}
+
+func TestAbandonCampaignLaunchUsesCatalogBoardAndPersistsCampaignContext(t *testing.T) {
+	web := campaignTestServer(t)
+	if err := web.prepareWebMission(actionRequest{
+		CampaignID: "abandon", MissionIndex: 1, PlayerHeroID: "recruit",
+	}); err != nil {
+		t.Fatal(err)
+	}
+	if web.session.variant != "abandon" || web.session.abandon == nil ||
+		web.session.abandon.BoardID != "board-01" || web.session.abandon.Target != 54 ||
+		web.session.campaign == nil || web.session.campaign.Variant != "abandon" ||
+		web.session.campaign.VariantID != "board-01" {
+		t.Fatalf("abandon campaign launch = %+v", web.session)
+	}
+	restored := snapshotSession(web.session).restore()
+	if restored.campaign == nil || restored.campaign.VariantID != "board-01" ||
+		restored.abandon.BoardID != "board-01" {
+		t.Fatalf("abandon campaign snapshot = %+v", restored)
+	}
+	marks := web.playerProfile.Marks
+	web.session.abandon.Finished, web.session.abandon.Won = true, true
+	web.updateAbandonPhase()
+	if !missionIsComplete(web.playerProfile.Campaigns["abandon"], 1) ||
+		!campaigns.CanPlayMission(web.playerProfile, "abandon", 2) ||
+		web.playerProfile.Marks != marks+400 {
+		t.Fatalf("successful Abandon completion did not advance with 400 Marks: %+v",
+			web.playerProfile.Campaigns["abandon"])
+	}
+	if err := web.prepareWebMission(actionRequest{
+		CampaignID: "abandon", MissionIndex: 1, PlayerHeroID: "recruit",
+	}); err != nil {
+		t.Fatal(err)
+	}
+	if !web.session.campaign.Replay {
+		t.Fatal("completed Abandon mission was not marked as a replay")
+	}
+	web.finishSpecialCampaignMission(true)
+	if web.playerProfile.Marks != marks+400 {
+		t.Fatalf("Abandon replay changed Marks to %d, want %d", web.playerProfile.Marks, marks+400)
+	}
+}
+
+func TestStandaloneSpecialVariantDoesNotAdvanceCampaign(t *testing.T) {
+	web := campaignTestServer(t)
+	body, _ := json.Marshal(map[string]any{
+		"mode": "easy", "variant": "puzzler", "puzzleId": "gp6_balanced",
+		"playerHeroId": "recruit",
+	})
+	response := httptest.NewRecorder()
+	web.handleNewGame(response, httptest.NewRequest(http.MethodPost, "/api/new", bytes.NewReader(body)))
+	if response.Code != http.StatusOK || web.session.campaign != nil {
+		t.Fatalf("standalone puzzle context/status = %+v / %d: %s",
+			web.session, response.Code, response.Body.String())
+	}
+	hero, _ := heroes.ByID("recruit")
+	web.session.puzzle = newPuzzleSession(puzzleDefinition{
+		ID: "gp6_balanced", Cards: []game.Card{
+			{Suit: game.Shield, Face: 2}, {Suit: game.Shield, Face: 2},
+		},
+		Par: 0, Direction: "low",
+	}, hero)
+	for _, index := range []int{0, 1} {
+		if err := web.applyAction(actionRequest{Action: "puzzle-pick", Index: index}); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if missionIsComplete(web.playerProfile.Campaigns["puzzler"], 1) {
+		t.Fatal("standalone puzzle advanced campaign progress")
+	}
+}
+
 func TestEveryWebCampaignMissionCompletesWithRestoredState(t *testing.T) {
 	for _, campaign := range campaigns.All() {
 		for _, mission := range campaign.Missions {
+			if mission.Variant != "" || mission.Disabled {
+				continue
+			}
 			t.Run(campaign.ID+"/"+mission.Name, func(t *testing.T) {
 				web := campaignTestServer(t)
 				for _, prerequisite := range campaigns.All() {

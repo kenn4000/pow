@@ -22,6 +22,10 @@ type Mission struct {
 	Name                  string
 	Flavor                string
 	Hint                  string
+	Variant               string
+	VariantID             string
+	Status                string
+	Disabled              bool
 	Type                  MissionType
 	DraftMode             int
 	PlayerSeat            *game.Seat
@@ -57,6 +61,8 @@ type Campaign struct {
 	ID          string
 	Name        string
 	Description string
+	Variant     string
+	Status      string
 	Missions    []Mission
 	Completion  CampaignRewards
 	Requires    string
@@ -69,7 +75,10 @@ const (
 	AdvancedCompleteMarks int64 = 2000
 )
 
-var definitions = []Campaign{basicCampaign(), advancedCampaign()}
+var definitions = func() []Campaign {
+	result := []Campaign{basicCampaign(), advancedCampaign(), abandonCampaign(), puzzlerCampaign()}
+	return append(result, heroCampaigns()...)
+}()
 
 func All() []Campaign {
 	result := make([]Campaign, len(definitions))

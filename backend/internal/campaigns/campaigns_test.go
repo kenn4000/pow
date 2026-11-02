@@ -1,6 +1,7 @@
 package campaigns
 
 import (
+	"fmt"
 	"math/rand"
 	"testing"
 	"time"
@@ -35,6 +36,60 @@ func TestCampaignDefinitions(t *testing.T) {
 		again.Missions[0].PlayerHeroRestriction[0] != "recruit" ||
 		again.Completion.Heroes[0] != "warden" {
 		t.Fatal("campaign definitions expose mutable internal slices")
+	}
+}
+
+func TestSpecialCampaignMissionMappingsAndHeroStubs(t *testing.T) {
+	abandon, ok := ByID("abandon")
+	if !ok || abandon.Variant != "abandon" || len(abandon.Missions) != 15 {
+		t.Fatalf("abandon definition = %+v", abandon)
+	}
+	for index, mission := range abandon.Missions {
+		wantID := fmt.Sprintf("board-%02d", index+1)
+		if mission.Index != index+1 || mission.Variant != "abandon" || mission.VariantID != wantID ||
+			mission.RewardMarks != 400 {
+			t.Errorf("abandon mission %d = %+v", index+1, mission)
+		}
+	}
+
+	puzzler, ok := ByID("puzzler")
+	if !ok || puzzler.Variant != "puzzler" || len(puzzler.Missions) != 20 {
+		t.Fatalf("puzzler definition = %+v", puzzler)
+	}
+	puzzleIDs := []string{
+		"gp6_balanced", "gp6_hunters_edge", "gp6_bounty_trap", "gp6_narrow_gate",
+		"gp6_bodybuilders_wall", "gp8_balanced", "gp8_bounty_climb", "gp8_forgiving",
+		"gp8_gamblers_puzzle", "gp8_tight", "gp10_balanced", "gp10_gorilla_threat",
+		"gp10_turtle_lead", "gp10_low_score", "gp10_everyone_solves", "gp12_balanced",
+		"gp12_dual_threat", "gp12_shift_dominant", "gp12_forgiving", "gp12_inverted",
+	}
+	for index, mission := range puzzler.Missions {
+		if mission.Index != index+1 || mission.Variant != "puzzler" ||
+			mission.VariantID != puzzleIDs[index] || mission.RewardMarks != 400 {
+			t.Errorf("puzzler mission %d = %+v", index+1, mission)
+		}
+	}
+
+	stubs := map[string]string{
+		"warden": "Warden's Campaign", "hunter": "Hunter's Campaign",
+		"treasurer": "Treasurer's Campaign", "ascendant": "Gorilla's Campaign",
+		"anchor": "Turtle's Campaign", "gambler": "Gambler's Campaign",
+		"diplomat": "Diplomat's Campaign", "ascetic": "Bureaucrat's Campaign",
+		"herald": "Bodybuilder's Campaign", "hater": "Hater's Campaign",
+	}
+	for id, name := range stubs {
+		campaign, found := ByID(id)
+		if !found || campaign.Name != name || campaign.Status != "Coming Soon" ||
+			campaign.Description != "Coming Soon" || len(campaign.Missions) != 1 ||
+			campaign.Missions[0].Name != "Coming Soon" ||
+			campaign.Missions[0].Hint != "Coming Soon" ||
+			campaign.Missions[0].Status != "Coming Soon" ||
+			!campaign.Missions[0].Disabled || CanPlayMission(&profile.Profile{}, id, 1) {
+			t.Errorf("hero campaign %q = %+v", id, campaign)
+		}
+	}
+	if _, ok := ByID("recruit"); ok {
+		t.Fatal("Recruit must not have a hero campaign")
 	}
 }
 

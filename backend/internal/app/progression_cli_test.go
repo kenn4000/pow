@@ -79,10 +79,13 @@ func TestDumpEconomyProducesAuditableJSON(t *testing.T) {
 	if err := json.Unmarshal(output.Bytes(), &config); err != nil {
 		t.Fatalf("dump is not JSON: %v", err)
 	}
-	for _, section := range []string{"payouts", "energy", "camp_draw_and_catalog", "skills", "chromas", "bundles", "achievements", "achievement_sets"} {
+	for _, section := range []string{"payouts", "energy", "camp_draw_and_catalog", "skills", "chromas", "achievements", "achievement_sets"} {
 		if _, ok := config[section]; !ok {
 			t.Errorf("dump is missing %q", section)
 		}
+	}
+	if _, ok := config["bundles"]; ok {
+		t.Error("dump includes removed fixed bundles")
 	}
 }
 

@@ -2,7 +2,7 @@
   "id": "amethyst",
   "displayName": "Tribal (purple)",
   "hexColor": "#784bb1",
-  "price": 20,
-  "currency": "crowns",
+  "price": 250,
+  "currency": "marks",
   "rarity": "uncommon"
 }

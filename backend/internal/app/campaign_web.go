@@ -3,6 +3,7 @@ package app
 import (
 	"errors"
 	"fmt"
+	"math/rand"
 	"net/http"
 	"strings"
 	"time"
@@ -14,6 +15,7 @@ import (
 	"prisonersofwar/internal/energy"
 	"prisonersofwar/internal/game"
 	"prisonersofwar/internal/heroes"
+	"prisonersofwar/internal/profile"
 	"prisonersofwar/internal/skills"
 )
 
@@ -22,9 +24,40 @@ type webCampaignContext struct {
 	Index       int    `json:"index"`
 	Name        string `json:"name"`
 	Hint        string `json:"hint"`
+	Variant     string `json:"variant"`
+	VariantID   string `json:"variantId,omitempty"`
 	Replay      bool   `json:"replay"`
 	RewardMarks int64  `json:"rewardMarks"`
 	Result      string `json:"result,omitempty"`
+}
+
+func campaignVariant(campaign campaigns.Campaign) string {
+	if campaign.Variant != "" {
+		return campaign.Variant
+	}
+	return "main"
+}
+
+func missionVariant(mission campaigns.Mission) string {
+	if mission.Variant != "" {
+		return mission.Variant
+	}
+	return "main"
+}
+
+func campaignMissionMetadata(mission campaigns.Mission) (string, string, int, int) {
+	name, description := mission.Name, mission.Hint
+	switch mission.Variant {
+	case "abandon":
+		if board, ok := abandonBoardByID(mission.VariantID); ok {
+			return board.Name, fmt.Sprintf("Target score: %d.", board.Target), board.Target, 0
+		}
+	case "puzzler":
+		if puzzle, ok := puzzleByID(mission.VariantID); ok {
+			return puzzle.Title, puzzle.Hint, puzzle.Target, puzzle.CardCount
+		}
+	}
+	return name, description, 0, 0
 }
 
 func heroOption(hero heroes.Hero, unlocked bool) webHeroOption {
@@ -126,6 +159,9 @@ func (s *webServer) prepareWebMission(input actionRequest) error {
 	if !ok {
 		return errors.New("mission not found")
 	}
+	if mission.Variant != "" {
+		return s.prepareSpecialWebMission(p, campaign, mission, input)
+	}
 	heroID := input.PlayerHeroID
 	if heroID == "" && len(mission.PlayerHeroRestriction) > 0 {
 		heroID = mission.PlayerHeroRestriction[0]
@@ -166,15 +202,107 @@ func (s *webServer) prepareWebMission(input actionRequest) error {
 	}
 	s.session = &webSession{
 		initialAchievements: achievementLevels(p),
-		state:               state, mode: "easy", whitePlayer: white, phase: phase, actor: actor, winner: -1,
+		state:               state, mode: "easy", variant: "main", whitePlayer: white, phase: phase, actor: actor, winner: -1,
 		playerHeroID: heroID, opponentHeroID: cpuID,
-		message:  message,
-		campaign: &webCampaignContext{ID: campaign.ID, Index: mission.Index, Name: mission.Name, Hint: mission.Hint, Replay: replay, RewardMarks: mission.RewardMarks},
+		message: message,
+		campaign: &webCampaignContext{
+			ID: campaign.ID, Index: mission.Index, Name: mission.Name, Hint: mission.Hint,
+			Variant: missionVariant(mission), Replay: replay, RewardMarks: mission.RewardMarks,
+		},
 	}
 	if state.Draft != nil {
 		s.session.message = s.draftTurnMessage(actor)
 	}
 	return p.Save()
+}
+
+func (s *webServer) prepareSpecialWebMission(p *profile.Profile, campaign campaigns.Campaign, mission campaigns.Mission, input actionRequest) error {
+	heroID := s.requestedHeroID(input.PlayerHeroID)
+	playerHero, ok := heroes.ByID(heroID)
+	if !ok || !s.heroUnlocked(heroID) {
+		return fmt.Errorf("player hero %q is not unlocked", heroID)
+	}
+	if s.rng == nil {
+		s.rng = rand.New(rand.NewSource(time.Now().UnixNano()))
+	}
+
+	var puzzle *puzzleSession
+	var abandon *abandonSession
+	switch mission.Variant {
+	case "puzzler":
+		definition, exists := puzzleByID(mission.VariantID)
+		if !exists {
+			return fmt.Errorf("unknown puzzle %q", mission.VariantID)
+		}
+		puzzle = newPuzzleSession(definition, playerHero)
+	case "abandon":
+		var err error
+		abandon, err = newAbandonSessionForBoard(playerHero, s.rng, mission.VariantID)
+		if err != nil {
+			return err
+		}
+	default:
+		return fmt.Errorf("unsupported campaign variant %q", mission.Variant)
+	}
+
+	replay := missionIsComplete(p.Campaigns[campaign.ID], mission.Index)
+	if !replay {
+		if _, err := refreshEnergy(p, time.Now()); err != nil {
+			return err
+		}
+		if err := energy.Spend(p, campaignMissionEnergyCost(p, mission), time.Now()); err != nil {
+			return err
+		}
+	}
+	if err := campaigns.Start(p, campaign.ID); err != nil {
+		return err
+	}
+	message, phase := "Choose an attacker.", "puzzle-pick"
+	if abandon != nil {
+		message, phase = "Choose the first board card.", "abandon-select"
+	}
+	s.session = &webSession{
+		initialAchievements: achievementLevels(p),
+		mode:                "easy", variant: mission.Variant, puzzle: puzzle, abandon: abandon,
+		phase: phase, actor: 0, winner: -1, playerHeroID: heroID, message: message,
+		campaign: &webCampaignContext{
+			ID: campaign.ID, Index: mission.Index, Name: mission.Name, Hint: mission.Hint,
+			Variant: mission.Variant, VariantID: mission.VariantID,
+			Replay: replay, RewardMarks: mission.RewardMarks,
+		},
+	}
+	return p.Save()
+}
+
+func (s *webServer) finishSpecialCampaignMission(won bool) {
+	session := s.session
+	if session == nil || session.campaign == nil {
+		return
+	}
+	p := s.playerProfile
+	if session.campaign.Replay {
+		session.campaign.Result = "Practice complete. No progression rewards were awarded."
+		session.message = session.campaign.Result
+		return
+	}
+	if !won {
+		session.campaign.Result = "Mission not completed. Try again."
+		session.message = session.campaign.Result
+		return
+	}
+	outcome, err := campaigns.CompleteMission(p, session.campaign.ID, session.campaign.Index, 0)
+	if err != nil {
+		session.profileError = err.Error()
+		return
+	}
+	session.campaign.Result = fmt.Sprintf("Mission complete! +%d Marks.", outcome.MissionMarks)
+	if outcome.CampaignCompleted {
+		session.campaign.Result += " Campaign complete."
+	}
+	session.message = session.campaign.Result
+	if err := p.Save(); err != nil {
+		session.profileError = err.Error()
+	}
 }
 
 func (s *webServer) finishWebMission() {

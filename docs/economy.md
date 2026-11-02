@@ -76,20 +76,24 @@ Skills have Crown costs and explicit prerequisites. Their effects are
 aggregated from unlocked nodes and applied by the payout, energy, and Camp
 Draw services. The CLI skill tree shows availability, costs, and prerequisites.
 
-The chroma catalog includes rarity, color, price, currency, and optional bundle
-membership. Purchases validate balances and ownership; repeated bundle
-purchases are idempotent. New profiles own Tribal (red), Tribal (blue), and
-Tribal (yellow). The four Conquistador chromas (lime green, gold, pink, and sky
-blue) cost 100 Marks each. Browser suit choices show only owned chromas; each
-can be assigned to Scissors (`B`), Paper (`F`), or Rock (`S`) as long as no
-other suit uses the same color. The selected chroma controls the deck artwork
-and face-number color. Initial assignments are Tribal (blue) for Scissors,
-Tribal (yellow) for Paper, and Tribal (red) for Rock.
+The chroma catalog includes rarity, color, price, and currency. Purchases
+validate balances and ownership. The browser groups chromas by skin family and
+offers a discounted Buy All purchase for families with multiple purchasable
+colors; all chromas in a family use that family's highest individual price.
+Buy All is discounted by 20% of the full family price and is available only
+when none of the family's chromas are owned. Partially owned families can be
+completed by buying remaining colors individually at full price. New profiles
+own Tribal (red), Tribal (blue), and Tribal (yellow). Tribal chromas cost 250
+Marks each, Dragon chromas cost 800 Crowns each, and all five Conquistador
+chromas cost 600 Marks each. Browser suit choices show only owned chromas;
+each can be assigned to Scissors (`B`), Paper (`F`), or Rock (`S`) as long as
+no other suit uses the same color. The selected chroma controls the deck
+artwork and face-number color. Initial assignments are Tribal (blue) for
+Scissors, Tribal (yellow) for Paper, and Tribal (red) for Rock.
 
-Alien (yellow), Amazon (green), Bee (silver), Cat (brown), Dog (gray), Dragon
-(ruby), Dwarf (purple), Orc (white), Reptile (pink), and Zulu (orange) skins
-are available in the browser Shop for 250 Marks each. Each uses the color suffix
-from its skin folder as its color identity and displays that exact skin artwork.
+Shop prices and currencies come from each skin manifest. Tribal chromas cost
+250 Marks each, and Dragon chromas cost 800 Crowns each. Each skin uses its
+folder color as its color identity and displays that exact skin artwork.
 
 ## CLI
 
@@ -123,8 +127,7 @@ allowed static “none today” placeholder.
 Ranked modes are local adapters around completed games; there is no server,
 online matchmaking, or network friend system.
 
-To inspect the current economy values, skill tree, catalog, and bundles as
-JSON:
+To inspect the current economy values, skill tree, and catalog as JSON:
 
 ```powershell
 GOWORK=off go -C backend run ./cmd/prisoners-of-war --dump-economy

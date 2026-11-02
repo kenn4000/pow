@@ -26,6 +26,10 @@ func TestLoadSaveProfileRoundTripAndSchemaValidation(t *testing.T) {
 		t.Fatalf("new campaign totals = basic %d, advanced %d",
 			p.Campaigns["basic"].TotalMissions, p.Campaigns["advanced"].TotalMissions)
 	}
+	if p.Campaigns["abandon"].TotalMissions != 15 || p.Campaigns["puzzler"].TotalMissions != 20 ||
+		p.Campaigns["warden"].TotalMissions != 1 || p.Campaigns["hater"].TotalMissions != 1 {
+		t.Fatal("new special and hero campaign progress defaults are missing")
+	}
 	p.Marks = 1234
 	p.LastHeroPicked = "hunter"
 	p.OpponentLastHeroID = "anchor"

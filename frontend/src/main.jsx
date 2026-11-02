@@ -2,6 +2,7 @@ import React, { useEffect, useRef, useState } from 'react';
 import { createRoot } from 'react-dom/client';
 import shell from 'virtual:game-shell';
 import { mountGame } from 'virtual:game-controller';
+import { renderSuitCycleWidget } from './suit-selector.js';
 import 'virtual:game-style.css';
 import { request } from './api';
 import { AdminUsers, SavedGames } from './pages';
@@ -25,7 +26,7 @@ function Game() {
       createElement: tag => document.createElement(tag),
       addEventListener: (type, listener) => root.addEventListener(type, listener, { signal: events.signal }),
     };
-    const dispose = mountGame(scopedDocument);
+    const dispose = mountGame(scopedDocument, renderSuitCycleWidget);
     return () => {
       events.abort();
       dispose();

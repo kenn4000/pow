@@ -24,15 +24,6 @@ func chromaName(id string) string {
 	return id
 }
 
-func bundleName(id string) string {
-	for _, bundle := range catalog.AllBundles() {
-		if bundle.ID == id && bundle.Name != "" {
-			return bundle.Name
-		}
-	}
-	return id
-}
-
 func suitDisplayName(code string) string {
 	switch strings.ToUpper(strings.TrimSpace(code)) {
 	case "B", "BLADE", "SCISSORS":
