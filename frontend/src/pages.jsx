@@ -1,7 +1,7 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { request } from './api';
 
-const modeLabel = mode => ({ hvh: 'Local two-player', easy: 'AI · Easy', normal: 'AI · Normal', hard: 'AI · Hard' })[mode] || mode;
+const modeLabel = mode => ({ hvh: 'Local two-player · Legacy', online: 'Online PvP', easy: 'AI · Easy', normal: 'AI · Normal', hard: 'AI · Hard' })[mode] || mode;
 const gameLabel = game => game.campaignName ? `Campaign · ${game.campaignName}` : modeLabel(game.mode);
 const points = count => `${count} ${count === 1 ? 'point' : 'points'}`;
 const statusLabel = status => ({ active: 'In progress', completed: 'Completed', abandoned: 'Archived unfinished' })[status] || status;

@@ -31,11 +31,13 @@ import (
 	"prisonersofwar/internal/energy"
 	"prisonersofwar/internal/game"
 	"prisonersofwar/internal/heroes"
+	"prisonersofwar/internal/ladder"
 	"prisonersofwar/internal/lootbox"
 	"prisonersofwar/internal/profile"
 	"prisonersofwar/internal/skills"
 	"prisonersofwar/internal/skins"
 	"prisonersofwar/internal/storage"
+	"prisonersofwar/internal/tugwar"
 )
 
 var webFiles = skins.Files
@@ -46,6 +48,8 @@ type webServer struct {
 	mu                  sync.Mutex
 	rng                 *rand.Rand
 	defaultMode         string
+	onlineViewer        bool
+	viewerPlayer        int
 	session             *webSession
 	playerProfile       *profile.Profile
 	previewProfile      *profile.Profile
@@ -88,6 +92,12 @@ type webSession struct {
 	variant             string
 	puzzle              *puzzleSession
 	abandon             *abandonSession
+	rummy               *rummySession
+	ladder              *ladder.LadderGame
+	poker               *pokerSession
+	pokerDuel           *pokerDuelGame
+	tugWar              *tugwar.Game
+	pokerDuelCPUReadyAt time.Time
 	whitePlayer         int
 	phase               string
 	actor               int
@@ -177,6 +187,8 @@ type webPlayer struct {
 type webView struct {
 	GameID             string                 `json:"gameId,omitempty"`
 	Started            bool                   `json:"started"`
+	CanAct             bool                   `json:"canAct,omitempty"`
+	Viewer             int                    `json:"viewer,omitempty"`
 	Dashboard          *webDashboard          `json:"dashboard,omitempty"`
 	Mode               string                 `json:"mode,omitempty"`
 	Variant            string                 `json:"variant"`
@@ -184,6 +196,11 @@ type webView struct {
 	AbandonOptions     []abandonBoardOption   `json:"abandonOptions"`
 	Puzzle             *webPuzzleState        `json:"puzzle,omitempty"`
 	Abandon            *webAbandonState       `json:"abandon,omitempty"`
+	Rummy              *webRummyState         `json:"rummy,omitempty"`
+	Ladder             *webLadderState        `json:"ladder,omitempty"`
+	Poker              *webPokerState         `json:"poker,omitempty"`
+	PokerDuel          *webPokerDuelState     `json:"pokerDuel,omitempty"`
+	TugWar             *webTugWarState        `json:"tugWar,omitempty"`
 	Phase              string                 `json:"phase,omitempty"`
 	Round              int                    `json:"round,omitempty"`
 	Exchange           int                    `json:"exchange,omitempty"`
@@ -278,6 +295,7 @@ type actionRequest struct {
 	Mode           string `json:"mode"`
 	Variant        string `json:"variant"`
 	Index          int    `json:"index"`
+	Slot           int    `json:"slot"`
 	Cards          []int  `json:"cards"`
 	PlayerHeroID   string `json:"playerHeroId"`
 	OpponentHeroID string `json:"opponentHeroId"`
@@ -286,6 +304,8 @@ type actionRequest struct {
 	BoxType        string `json:"boxType"`
 	Suit           string `json:"suit"`
 	SuitIndex      int    `json:"suitIndex"`
+	FaceUpIndex    int    `json:"faceUpIndex"`
+	BuriedIndex    int    `json:"buriedIndex"`
 	CampaignID     string `json:"campaignId"`
 	MissionIndex   int    `json:"missionIndex"`
 }
@@ -679,13 +699,13 @@ func (s *webServer) handleNewGame(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusBadRequest, err)
 		return
 	}
-	if variant == "puzzler" || variant == "abandon" {
-		writeError(w, http.StatusBadRequest, errors.New("Puzzler and Abandon are only available as campaign missions"))
+	if variant == "puzzler" || variant == "abandon" || variant == "poker" {
+		writeError(w, http.StatusBadRequest, errors.New("Poker, Puzzler, and Abandon are only available as campaign missions"))
 		return
 	}
 	mode := requestedWebMode(request.Mode, s.defaultMode)
 	if !validWebMode(mode) {
-		writeError(w, http.StatusBadRequest, errors.New("mode must be hvh, easy, normal, or hard"))
+		writeError(w, http.StatusBadRequest, errors.New("mode must be easy, normal, or hard; use online battles to play another person"))
 		return
 	}
 	s.mu.Lock()
@@ -696,44 +716,56 @@ func (s *webServer) handleNewGame(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusBadRequest, fmt.Errorf("player hero %q is not unlocked", playerHeroID))
 		return
 	}
-	opponentHeroID := request.OpponentHeroID
-	if mode == "hvh" {
-		if opponentHeroID == "" {
-			opponentHeroID = playerHeroID
+	unlockedIDs := s.unlockedHeroIDs()
+	opponentHero, chooseErr := heroes.ChooseForOpponent(unlockedIDs, playerHeroID, s.rng)
+	if chooseErr != nil {
+		writeError(w, http.StatusInternalServerError, chooseErr)
+		return
+	}
+	opponentHeroID := opponentHero.ID
+	if variant == "poker-duel" {
+		duel, err := newPokerDuelGame(playerHero, opponentHero, s.rng, time.Now())
+		if err != nil {
+			writeError(w, http.StatusInternalServerError, err)
+			return
 		}
-		if _, ok := heroes.ByID(opponentHeroID); !ok || !s.heroUnlocked(opponentHeroID) {
-			writeError(w, http.StatusBadRequest, fmt.Errorf("opponent hero %q is not unlocked", opponentHeroID))
+		s.session = &webSession{
+			mode: mode, variant: variant, pokerDuel: duel, phase: "poker-duel-play",
+			actor: duel.ActivePlayer, handoffTarget: duel.ActivePlayer,
+			handoffPhase: "poker-duel-play", winner: -1,
+			playerHeroID: playerHeroID, opponentHeroID: opponentHeroID,
+			message:             "Your turn. Place or redraw a card before the 15-second clock expires.",
+			initialAchievements: achievementLevels(s.playerProfile),
+		}
+	} else if variant == "tug-war" {
+		if err := s.startWebTugWar(mode, playerHeroID, opponentHeroID, playerHero, opponentHero); err != nil {
+			writeError(w, http.StatusInternalServerError, err)
+			return
+		}
+	} else if variant == "rummy" {
+		s.startWebRummy(mode, playerHeroID, opponentHeroID, playerHero, opponentHero)
+	} else if variant == "ladder" {
+		if err := s.startWebLadder(mode, playerHeroID, opponentHeroID, playerHero, opponentHero); err != nil {
+			writeError(w, http.StatusInternalServerError, err)
 			return
 		}
 	} else {
-		unlockedIDs := s.unlockedHeroIDs()
-		opponentHero, chooseErr := heroes.ChooseForOpponent(unlockedIDs, playerHeroID, s.rng)
-		if chooseErr != nil {
-			writeError(w, http.StatusInternalServerError, chooseErr)
+		gameModifiers, err := heroes.GameModifiersFor(playerHero, opponentHero, s.rng)
+		if err != nil {
+			writeError(w, http.StatusInternalServerError, err)
 			return
 		}
-		opponentHeroID = opponentHero.ID
+		state, err := game.NewDraftGameWithDraftMode(s.rng, gameModifiers, heroes.DraftMode(playerHero, opponentHero))
+		if err != nil {
+			writeError(w, http.StatusInternalServerError, err)
+			return
+		}
+		if err := s.startWebGameSession(state, mode, playerHeroID, opponentHeroID); err != nil {
+			writeError(w, http.StatusInternalServerError, err)
+			return
+		}
+		s.session.variant = variant
 	}
-	opponentHero, ok := heroes.ByID(opponentHeroID)
-	if !ok {
-		writeError(w, http.StatusBadRequest, fmt.Errorf("unknown opponent hero %q", opponentHeroID))
-		return
-	}
-	gameModifiers, err := heroes.GameModifiersFor(playerHero, opponentHero, s.rng)
-	if err != nil {
-		writeError(w, http.StatusInternalServerError, err)
-		return
-	}
-	state, err := game.NewDraftGameWithDraftMode(s.rng, gameModifiers, heroes.DraftMode(playerHero, opponentHero))
-	if err != nil {
-		writeError(w, http.StatusInternalServerError, err)
-		return
-	}
-	if err := s.startWebGameSession(state, mode, playerHeroID, opponentHeroID); err != nil {
-		writeError(w, http.StatusInternalServerError, err)
-		return
-	}
-	s.session.variant = variant
 	if s.playerProfile != nil {
 		s.playerProfile.LastHeroPicked = playerHeroID
 		s.playerProfile.OpponentLastHeroID = opponentHeroID
@@ -1501,6 +1533,30 @@ func webHistoryModeName(modeID int) string {
 
 func (s *webServer) applyAction(request actionRequest) error {
 	session := s.session
+	if session.variant == "tug-war" {
+		return s.applyTugWarAction(request)
+	}
+	if session.variant == "ladder" {
+		if request.Action == "ready" {
+			return s.readyAction()
+		}
+		return s.applyLadderAction(request)
+	}
+	if session.variant == "rummy" {
+		if request.Action == "ready" {
+			return s.readyAction()
+		}
+		return s.applyRummyAction(request)
+	}
+	if session.variant == "poker" {
+		return s.applyPokerAction(request)
+	}
+	if session.variant == "poker-duel" {
+		if request.Action == "ready" {
+			return s.readyAction()
+		}
+		return s.applyPokerDuelAction(request)
+	}
 	if session.variant == "puzzler" {
 		if request.Action != "puzzle-pick" {
 			return errors.New("unknown puzzler action")
@@ -1640,10 +1696,22 @@ func (s *webServer) readyAction() error {
 	if session.phase != "handoff" {
 		return errors.New("there is no handoff to acknowledge")
 	}
+	if session.variant == "poker-duel" &&
+		(session.pokerDuel == nil || session.handoffPhase != "poker-duel-play" ||
+			session.handoffTarget != session.pokerDuel.ActivePlayer) {
+		return errors.New("Poker duel turn is unavailable")
+	}
 	session.actor = session.handoffTarget
 	session.phase = session.handoffPhase
 	session.handoffPhase = ""
-	if session.phase == "commit" {
+	if session.variant == "poker-duel" {
+		session.pokerDuel.TurnStarted = time.Now()
+		session.message = fmt.Sprintf("Player %d, make your move before the 15-second clock expires.", session.actor+1)
+	} else if session.variant == "ladder" {
+		session.message = "Choose a legal card to play."
+	} else if session.phase == "rummy-turn" {
+		session.message = fmt.Sprintf("Player %d, take the face-up card or draw two cards.", session.actor+1)
+	} else if session.phase == "commit" {
 		session.message = fmt.Sprintf("Player %d, choose three cards to commit.", session.actor+1)
 	} else if session.phase == "attack" {
 		session.message = fmt.Sprintf("Player %d attacks. Choose a card from their pile.", session.actor+1)
@@ -1657,7 +1725,19 @@ func (s *webServer) readyAction() error {
 
 func (s *webServer) advanceAI() error {
 	session := s.session
-	if session != nil && (session.variant == "puzzler" || session.variant == "abandon") {
+	if session != nil && session.variant == "tug-war" {
+		return s.advanceTugWarAI()
+	}
+	if session != nil && session.variant == "ladder" {
+		return s.advanceLadderAI()
+	}
+	if session != nil && session.variant == "rummy" {
+		return s.advanceRummyAI()
+	}
+	if session != nil && session.variant == "poker-duel" {
+		return s.schedulePokerDuelCPU()
+	}
+	if session != nil && (session.variant == "puzzler" || session.variant == "abandon" || session.variant == "poker") {
 		return nil
 	}
 	for session != nil && isAI(session.mode, session.actor) {
@@ -2114,6 +2194,95 @@ func (s *webServer) view() webView {
 	if variant == "" {
 		variant = "main"
 	}
+	if variant == "tug-war" {
+		if session.tugWar == nil {
+			return webView{
+				GameID: s.gameID, Started: true, Variant: variant, Phase: "gameover",
+				Winner: -1, Message: "Tug War state is unavailable.",
+			}
+		}
+		tugWarView := tugWarWebView(s, session)
+		message := session.message
+		if s.onlineViewer {
+			switch {
+			case session.phase == "gameover" && session.winner < 0:
+				message = "Tug War ends in a draw."
+			case session.phase == "gameover" && session.winner == s.viewerPlayer:
+				message = "You win Tug War."
+			case session.phase == "gameover":
+				message = "Opponent wins Tug War."
+			case session.actor == s.viewerPlayer:
+				message = "Your turn. Choose a card, flip the deck, or spend a push."
+			default:
+				message = "Opponent's turn."
+			}
+		}
+		return webView{
+			GameID: s.gameID, Started: true, CanAct: tugWarView.CanAct, Dashboard: s.dashboard(), Mode: session.mode,
+			Variant: variant, Phase: session.phase, Actor: session.actor, Winner: session.winner,
+			Message: message, PlayerHero: heroName(session.playerHeroID),
+			OpponentHero: heroName(session.opponentHeroID), PlayerHeroID: session.playerHeroID,
+			OpponentHeroID: session.opponentHeroID, DefaultHeroID: session.playerHeroID,
+			Heroes: s.heroOptions(), TugWar: tugWarView,
+		}
+	}
+	if variant == "rummy" {
+		return webView{
+			GameID: s.gameID, Started: true, Dashboard: s.dashboard(), Mode: session.mode,
+			Variant: variant, Phase: session.phase, Actor: session.actor, Winner: session.winner,
+			Message: session.message, PlayerHero: heroName(session.playerHeroID),
+			OpponentHero: heroName(session.opponentHeroID), PlayerHeroID: session.playerHeroID,
+			OpponentHeroID: session.opponentHeroID, DefaultHeroID: session.playerHeroID,
+			Heroes: s.heroOptions(), Rummy: session.rummy.webView(session, s.viewerPlayer, s.onlineViewer),
+		}
+	}
+	if variant == "ladder" {
+		return webView{
+			GameID: s.gameID, Started: true, Dashboard: s.dashboard(), Mode: session.mode,
+			Variant: variant, Phase: session.phase, Actor: session.actor, Winner: session.winner,
+			Message: session.message, PlayerHero: heroName(session.playerHeroID),
+			OpponentHero: heroName(session.opponentHeroID), PlayerHeroID: session.playerHeroID,
+			OpponentHeroID: session.opponentHeroID, DefaultHeroID: session.playerHeroID,
+			Heroes: s.heroOptions(), Ladder: ladderWebView(session, s.viewerPlayer, s.onlineViewer),
+		}
+	}
+	if variant == "poker-duel" {
+		if session.pokerDuel == nil {
+			return webView{Started: true, Variant: variant, Phase: "gameover", Winner: -1, Message: "Poker duel state is unavailable."}
+		}
+		now := time.Now()
+		duelView := session.pokerDuel.webView(
+			session.phase, now, func() int {
+				if s.onlineViewer {
+					return 1 - s.viewerPlayer
+				}
+				return pokerDuelCPUPlayer(session.mode)
+			}(),
+		)
+		if !session.pokerDuelCPUReadyAt.IsZero() {
+			remaining := session.pokerDuelCPUReadyAt.Sub(now)
+			if remaining > 0 {
+				duelView.CPUThinkRemainingMS = (remaining + time.Millisecond - 1).Milliseconds()
+			}
+		}
+		return webView{
+			GameID: s.gameID, Started: true, Dashboard: s.dashboard(), Mode: session.mode,
+			Variant: variant, Phase: session.phase, Actor: session.actor, Winner: session.pokerDuel.Winner,
+			Message: session.message, PlayerHero: heroName(session.playerHeroID),
+			OpponentHero: heroName(session.opponentHeroID), PlayerHeroID: session.playerHeroID,
+			OpponentHeroID: session.opponentHeroID, DefaultHeroID: session.playerHeroID,
+			Heroes: s.heroOptions(), PokerDuel: duelView,
+		}
+	}
+	if variant == "poker" {
+		return webView{
+			GameID: s.gameID, Started: true, Dashboard: s.dashboard(), Mode: session.mode,
+			Variant: variant, Phase: session.phase, Actor: session.actor, Winner: session.winner,
+			Message: session.message, PlayerHero: heroName(session.playerHeroID),
+			PlayerHeroID: session.playerHeroID, DefaultHeroID: session.playerHeroID,
+			Heroes: s.heroOptions(), Poker: session.poker.webView(session.phase), Campaign: session.campaign,
+		}
+	}
 	if variant == "puzzler" || variant == "abandon" {
 		result := webView{
 			GameID: s.gameID, Started: true, Dashboard: s.dashboard(), Mode: session.mode,
@@ -2345,7 +2514,12 @@ func (s *webServer) fillDraftView(result *webView) {
 	draft := session.state.Draft
 	result.DraftPool = make([]webCard, len(draft.Pool))
 	for index, card := range draft.Pool {
-		result.DraftPool[index] = webCard{Card: card, Index: index, Selectable: !isAI(session.mode, session.actor)}
+		selectable := !isAI(session.mode, session.actor) &&
+			(!s.onlineViewer || s.viewerPlayer == session.actor)
+		result.DraftPool[index] = webCard{Card: card, Index: index, Selectable: selectable}
+	}
+	if s.onlineViewer && s.viewerPlayer != session.actor {
+		return
 	}
 	seat, ok := draft.CurrentSeat()
 	if ok {
@@ -2360,7 +2534,8 @@ func (s *webServer) fillDraftView(result *webView) {
 
 func (s *webServer) playerView(index int, player game.Player, score int) webPlayer {
 	session := s.session
-	private := session.mode == "hvh" && index == session.actor && session.phase != "handoff" || session.mode != "hvh" && index == 0
+	private := session.mode == "hvh" && index == session.actor && session.phase != "handoff" &&
+		(!s.onlineViewer || index == s.viewerPlayer) || session.mode != "hvh" && index == 0
 	view := webPlayer{Color: s.colorName(index), You: session.mode != "hvh" && index == 0, Seat: player.Seat.String(), Score: score, Hand: []webCard{}, Pool: []webCard{}, HiddenHand: len(player.Hand), HiddenPool: len(player.Pool)}
 	if session.state.Draft != nil {
 		if player.Seat == game.SeatX {
@@ -2574,7 +2749,7 @@ func (s *webServer) opponentLastHeroName() string {
 }
 
 func validWebMode(mode string) bool {
-	return mode == "hvh" || mode == "easy" || mode == "normal" || mode == "hard"
+	return mode == "easy" || mode == "normal" || mode == "hard"
 }
 
 func isAI(mode string, playerIndex int) bool {

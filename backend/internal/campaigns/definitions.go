@@ -46,6 +46,7 @@ type Mission struct {
 	AIHero                string
 	PlayerHeroRestriction []string
 	RewardMarks           int64
+	PokerRules            *game.PokerMissionRules
 }
 
 type CampaignRewards struct {
@@ -76,7 +77,7 @@ const (
 )
 
 var definitions = func() []Campaign {
-	result := []Campaign{basicCampaign(), advancedCampaign(), abandonCampaign(), puzzlerCampaign()}
+	result := []Campaign{basicCampaign(), advancedCampaign(), abandonCampaign(), puzzlerCampaign(), pokerCampaign(), ladderCampaign()}
 	return append(result, heroCampaigns()...)
 }()
 
@@ -110,6 +111,10 @@ func cloneCampaign(campaign Campaign) Campaign {
 		mission.CPULeads = append([]game.Card(nil), mission.CPULeads...)
 		mission.CPUPool = append([]game.Card(nil), mission.CPUPool...)
 		mission.PlayerHeroRestriction = append([]string(nil), mission.PlayerHeroRestriction...)
+		if mission.PokerRules != nil {
+			rules := *mission.PokerRules
+			mission.PokerRules = &rules
+		}
 		if mission.PlayerSeat != nil {
 			seat := *mission.PlayerSeat
 			mission.PlayerSeat = &seat

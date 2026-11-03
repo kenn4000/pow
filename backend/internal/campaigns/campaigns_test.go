@@ -40,6 +40,13 @@ func TestCampaignDefinitions(t *testing.T) {
 }
 
 func TestSpecialCampaignMissionMappingsAndHeroStubs(t *testing.T) {
+	ladder, ok := ByID("ladder")
+	if !ok || ladder.Name != "Ladder Campaign" || ladder.Variant != "ladder" ||
+		ladder.Status != "Coming Soon" || len(ladder.Missions) != 1 ||
+		!ladder.Missions[0].Disabled || CanPlayMission(&profile.Profile{}, "ladder", 1) {
+		t.Fatalf("Ladder campaign stub = %+v", ladder)
+	}
+
 	abandon, ok := ByID("abandon")
 	if !ok || abandon.Variant != "abandon" || len(abandon.Missions) != 15 {
 		t.Fatalf("abandon definition = %+v", abandon)
@@ -90,6 +97,40 @@ func TestSpecialCampaignMissionMappingsAndHeroStubs(t *testing.T) {
 	}
 	if _, ok := ByID("recruit"); ok {
 		t.Fatal("Recruit must not have a hero campaign")
+	}
+}
+
+func TestPokerCampaignMissionRules(t *testing.T) {
+	poker, ok := ByID("poker")
+	if !ok || poker.Variant != "poker" || len(poker.Missions) != 15 {
+		t.Fatalf("poker campaign = %+v", poker)
+	}
+	names := []string{
+		"First Hand", "The Crown", "Find Your Suit", "Nine Storm", "The Long Game",
+		"Pure Suit", "Gorilla's Game", "Silent Nines", "The Bounty Hunter",
+		"Bodyb's Table", "Doubled Down", "The Marathon", "Hater's Crown",
+		"The Wall", "The Crown",
+	}
+	for index, mission := range poker.Missions {
+		if mission.Index != index+1 || mission.Name != names[index] ||
+			mission.Variant != "poker" || mission.VariantID != fmt.Sprintf("poker-%02d", index+1) ||
+			mission.RewardMarks != 400 || mission.PokerRules == nil {
+			t.Errorf("poker mission %d = %+v", index+1, mission)
+		}
+	}
+	if poker.Missions[5].PokerRules.Constraint != game.PokerNoStraightsOrFlushes ||
+		poker.Missions[6].PokerRules.Constraint != game.PokerNineInEveryHand ||
+		poker.Missions[7].PokerRules.Constraint != game.PokerNoNines ||
+		poker.Missions[8].PokerRules.Constraint != game.PokerSameBountySuitEvery ||
+		poker.Missions[10].PokerRules.NineBase != 8 ||
+		poker.Missions[11].PokerRules.StreakCount != 3 ||
+		poker.Missions[11].PokerRules.StreakScore != 180 {
+		t.Fatal("poker mission overrides or constraints are not configured")
+	}
+	poker.Missions[0].PokerRules.NineBase = -1
+	again, _ := ByID("poker")
+	if again.Missions[0].PokerRules.NineBase != 12 {
+		t.Fatal("poker rules expose mutable internal campaign data")
 	}
 }
 

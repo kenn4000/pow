@@ -79,6 +79,12 @@ button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible
 .board { display: grid; grid-template-columns: 1fr 1fr; grid-template-areas: 'track track' 'info info' 'battle players' 'actions players' 'help help'; align-content: start; align-items: start; gap: 14px; }
 #gameShell[data-variant="puzzler"] .board { grid-template-columns: minmax(0, 1fr); grid-template-areas: 'track' 'battle' 'players' 'help'; }
 #gameShell[data-variant="puzzler"] .actions { display: none; }
+#gameShell[data-variant="rummy"] .board { grid-template-columns: minmax(0, 1fr); grid-template-areas: 'battle' 'actions' 'help'; }
+#gameShell[data-variant="rummy"] #players { display: none; }
+#gameShell[data-variant="poker"] .board { grid-template-columns: minmax(0, 1fr); grid-template-rows: max-content max-content max-content max-content; grid-template-areas: 'battle' 'players' 'actions' 'help'; }
+#gameShell[data-variant="poker"] .players { gap: 12px; }
+#gameShell[data-variant="poker-duel"] .board { grid-template-columns: minmax(0, 1fr); grid-template-areas: 'battle' 'actions' 'help'; }
+#gameShell[data-variant="poker-duel"] #players { display: none; }
 .track { grid-area: track; }
 .match-info { grid-area: info; margin: 0; }
 .battle { grid-area: battle; }
@@ -185,6 +191,93 @@ button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible
 .draft-card-pool .card { width: clamp(48px, 8vw, 82px); height: clamp(62px, 10vw, 102px); justify-self: center; }
 .draft-player-panel .card-row { min-height: 84px; }
 .draft-opponent-count { margin: 4px 0 0; color: #b8c6db; font-size: 12px; }
+.rummy-overview { display: grid; gap: 16px; width: min(100%, 980px); margin-inline: auto; text-align: left; }
+.rummy-heading { display: flex; align-items: flex-start; justify-content: space-between; gap: 16px; flex-wrap: wrap; }
+.rummy-heading h2, .rummy-heading p, .rummy-pile h3, .rummy-hand h3 { margin: 0; }
+.rummy-status { color: #f0d484; }
+.rummy-parameters { display: flex; gap: 8px 18px; flex-wrap: wrap; color: #c8d1df; font-size: 13px; }
+.rummy-parameters strong { color: #f0d484; }
+.rummy-piles { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
+.rummy-pile, .rummy-hand, .rummy-result { min-width: 0; padding: 12px; border: 1px solid #344159; border-radius: 10px; background: #101624; }
+.rummy-pile h3, .rummy-hand h3 { display: flex; justify-content: space-between; gap: 8px; margin-bottom: 10px; font-size: 14px; }
+.rummy-pile h3 span, .rummy-hand h3 span { color: #aebbd0; font-size: 12px; font-weight: 400; }
+.rummy-pile .card { width: clamp(56px, 8vw, 88px); height: clamp(74px, 11vw, 112px); }
+.rummy-card-row, .rummy-result-cards { display: flex; flex-wrap: wrap; justify-content: center; gap: 8px; min-height: 76px; }
+.rummy-card-row .card, .rummy-result-cards .card { width: clamp(46px, 7vw, 68px); height: clamp(60px, 9vw, 88px); }
+.rummy-card-row .card.chosen { outline: 3px solid #f0d484; outline-offset: 2px; transform: translateY(-4px); }
+.rummy-selection { margin: 8px 0 0; color: #f0d484; text-align: center; }
+.rummy-results { display: grid; gap: 12px; }
+.rummy-result h3 { margin: 0; }
+.rummy-result ul { padding-left: 20px; }
+.rummy-result li { margin-block: 10px; }
+.rummy-result p { margin: 8px 0; }
+.rummy-result-cards { justify-content: flex-start; min-height: 0; margin-top: 6px; }
+@media (max-width: 560px) {
+  .rummy-piles { grid-template-columns: minmax(0, 1fr); }
+  .rummy-heading { display: grid; }
+}
+.poker-overview { display: grid; gap: 12px; width: min(100%, 980px); margin-inline: auto; text-align: left; }
+.variant-overview.poker-overview { grid-template-columns: minmax(0, 1fr); }
+.poker-overview h2, .poker-overview p { margin-block: 6px; }
+.poker-player-panel { display: grid; gap: 14px; }
+.poker-slots { display: grid; grid-template-columns: minmax(0, 1fr); gap: 10px; }
+.poker-score-hands { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px; }
+.poker-slot, .poker-score-hands article { min-width: 0; padding: 10px; border: 1px solid #344159; border-radius: 10px; background: #101624; }
+.poker-slot h3 { display: flex; justify-content: space-between; gap: 8px; margin: 0 0 8px; font-size: 14px; }
+.poker-slot h3 span, .poker-next-hero small { color: #aebbd0; font-size: 12px; font-weight: 400; }
+.poker-slot .card-row { min-height: 72px; }
+.poker-slot .card { width: clamp(42px, 5vw, 58px); height: clamp(56px, 7vw, 76px); }
+.poker-bounty { font-size: 16px; font-weight: 800; }
+.poker-suit-cycle { width: min(190px, 100%); margin: 12px auto 0; }
+.poker-held-hand { display: grid; grid-template-columns: repeat(7, minmax(44px, 1fr)); gap: clamp(4px, 1vw, 12px); overflow-x: auto; padding: 30px 3px 8px; }
+.poker-held-hand .card { justify-self: center; width: clamp(44px, 6.5vw, 82px); height: clamp(58px, 8.5vw, 100px); }
+.poker-held-hand .card.chosen { outline: 3px solid #f0d484; outline-offset: 2px; transform: translateY(-4px); }
+.poker-score { margin-top: 12px; padding-top: 10px; border-top: 1px solid #344159; }
+.poker-score h3, .poker-score h4 { margin: 0 0 8px; }
+.poker-score-hands article { color: #c8d1df; }
+.poker-score-hands p { font-size: 13px; }
+.poker-score-hands strong { color: #f0d484; }
+.poker-constraint-failure { color: #ffd0ce; font-weight: 700; }
+.poker-next-hero { display: grid; gap: 5px; max-width: 320px; margin-block: 10px; }
+.poker-next-hero select { min-height: 38px; padding: 6px 10px; }
+.poker-duel-overview { display: grid; gap: 14px; width: min(100%, 1120px); margin-inline: auto; text-align: left; }
+.poker-duel-heading, .poker-duel-player-heading { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
+.poker-duel-heading h2, .poker-duel-heading p, .poker-duel-player-heading h3, .poker-duel-player-heading span { margin: 0; }
+.poker-duel-clock { color: #f0d484; font-size: 17px; }
+.poker-duel-summary { display: flex; align-items: baseline; gap: 8px 18px; flex-wrap: wrap; color: #c8d1df; }
+.poker-duel-summary p { margin: 0; }
+.poker-duel-players { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 14px; }
+.poker-duel-player, .poker-duel-held, .poker-duel-score, .poker-duel-log { min-width: 0; padding: 12px; border: 1px solid #344159; border-radius: 10px; background: #101624; }
+.poker-duel-player { display: grid; align-content: start; gap: 10px; }
+.poker-duel-player-heading span, .poker-duel-pile h4 span, .poker-duel-held h4 span { color: #aebbd0; font-size: 12px; }
+.poker-duel-piles { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 2fr); gap: 8px; }
+.poker-duel-pile { min-width: 0; padding: 8px; border: 1px solid #344159; border-radius: 8px; }
+.poker-duel-pile h4, .poker-duel-held h4 { display: flex; justify-content: space-between; gap: 8px; margin: 0 0 8px; font-size: 13px; }
+.poker-duel-pile .card { width: 42px; height: 56px; }
+.poker-duel-cards { display: flex; align-items: center; flex-wrap: wrap; gap: 6px; min-height: 58px; }
+.poker-duel-cards .card { width: clamp(36px, 4vw, 48px); height: clamp(48px, 5.3vw, 64px); }
+.poker-duel-table { display: grid; gap: 8px; }
+.poker-duel-table .poker-slot { padding: 8px; }
+.poker-duel-table .poker-slot h4 { display: flex; justify-content: space-between; margin: 0 0 6px; font-size: 13px; }
+.poker-duel-table .poker-slot h4 span { color: #aebbd0; font-weight: 400; }
+.poker-duel-held { padding: 9px; }
+.poker-duel-held .card.chosen { outline: 3px solid #f0d484; outline-offset: 2px; transform: translateY(-4px); }
+.poker-duel-score, .poker-duel-log { grid-column: 1 / -1; }
+.poker-duel-log ol, .poker-duel-result-log { margin-bottom: 0; }
+.poker-duel-final-scores { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; text-align: left; }
+.poker-duel-final-score { padding: 10px; border: 1px solid #344159; border-radius: 8px; }
+.poker-duel-final-score h3, .poker-duel-final-score p { margin: 4px 0; }
+.poker-duel-result-log { text-align: left; }
+@media (max-width: 760px) {
+  .poker-duel-players { grid-template-columns: minmax(0, 1fr); }
+  .poker-duel-score, .poker-duel-log { grid-column: auto; }
+}
+@media (max-width: 560px) {
+  .poker-duel-final-scores { grid-template-columns: minmax(0, 1fr); }
+}
+@media (max-width: 680px) {
+  .poker-score-hands { grid-template-columns: minmax(0, 1fr); }
+}
 .campaign-coach { display: flex; align-items: center; gap: 10px; margin: 8px 0 14px; color: #e5d08a; font-weight: 700; }
 .campaign-coach img { width: 52px; height: 52px; object-fit: cover; border: 2px solid #d7a629; border-radius: 8px; }
 

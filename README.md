@@ -133,11 +133,16 @@ Human-vs-Human mode uses a pass-screen prompt to hide hands during commitments
 and handoffs. Play Again starts a fresh game and randomizes which player is
 White.
 
-The UI offers Human vs Human and Human vs AI at Easy, Normal, or Hard. A mode
-can be preselected:
+Battle also offers **Poker Duel**, a randomly seeded standalone mirror match.
+Choose an Easy, Medium, or Hard CPU opponent, invite a friend, or use random
+matchmaking. Each player selects a hero; hands stay private, turns are timed,
+and the heroes' strongest modifiers are shared. Multiplayer games do not
+affect campaign progress or rewards.
+
+Human-vs-human battles are online only: connect through a friend invitation or
+random matchmaking. Human-vs-AI matches can be preselected:
 
 ```sh
-GOWORK=off go -C backend run ./cmd/prisoners-of-war --mode hvh
 GOWORK=off go -C backend run ./cmd/prisoners-of-war --mode easy
 GOWORK=off go -C backend run ./cmd/prisoners-of-war --mode normal
 GOWORK=off go -C backend run ./cmd/prisoners-of-war --mode hard
@@ -166,9 +171,10 @@ GOWORK=off go -C backend run ./cmd/prisoners-of-war --ui terminal
 GOWORK=off go -C backend run ./cmd/prisoners-of-war --ui terminal --mode hard
 ```
 
-The terminal starts with a progression menu for CPU games, local Ranked and
-friend matches, profile, heroes, campaigns, shop, skills, Camp Draws, and
-energy actions. See [campaigns](docs/campaigns.md) for the full
+The terminal starts with a progression menu for CPU games, Ranked best-of-three
+against the Hard AI, profile, heroes, campaigns, shop, skills, Camp Draws, and
+energy actions. Human-vs-human matches are available in the web UI through
+friend invitations or random matchmaking. See [campaigns](docs/campaigns.md) for the full
 mission list, scripted setups, progression rules, and rewards. The Shop offers
 chromas, Hero Boxes, and direct hero purchases.
 At commit, enter exactly three distinct hand numbers separated by spaces or

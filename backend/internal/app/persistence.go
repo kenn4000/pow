@@ -15,8 +15,10 @@ import (
 
 	"github.com/go-chi/chi/v5"
 	"prisonersofwar/internal/game"
+	"prisonersofwar/internal/ladder"
 	"prisonersofwar/internal/lootbox"
 	"prisonersofwar/internal/profile"
+	"prisonersofwar/internal/tugwar"
 )
 
 type sessionSnapshot struct {
@@ -25,6 +27,12 @@ type sessionSnapshot struct {
 	Variant             string
 	Puzzle              *puzzleSession
 	Abandon             *abandonSession
+	Rummy               *rummySession
+	Ladder              *ladder.LadderState
+	Poker               *pokerSession
+	PokerDuel           *pokerDuelGame
+	TugWar              *tugwar.Game
+	PokerDuelCPUReadyAt time.Time
 	WhitePlayer         int
 	Phase               string
 	Actor               int
@@ -56,9 +64,15 @@ func snapshotSession(s *webSession) *sessionSnapshot {
 	if s == nil {
 		return nil
 	}
+	var ladderState *ladder.LadderState
+	if s.ladder != nil {
+		state := s.ladder.State()
+		ladderState = &state
+	}
 	return &sessionSnapshot{
-		State: s.state, Mode: s.mode, Variant: s.variant, Puzzle: s.puzzle, Abandon: s.abandon,
-		WhitePlayer: s.whitePlayer, Phase: s.phase, Actor: s.actor, HandoffTarget: s.handoffTarget,
+		State: s.state, Mode: s.mode, Variant: s.variant, Puzzle: s.puzzle, Abandon: s.abandon, Rummy: s.rummy, Ladder: ladderState, Poker: s.poker, PokerDuel: s.pokerDuel, TugWar: s.tugWar,
+		PokerDuelCPUReadyAt: s.pokerDuelCPUReadyAt,
+		WhitePlayer:         s.whitePlayer, Phase: s.phase, Actor: s.actor, HandoffTarget: s.handoffTarget,
 		HandoffPhase: s.handoffPhase, Exchange: s.exchange, Attacker: s.attacker,
 		AttackIndex: s.attackIndex, AttackCard: s.attackCard, LastAttack: s.lastAttack,
 		LastDefense: s.lastDefense, LastOutcome: s.lastOutcome, HasLastBattle: s.hasLastBattle,
@@ -73,9 +87,25 @@ func (s *sessionSnapshot) restore() *webSession {
 	if s == nil {
 		return nil
 	}
+	var rummy *rummySession
+	if s.Rummy != nil {
+		restored := *s.Rummy
+		if len(restored.PreviousBuried) > 0 {
+			drawPile := make([]game.Card, 0, len(restored.PreviousBuried)+len(restored.DrawPile))
+			drawPile = append(drawPile, restored.PreviousBuried...)
+			drawPile = append(drawPile, restored.DrawPile...)
+			restored.DrawPile = drawPile
+			restored.PreviousBuried = nil
+		}
+		rummy = &restored
+	}
 	variant := s.Variant
 	if variant == "" {
 		variant = "main"
+	}
+	var ladderGame *ladder.LadderGame
+	if s.Ladder != nil {
+		ladderGame = ladder.Restore(*s.Ladder)
 	}
 	if s.Abandon != nil && s.Abandon.BoardID == "" {
 		s.Abandon.BoardID = "board-01"
@@ -88,8 +118,9 @@ func (s *sessionSnapshot) restore() *webSession {
 		s.Abandon.CategorySuits = [3]game.Suit{game.Blade, game.Fang, game.Shield}
 	}
 	return &webSession{
-		state: s.State, mode: s.Mode, variant: variant, puzzle: s.Puzzle, abandon: s.Abandon,
-		whitePlayer: s.WhitePlayer, phase: s.Phase, actor: s.Actor, handoffTarget: s.HandoffTarget,
+		state: s.State, mode: s.Mode, variant: variant, puzzle: s.Puzzle, abandon: s.Abandon, rummy: rummy, ladder: ladderGame, poker: s.Poker, pokerDuel: s.PokerDuel, tugWar: s.TugWar,
+		pokerDuelCPUReadyAt: s.PokerDuelCPUReadyAt,
+		whitePlayer:         s.WhitePlayer, phase: s.Phase, actor: s.Actor, handoffTarget: s.HandoffTarget,
 		handoffPhase: s.HandoffPhase, exchange: s.Exchange, attacker: s.Attacker,
 		attackIndex: s.AttackIndex, attackCard: s.AttackCard, lastAttack: s.LastAttack,
 		lastDefense: s.LastDefense, lastOutcome: s.LastOutcome, hasLastBattle: s.HasLastBattle,
@@ -295,7 +326,8 @@ func saveGame(ctx context.Context, tx *sql.Tx, userID string, snapshot playerSna
 
 func completedGameRecord(current *webServer) ([]byte, error) {
 	session := current.session
-	if session.variant == "puzzler" || session.variant == "abandon" {
+	if session.variant == "puzzler" || session.variant == "abandon" ||
+		session.variant == "rummy" || session.variant == "ladder" || session.variant == "poker" || session.variant == "poker-duel" {
 		return nil, nil
 	}
 	if session.campaign != nil && session.campaign.Replay {
@@ -311,6 +343,7 @@ func completedGameRecord(current *webServer) ([]byte, error) {
 func attachMatchRecordID(current *webServer, id string) {
 	if current.session == nil || current.session.phase != "gameover" ||
 		current.session.variant == "puzzler" || current.session.variant == "abandon" ||
+		current.session.variant == "rummy" || current.session.variant == "ladder" || current.session.variant == "poker" || current.session.variant == "poker-duel" ||
 		len(current.playerProfile.MatchHistory) == 0 {
 		return
 	}

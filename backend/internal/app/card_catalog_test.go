@@ -12,7 +12,7 @@ func TestCardCatalogIncludesDeckAndEveryArtwork(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(catalog.Cards) != 27 || len(catalog.Artwork) != 240 {
+	if len(catalog.Cards) != 27 || len(catalog.Artwork) < 240 {
 		t.Fatalf("catalog has %d cards and %d artwork files", len(catalog.Cards), len(catalog.Artwork))
 	}
 

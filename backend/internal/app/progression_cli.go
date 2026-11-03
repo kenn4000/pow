@@ -214,8 +214,6 @@ func (a *app) playMenu(p *profile.Profile, preferred mode) error {
 	fmt.Println("[3] Normal AI")
 	fmt.Println("[4] Hard AI")
 	fmt.Println("[5] Ranked best-of-three vs Hard AI")
-	fmt.Println("[6] Friend casual (local)")
-	fmt.Println("[7] Friend-ranked best-of-three (local)")
 	fmt.Println("[0] Back")
 	answer, err := a.ask("Choose a mode: ")
 	if err != nil {
@@ -238,10 +236,6 @@ func (a *app) playMenu(p *profile.Profile, preferred mode) error {
 		selectedMode, payoutMode = humanVsHard, economy.ModeCPUHard
 	case "5":
 		selectedMode, payoutMode, bestOfThree = humanVsHard, economy.ModeRanked, true
-	case "6":
-		selectedMode, payoutMode = humanVsHuman, economy.ModeFriendCasual
-	case "7":
-		selectedMode, payoutMode, bestOfThree = humanVsHuman, economy.ModeFriendRanked, true
 	default:
 		fmt.Println("Enter a listed mode number.")
 		return nil

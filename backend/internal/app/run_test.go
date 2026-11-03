@@ -57,6 +57,12 @@ func TestScriptedTerminalGamePreservesAllCards(t *testing.T) {
 	}
 }
 
+func TestParseModeRejectsHotSeatMode(t *testing.T) {
+	if _, err := parseMode("hvh"); err == nil {
+		t.Fatal("terminal mode parser accepted local human-vs-human play")
+	}
+}
+
 func TestHeroSimulatorCompletesGreedyMatch(t *testing.T) {
 	first, _ := heroes.ByID("warden")
 	second, _ := heroes.ByID("hunter")

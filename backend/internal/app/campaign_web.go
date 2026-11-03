@@ -56,6 +56,14 @@ func campaignMissionMetadata(mission campaigns.Mission) (string, string, int, in
 		if puzzle, ok := puzzleByID(mission.VariantID); ok {
 			return puzzle.Title, puzzle.Hint, puzzle.Target, puzzle.CardCount
 		}
+	case "poker":
+		if mission.PokerRules != nil {
+			description := mission.Hint
+			if mission.PokerRules.StreakCount == 0 {
+				description = fmt.Sprintf("%s Par: %d.", description, mission.PokerRules.Par)
+			}
+			return mission.Name, description, mission.PokerRules.Par, 0
+		}
 	}
 	return name, description, 0, 0
 }
@@ -228,6 +236,7 @@ func (s *webServer) prepareSpecialWebMission(p *profile.Profile, campaign campai
 
 	var puzzle *puzzleSession
 	var abandon *abandonSession
+	var poker *pokerSession
 	switch mission.Variant {
 	case "puzzler":
 		definition, exists := puzzleByID(mission.VariantID)
@@ -238,6 +247,15 @@ func (s *webServer) prepareSpecialWebMission(p *profile.Profile, campaign campai
 	case "abandon":
 		var err error
 		abandon, err = newAbandonSessionForBoard(playerHero, s.rng, mission.VariantID)
+		if err != nil {
+			return err
+		}
+	case "poker":
+		if mission.PokerRules == nil {
+			return errors.New("Poker mission rules are unavailable")
+		}
+		var err error
+		poker, err = newPokerSession(heroID, playerHero, *mission.PokerRules, s.rng)
 		if err != nil {
 			return err
 		}
@@ -260,10 +278,12 @@ func (s *webServer) prepareSpecialWebMission(p *profile.Profile, campaign campai
 	message, phase := "Choose an attacker.", "puzzle-pick"
 	if abandon != nil {
 		message, phase = "Choose the first board card.", "abandon-select"
+	} else if poker != nil {
+		message, phase = "Place cards into three poker hands or redraw one card.", "poker-play"
 	}
 	s.session = &webSession{
 		initialAchievements: achievementLevels(p),
-		mode:                "easy", variant: mission.Variant, puzzle: puzzle, abandon: abandon,
+		mode:                "easy", variant: mission.Variant, puzzle: puzzle, abandon: abandon, poker: poker,
 		phase: phase, actor: 0, winner: -1, playerHeroID: heroID, message: message,
 		campaign: &webCampaignContext{
 			ID: campaign.ID, Index: mission.Index, Name: mission.Name, Hint: mission.Hint,

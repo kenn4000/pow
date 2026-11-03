@@ -51,7 +51,7 @@ func Run() {
 	simDraftGames := flag.Int("sim-draft", 0, "run N opening-draft balance tests")
 	simCampDraws := flag.Int("sim-campdraw", 0, "run N headless Camp Draws and report reward statistics")
 	ui := flag.String("ui", "web", "user interface: web or terminal")
-	modeFlag := flag.String("mode", "", "game mode: hvh, easy, normal, or hard")
+	modeFlag := flag.String("mode", "", "game mode: easy, normal, or hard")
 	listen := flag.String("listen", "127.0.0.1:8080", "HTTP listen address")
 	noColor := flag.Bool("no-color", false, "disable ANSI suit colors")
 	dumpEconomy := flag.Bool("dump-economy", false, "print economy, skill, chroma, and Camp Draw configuration as JSON")
@@ -180,8 +180,6 @@ func parseMode(value string) (mode, error) {
 	switch strings.ToLower(value) {
 	case "":
 		return -1, nil
-	case "hvh":
-		return humanVsHuman, nil
 	case "easy":
 		return humanVsEasy, nil
 	case "normal":
@@ -189,32 +187,29 @@ func parseMode(value string) (mode, error) {
 	case "hard":
 		return humanVsHard, nil
 	default:
-		return -1, fmt.Errorf("unknown mode %q; use hvh, easy, normal, or hard", value)
+		return -1, fmt.Errorf("unknown mode %q; use easy, normal, or hard", value)
 	}
 }
 
 func (a *app) chooseMode() (mode, error) {
 	fmt.Println("Prisoners of War")
-	fmt.Println("1) Human vs Human")
-	fmt.Println("2) Human vs AI (Easy)")
-	fmt.Println("3) Human vs AI (Normal)")
-	fmt.Println("4) Human vs AI (Hard)")
+	fmt.Println("1) Human vs AI (Easy)")
+	fmt.Println("2) Human vs AI (Normal)")
+	fmt.Println("3) Human vs AI (Hard)")
 	for {
-		answer, err := a.ask("Choose a mode (1-4): ")
+		answer, err := a.ask("Choose a mode (1-3): ")
 		if err != nil {
 			return 0, err
 		}
 		switch strings.TrimSpace(answer) {
 		case "1":
-			return humanVsHuman, nil
-		case "2":
 			return humanVsEasy, nil
-		case "3":
+		case "2":
 			return humanVsNormal, nil
-		case "4":
+		case "3":
 			return humanVsHard, nil
 		default:
-			fmt.Println("Enter 1, 2, 3, or 4.")
+			fmt.Println("Enter 1, 2, or 3.")
 		}
 	}
 }

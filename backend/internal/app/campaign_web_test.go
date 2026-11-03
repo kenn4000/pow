@@ -277,7 +277,7 @@ func TestAbandonCampaignLaunchUsesCatalogBoardAndPersistsCampaignContext(t *test
 	}
 }
 
-func TestStandaloneSpecialVariantDoesNotAdvanceCampaign(t *testing.T) {
+func TestStandalonePuzzlerRequiresCampaignMission(t *testing.T) {
 	web := campaignTestServer(t)
 	body, _ := json.Marshal(map[string]any{
 		"mode": "easy", "variant": "puzzler", "puzzleId": "gp6_balanced",
@@ -285,24 +285,9 @@ func TestStandaloneSpecialVariantDoesNotAdvanceCampaign(t *testing.T) {
 	})
 	response := httptest.NewRecorder()
 	web.handleNewGame(response, httptest.NewRequest(http.MethodPost, "/api/new", bytes.NewReader(body)))
-	if response.Code != http.StatusOK || web.session.campaign != nil {
-		t.Fatalf("standalone puzzle context/status = %+v / %d: %s",
-			web.session, response.Code, response.Body.String())
-	}
-	hero, _ := heroes.ByID("recruit")
-	web.session.puzzle = newPuzzleSession(puzzleDefinition{
-		ID: "gp6_balanced", Cards: []game.Card{
-			{Suit: game.Shield, Face: 2}, {Suit: game.Shield, Face: 2},
-		},
-		Par: 0, Direction: "low",
-	}, hero)
-	for _, index := range []int{0, 1} {
-		if err := web.applyAction(actionRequest{Action: "puzzle-pick", Index: index}); err != nil {
-			t.Fatal(err)
-		}
-	}
-	if missionIsComplete(web.playerProfile.Campaigns["puzzler"], 1) {
-		t.Fatal("standalone puzzle advanced campaign progress")
+	if response.Code != http.StatusBadRequest || web.session != nil {
+		t.Fatalf("standalone puzzler status/session = %d / %+v: %s",
+			response.Code, web.session, response.Body.String())
 	}
 }
 

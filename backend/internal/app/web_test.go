@@ -10,8 +10,10 @@ import (
 	"testing"
 	"time"
 
+	"prisonersofwar/internal/campaigns"
 	"prisonersofwar/internal/energy"
 	"prisonersofwar/internal/game"
+	"prisonersofwar/internal/heroes"
 	"prisonersofwar/internal/profile"
 )
 
@@ -30,9 +32,20 @@ func TestWebGameFlowRedactsHandsAndAutoPlaysThirdBattle(t *testing.T) {
 	server := httptest.NewServer(mux)
 	defer server.Close()
 
-	view := sendWebRequest(t, server.Client(), server.URL+"/api/new", map[string]any{
-		"mode": "hvh", "playerHeroId": "warden", "opponentHeroId": "hunter",
-	})
+	playerHero, _ := heroes.ByID("warden")
+	opponentHero, _ := heroes.ByID("hunter")
+	modifiers, err := heroes.GameModifiersFor(playerHero, opponentHero, web.rng)
+	if err != nil {
+		t.Fatal(err)
+	}
+	state, err := game.NewDraftGameWithDraftMode(web.rng, modifiers, heroes.DraftMode(playerHero, opponentHero))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := web.startWebGameSession(state, "hvh", playerHero.ID, opponentHero.ID); err != nil {
+		t.Fatal(err)
+	}
+	view := web.view()
 	if !view.Started || view.Phase != "handoff" {
 		t.Fatalf("new game state = started:%t phase:%q", view.Started, view.Phase)
 	}
@@ -250,22 +263,50 @@ func TestAwardWebMatchMarksWithoutQuartermaster(t *testing.T) {
 }
 
 func TestWebHeroSelectionRejectsLockedHeroes(t *testing.T) {
-	web := &webServer{rng: rand.New(rand.NewSource(55))}
+	playerProfile, err := profile.New(time.Now())
+	if err != nil {
+		t.Fatal(err)
+	}
+	playerProfile.UnlockedHeroes = []string{"recruit"}
+	web := &webServer{rng: rand.New(rand.NewSource(55)), playerProfile: playerProfile}
 	request := httptest.NewRequest(http.MethodPost, "/api/new", bytes.NewBufferString(
-		`{"mode":"hvh","playerHeroId":"hunter","opponentHeroId":"hater"}`,
+		`{"mode":"easy","playerHeroId":"hunter"}`,
 	))
 	response := httptest.NewRecorder()
 	web.handleNewGame(response, request)
 	if response.Code != http.StatusBadRequest {
 		t.Fatalf("locked hero request status = %d, want %d", response.Code, http.StatusBadRequest)
 	}
+	if !bytes.Contains(response.Body.Bytes(), []byte("not unlocked")) {
+		t.Fatalf("locked hero error = %s", response.Body.String())
+	}
 	if web.session != nil {
 		t.Fatal("invalid hero selection started a game")
 	}
 }
 
+func TestNewGameRejectsHotSeatMode(t *testing.T) {
+	for _, variant := range []string{"main", "fog", "rummy", "ladder", "poker-duel"} {
+		t.Run(variant, func(t *testing.T) {
+			web := &webServer{rng: rand.New(rand.NewSource(56)), defaultMode: "easy"}
+			request := httptest.NewRequest(http.MethodPost, "/api/new", bytes.NewBufferString(
+				`{"mode":"hvh","variant":"`+variant+`","playerHeroId":"recruit"}`,
+			))
+			response := httptest.NewRecorder()
+			web.handleNewGame(response, request)
+			if response.Code != http.StatusBadRequest ||
+				!bytes.Contains(response.Body.Bytes(), []byte("online battles")) {
+				t.Fatalf("hot-seat mode status/body = %d / %s", response.Code, response.Body.String())
+			}
+			if web.session != nil {
+				t.Fatal("hot-seat request started a local game")
+			}
+		})
+	}
+}
+
 func TestSpecialVariantsRequireCampaignMission(t *testing.T) {
-	for _, variant := range []string{"puzzler", "abandon"} {
+	for _, variant := range []string{"puzzler", "abandon", "poker"} {
 		t.Run(variant, func(t *testing.T) {
 			web := &webServer{rng: rand.New(rand.NewSource(57)), defaultMode: "easy"}
 			request := httptest.NewRequest(http.MethodPost, "/api/new", bytes.NewBufferString(
@@ -684,7 +725,7 @@ func TestWebProfileCampaignAndHistoryPagesUseProfileData(t *testing.T) {
 	if err := json.Unmarshal(campaignResponse.Body.Bytes(), &campaignPage); err != nil {
 		t.Fatal(err)
 	}
-	if campaignResponse.Code != http.StatusOK || len(campaignPage.Campaigns) != 14 {
+	if campaignResponse.Code != http.StatusOK || len(campaignPage.Campaigns) != len(campaigns.All()) {
 		t.Fatalf("campaign page status=%d campaigns=%d",
 			campaignResponse.Code, len(campaignPage.Campaigns))
 	}

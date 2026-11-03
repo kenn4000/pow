@@ -60,6 +60,75 @@ Each mission awards 400 Marks. Completing Advanced Training awards 2,000
 additional Marks, one Hero Box, one Skill Tree Point, and
 `badge_advanced_training`. Total campaign Marks: 6,000.
 
+## Ladder Campaign
+
+**ID:** `ladder`
+
+**Status:** Coming Soon
+
+**Variant:** Ladder
+
+The campaign is registered as a disabled placeholder until its missions are
+created. Standalone Ladder matches are available from the multiplayer mode
+selector and do not advance campaign progress.
+
+## Poker Campaign
+
+**ID:** `poker`
+**Prerequisite:** None
+**Description:** Build and score three five-card hands with one hero.
+
+The campaign's 15 missions are solo and campaign-only. Each mission attempt
+chooses one unlocked hero. The game copies the hero's Bounty, Favor, Shift, and
+Draft values into its own state; it never changes the hero object. Every game
+randomly selects a bounty suit, including every game in Mission 12.
+
+Draft sets the minimum card value in the deck: `2 - Draft`. Draft -1 removes
+ones and twos, Draft 0 removes ones, and Draft +1 keeps the full 1-9 deck. The
+player receives six cards. Each turn, place one card into any legal one of
+three five-card slots, or discard one card and draw one. The three hand sizes
+must always differ by at most one; after either action, draw back up to six
+while the draw pile has cards. The game ends when all slots are full, the
+player has no legal placement after the draw pile empties, or 30 turns have
+passed. A slot with fewer than five cards is void and scores zero.
+
+| # | Mission | Constraint | Par |
+|---|---|---|---:|
+| 1 | First Hand | — | 160 |
+| 2 | The Crown | — | 175 |
+| 3 | Find Your Suit | — | 185 |
+| 4 | Nine Storm | — | 195 |
+| 5 | The Long Game | — | 200 |
+| 6 | Pure Suit | Straights and flushes score as base zero | 175 |
+| 7 | Gorilla's Game | Every hand must contain a 9; bounty base 2 | 195 |
+| 8 | Silent Nines | No completed hand may contain a 9 | 165 |
+| 9 | The Bounty Hunter | Every hand must contain the bounty suit; bounty base 3 | 200 |
+| 10 | Bodyb's Table | Bounty base 3 | 205 |
+| 11 | Doubled Down | Nine base 8; bounty base 3 | 200 |
+| 12 | The Marathon | Three consecutive games at 180+, same hero |
+| 13 | Hater's Crown | Every hand must contain a 9; bounty base 3 | 210 |
+| 14 | The Wall | Straights and flushes score as base zero | 205 |
+| 15 | The Crown | — | 235 |
+
+Hand base scores are: straight flush 100, three of a kind 60, straight 50,
+flush 40, a pair 20, and high card 0. Unlisted pair patterns use the listed
+pair or three-of-a-kind category; four of a kind and full house have no
+separate category. A hand containing a 9 adds `nine_base + 2 × Shift`. A hand
+with at least `2 - Favor` bounty-suit cards adds
+`max(0, bounty_base + Bounty)`. A zero-base completed hand loses 10 points.
+If all three hands have a base score of at least 20, add a 15-point table
+bonus. Mission constraints are checked before scoring; a failed constraint
+fails the attempt without reporting a score.
+
+When all three hands are complete, add 15 points if Hand A's score is strictly
+higher than both other hands, and add 5 points if Hand C's score is strictly
+lower than both other hands. Neither bonus applies if any hand is void.
+
+Mission 12 repeats games within one attempt. A score of at least 180 advances
+the streak; a lower score resets it. Switching heroes also resets the streak.
+The bounty suit is rerolled for every game. Each mission awards 400 Marks on
+first completion; practice replays do not award progression rewards.
+
 ## Mission behavior
 
 - `SingleRound` missions deal one three-exchange round. `ThreeRound` missions

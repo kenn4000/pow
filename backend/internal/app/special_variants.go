@@ -682,7 +682,7 @@ func specialVariant(variant string) (string, error) {
 		return "main", nil
 	}
 	switch variant {
-	case "main", "fog", "puzzler", "abandon":
+	case "main", "fog", "puzzler", "abandon", "rummy", "ladder", "poker", "poker-duel", "tug-war":
 		return variant, nil
 	default:
 		return "", fmt.Errorf("unknown variant %q", variant)

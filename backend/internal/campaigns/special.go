@@ -38,6 +38,17 @@ func puzzlerCampaign() Campaign {
 	}
 }
 
+func ladderCampaign() Campaign {
+	return Campaign{
+		ID: "ladder", Name: "Ladder Campaign", Description: "Coming Soon",
+		Variant: "ladder", Status: "Coming Soon",
+		Missions: []Mission{{
+			Index: 1, Name: "Coming Soon", Hint: "Coming Soon",
+			Status: "Coming Soon", Disabled: true,
+		}},
+	}
+}
+
 func heroCampaigns() []Campaign {
 	heroes := []struct {
 		id   string

@@ -64,6 +64,17 @@ func (s *webServer) applicationRoutes(r chi.Router) {
 				social.Post("/unblock", s.handleSocialUnblock)
 				social.Post("/messages", s.handleSocialMessage)
 			})
+			protected.Route("/puzzle-battle", func(puzzleBattle chi.Router) {
+				puzzleBattle.Get("/", s.handlePuzzleBattle)
+				puzzleBattle.Post("/", s.handlePuzzleBattle)
+				puzzleBattle.Get("/history", s.handlePuzzleBattleHistory)
+				puzzleBattle.Post("/{matchID}/action", s.handlePuzzleBattleAction)
+			})
+			protected.Route("/online-battle", func(onlineBattle chi.Router) {
+				onlineBattle.Get("/", s.handleOnlineBattle)
+				onlineBattle.Post("/", s.handleOnlineBattle)
+				onlineBattle.Post("/{matchID}/action", s.handleOnlineBattleAction)
+			})
 			protected.Route("/admin", func(admin chi.Router) {
 				admin.Use(requireAdmin)
 				admin.Get("/cards", s.handleCardCatalog)
