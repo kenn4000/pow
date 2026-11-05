@@ -256,6 +256,7 @@ func (s *webServer) completeRummyTurn() error {
 			session.message = "The Rummy game is a draw."
 		}
 		session.phase = "gameover"
+		s.awardLocalMultiplayerPayout(rummy.Results[0].Total)
 		return nil
 	}
 

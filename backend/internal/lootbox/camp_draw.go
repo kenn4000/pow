@@ -4,8 +4,10 @@ import (
 	"errors"
 	"fmt"
 	"math/rand"
+	"time"
 
 	"prisonersofwar/internal/catalog"
+	"prisonersofwar/internal/energy"
 	"prisonersofwar/internal/game"
 	"prisonersofwar/internal/profile"
 	"prisonersofwar/internal/skills"
@@ -15,6 +17,7 @@ type BoxOpenResult struct {
 	BoxType        string `json:"box_type"`
 	Marks          int64  `json:"marks,omitempty"`
 	Crowns         int64  `json:"crowns,omitempty"`
+	Energy         int    `json:"energy,omitempty"`
 	ChromaID       string `json:"chroma_id,omitempty"`
 	ChromaRarity   string `json:"chroma_rarity,omitempty"`
 	FallbackReason string `json:"fallback_reason,omitempty"`
@@ -30,6 +33,7 @@ type ExchangeResult struct {
 
 type CampDrawResult struct {
 	BoxType    string           `json:"box_type"`
+	Rerolled   bool             `json:"rerolled,omitempty"`
 	PlayerWins int              `json:"player_wins"`
 	Exchanges  []ExchangeResult `json:"exchanges"`
 	Reward     BoxOpenResult    `json:"reward"`
@@ -111,11 +115,12 @@ func BeginCampDraw(p *profile.Profile, rng *rand.Rand) (*CampDrawSession, error)
 	}
 	deck := game.NewDeck()
 	game.Shuffle(deck, rng)
-	playerPool := append([]game.Card(nil), deck[:3]...)
+	playerHandSize := 3 + skills.AggregateBonuses(p).CampDrawExtraCards
+	playerPool := append([]game.Card(nil), deck[:playerHandSize]...)
 	return &CampDrawSession{
 		startingHand: append([]game.Card(nil), playerPool...),
 		playerPool:   playerPool,
-		cpuPool:      append([]game.Card(nil), deck[3:3+CPUHandSize]...),
+		cpuPool:      append([]game.Card(nil), deck[playerHandSize:playerHandSize+CPUHandSize]...),
 		exchanges:    make([]ExchangeResult, 0, 3),
 	}, nil
 }
@@ -223,13 +228,50 @@ func (s *CampDrawSession) Finish(p *profile.Profile, rng *rand.Rand, ui CampDraw
 	}
 	result.BoxType = boxTypeForWins(result.PlayerWins)
 	result.Reward = RollBox(result.BoxType, p, rng)
-	applyBoxReward(p, result.Reward)
+	if skills.AggregateBonuses(p).CampDrawReroll {
+		reroll := RollBox(result.BoxType, p, rng)
+		if higherRankedReward(reroll, result.Reward) {
+			result.Reward = reroll
+			result.Rerolled = true
+		}
+	}
+	if err := applyBoxReward(p, result.Reward); err != nil {
+		return CampDrawResult{}, err
+	}
 	p.DrawsAvailable--
 	s.finished = true
 	if ui != nil {
 		ui.ShowBoxResult(result.BoxType, result.Reward)
 	}
 	return result, nil
+}
+
+func higherRankedReward(candidate, current BoxOpenResult) bool {
+	candidateRarity := rarityRank(candidate.ChromaRarity)
+	currentRarity := rarityRank(current.ChromaRarity)
+	if candidateRarity != currentRarity {
+		return candidateRarity > currentRarity
+	}
+	candidateValue := candidate.Marks + candidate.Crowns*20 + int64(candidate.Energy)*500
+	currentValue := current.Marks + current.Crowns*20 + int64(current.Energy)*500
+	return candidateValue > currentValue
+}
+
+func rarityRank(rarity string) int {
+	switch rarity {
+	case "common":
+		return 1
+	case "uncommon":
+		return 2
+	case "rare":
+		return 3
+	case "epic":
+		return 4
+	case "seasonal", "legendary", "super-rare", "seasonal_or_premium":
+		return 5
+	default:
+		return 0
+	}
 }
 
 func OpenCampDraw(p *profile.Profile, rng *rand.Rand, ui CampDrawUI) (CampDrawResult, error) {
@@ -298,7 +340,6 @@ func RollBox(boxType string, p *profile.Profile, rng *rand.Rand) BoxOpenResult {
 		result.FallbackReason = err.Error()
 		return result
 	}
-	table = adjustForLuckyFind(table, p)
 	totalWeight := 0
 	for _, prize := range table {
 		totalWeight += prize.Weight
@@ -318,12 +359,20 @@ func RollBox(boxType string, p *profile.Profile, rng *rand.Rand) BoxOpenResult {
 			result.Marks = selected.Amount
 		case PrizeCrowns:
 			result.Crowns = selected.Amount
+		case PrizeEnergy:
+			result.Energy = int(selected.Amount)
 		}
+		result.Crowns += selected.BonusCrowns
 		return result
 	}
 
 	chroma, fallback := rollChroma(selected.Rarity, p, rng)
 	if chroma != nil {
+		if p.OwnedChromas[chroma.ID] {
+			result.Marks = chroma.Cost
+			result.FallbackReason = "Owned skin converted to Marks"
+			return result
+		}
 		result.ChromaID = chroma.ID
 		result.ChromaRarity = chroma.Rarity
 		return result
@@ -333,63 +382,35 @@ func RollBox(boxType string, p *profile.Profile, rng *rand.Rand) BoxOpenResult {
 	return result
 }
 
-func adjustForLuckyFind(table []LootPrize, p *profile.Profile) []LootPrize {
-	result := append([]LootPrize(nil), table...)
-	if skills.AggregateBonuses(p).RareRewardPercent == 0 {
-		return result
-	}
-	rareIndex, currencyIndex := -1, -1
-	for index, prize := range result {
-		if prize.Type == PrizeChroma && prize.Rarity == "rare" {
-			rareIndex = index
-		}
-		if prize.Type == PrizeMarks || prize.Type == PrizeCrowns {
-			if currencyIndex < 0 || prize.Amount > result[currencyIndex].Amount {
-				currencyIndex = index
-			}
-		}
-	}
-	if rareIndex < 0 || currencyIndex < 0 {
-		return result
-	}
-	shift := 10
-	if result[currencyIndex].Weight < shift {
-		shift = result[currencyIndex].Weight
-	}
-	result[currencyIndex].Weight -= shift
-	result[rareIndex].Weight += shift
-	return result
-}
-
-func rollChroma(rarity string, p *profile.Profile, rng *rand.Rand) (*catalog.Chroma, string) {
+func rollChroma(rarity string, _ *profile.Profile, rng *rand.Rand) (*catalog.Chroma, string) {
 	matches := chromasForRarity(rarity)
 	if len(matches) == 0 {
 		return nil, "no chromas exist at this rarity"
 	}
 	first := matches[rng.Intn(len(matches))]
-	if !skills.AggregateBonuses(p).Curator || !p.OwnedChromas[first.ID] {
-		return &first, ""
-	}
-	second := matches[rng.Intn(len(matches))]
-	if !p.OwnedChromas[second.ID] {
-		return &second, ""
-	}
-	return nil, "Curator rerolled an owned chroma twice"
+	return &first, ""
 }
 
 func chromasForRarity(rarity string) []catalog.Chroma {
 	var matches []catalog.Chroma
 	for _, chroma := range catalog.AllChromas() {
-		if chroma.Rarity == rarity {
+		if chroma.Rarity == rarity ||
+			(rarity == "seasonal_or_premium" &&
+				(chroma.Rarity == "seasonal" || chroma.Rarity == "legendary" || chroma.Rarity == "super-rare")) {
 			matches = append(matches, chroma)
 		}
 	}
 	return matches
 }
 
-func applyBoxReward(p *profile.Profile, reward BoxOpenResult) {
+func applyBoxReward(p *profile.Profile, reward BoxOpenResult) error {
 	p.Marks += reward.Marks
 	p.Crowns += reward.Crowns
+	if reward.Energy > 0 {
+		if err := energy.Grant(p, reward.Energy, time.Now()); err != nil {
+			return err
+		}
+	}
 	if reward.ChromaID != "" {
 		if p.OwnedChromas == nil {
 			p.OwnedChromas = make(map[string]bool)
@@ -400,6 +421,7 @@ func applyBoxReward(p *profile.Profile, reward BoxOpenResult) {
 		p.OwnedChromas[reward.ChromaID] = true
 		p.SeenChromas[reward.ChromaID] = false
 	}
+	return nil
 }
 
 func OpenPendingBox(p *profile.Profile, boxType string, rng *rand.Rand) (BoxOpenResult, error) {
@@ -420,7 +442,9 @@ func OpenPendingBox(p *profile.Profile, boxType string, rng *rand.Rand) (BoxOpen
 		return BoxOpenResult{}, fmt.Errorf("roll %s box: %s", boxType, reward.FallbackReason)
 	}
 	p.PendingBoxes[boxType]--
-	applyBoxReward(p, reward)
+	if err := applyBoxReward(p, reward); err != nil {
+		return BoxOpenResult{}, err
+	}
 	return reward, nil
 }
 

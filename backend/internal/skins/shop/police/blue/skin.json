@@ -1,6 +1,7 @@
 {
   "id": "police-blue",
   "displayName": "Police (blue)",
+  "rarityRank": 0,
   "hexColor": "#0C182E",
   "price": 800,
   "currency": "crowns"

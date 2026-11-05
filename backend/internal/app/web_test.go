@@ -228,6 +228,22 @@ func TestWebSkillBranchIconsAreServed(t *testing.T) {
 	}
 }
 
+func TestWebSkillTreeBranchIconsAreServed(t *testing.T) {
+	web := &webServer{}
+	for _, name := range []string{
+		"branch_daily.png", "branch_multi.png", "branch_general.png",
+		"branch_energy.png", "branch_chest.png", "branch_deck.png",
+	} {
+		request := httptest.NewRequest(http.MethodGet, "/skins/icons/"+name, nil)
+		response := httptest.NewRecorder()
+		web.handleSkinAsset(response, request)
+		if response.Code != http.StatusOK || response.Header().Get("Content-Type") != "image/png" || response.Body.Len() == 0 {
+			t.Errorf("branch icon %q status=%d content-type=%q body-size=%d", name, response.Code,
+				response.Header().Get("Content-Type"), response.Body.Len())
+		}
+	}
+}
+
 func TestAwardWebMatchMarksAppliesWinAndQuartermasterMultipliers(t *testing.T) {
 	p, err := profile.New(time.Now())
 	if err != nil {
@@ -236,15 +252,21 @@ func TestAwardWebMatchMarksAppliesWinAndQuartermasterMultipliers(t *testing.T) {
 	p.Marks = 250
 	p.SkillNodes["quartermaster"] = true
 
-	win := awardWebMatchMarks(p, 20, true)
-	if win.BaseMarks != 70 || win.WinMultiplier != 3 || win.SkillBonusPct != 10 ||
-		win.TotalMarks != 231 || p.Marks != 481 {
+	win, err := awardWebMultiplayerPayout(p, "main", 20, true, false, true, "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if win.BaseMarks != 360 || win.SkillBonusPct != 10 ||
+		win.TotalMarks != 396 || win.TotalCrowns != 19 || p.Marks != 646 {
 		t.Fatalf("win payout/profile = %+v / %d", win, p.Marks)
 	}
 
-	loss := awardWebMatchMarks(p, 20, false)
-	if loss.BaseMarks != 70 || loss.WinMultiplier != 1 || loss.SkillBonusPct != 10 ||
-		loss.TotalMarks != 77 || p.Marks != 558 {
+	loss, err := awardWebMultiplayerPayout(p, "main", 20, false, false, false, "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if loss.BaseMarks != 120 || loss.SkillBonusPct != 10 ||
+		loss.TotalMarks != 132 || p.Marks != 778 {
 		t.Fatalf("loss payout/profile = %+v / %d", loss, p.Marks)
 	}
 }
@@ -255,9 +277,12 @@ func TestAwardWebMatchMarksWithoutQuartermaster(t *testing.T) {
 		t.Fatal(err)
 	}
 	p.Marks = 50
-	payout := awardWebMatchMarks(p, 17, true)
-	if payout.BaseMarks != 67 || payout.WinMultiplier != 3 ||
-		payout.SkillBonusPct != 0 || payout.TotalMarks != 201 || p.Marks != 251 {
+	payout, err := awardWebMultiplayerPayout(p, "main", 17, true, false, true, "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if payout.BaseMarks != 351 ||
+		payout.SkillBonusPct != 0 || payout.TotalMarks != 351 || payout.TotalCrowns != 19 || p.Marks != 401 {
 		t.Fatalf("payout/profile = %+v / %d", payout, p.Marks)
 	}
 }
@@ -622,16 +647,22 @@ func TestShopBoxPurchasesChargeCurrencyAndGrantInventory(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	p.Marks = 5000
-	p.Crowns = 2000
+	p.Marks = 9500
+	p.Crowns = 25
 	web := &webServer{}
 
-	for _, boxType := range []string{"wooden", "silver", "hero", "gold"} {
-		if _, err := web.applyShopAction(p, actionRequest{Action: "buy-box", BoxType: boxType}); err != nil {
-			t.Fatalf("buy %s box: %v", boxType, err)
+	purchases := []actionRequest{
+		{Action: "buy-box", BoxType: "wooden", Payment: "marks"},
+		{Action: "buy-box", BoxType: "silver", Payment: "crowns"},
+		{Action: "buy-box", BoxType: "hero", Payment: "marks"},
+		{Action: "buy-box", BoxType: "gold", Payment: "marks"},
+	}
+	for _, purchase := range purchases {
+		if _, err := web.applyShopAction(p, purchase); err != nil {
+			t.Fatalf("buy %s box: %v", purchase.BoxType, err)
 		}
 	}
-	if p.Marks != 2000 || p.Crowns != 1000 ||
+	if p.Marks != 0 || p.Crowns != 0 ||
 		p.PendingBoxes["wooden"] != 1 || p.PendingBoxes["silver"] != 1 ||
 		p.PendingBoxes["gold"] != 1 || p.HeroBoxesAvailable != 1 {
 		t.Fatalf("box purchase inventory = marks:%d crowns:%d boxes:%v hero boxes:%d",
@@ -642,25 +673,101 @@ func TestShopBoxPurchasesChargeCurrencyAndGrantInventory(t *testing.T) {
 		t.Fatalf("shop returned %d box offers, want 4", len(offers))
 	}
 	wantOffers := []webShopBoxOffer{
-		{Type: "wooden", Currency: "marks", Cost: 1000, Available: 1},
-		{Type: "silver", Currency: "marks", Cost: 1000, Available: 1},
-		{Type: "hero", Currency: "marks", Cost: 1000, Available: 1},
-		{Type: "gold", Currency: "crowns", Cost: 1000, Available: 1},
+		{Type: "wooden", MarksCost: 300, CrownsCost: 13, Available: 1},
+		{Type: "silver", MarksCost: 600, CrownsCost: 25, Available: 1},
+		{Type: "hero", MarksCost: heroes.HeroBoxMarksCost, Available: 1},
+		{Type: "gold", MarksCost: 1200, CrownsCost: 50, Available: 1},
 	}
 	for index, offer := range offers {
 		want := wantOffers[index]
-		if offer.Type != want.Type || offer.Currency != want.Currency ||
-			offer.Cost != want.Cost || offer.Available != want.Available {
+		if offer.Type != want.Type || offer.MarksCost != want.MarksCost ||
+			offer.CrownsCost != want.CrownsCost || offer.Available != want.Available {
 			t.Errorf("box offer %d = %+v, want %+v", index, offer, want)
 		}
 	}
 
-	p.Marks = 999
-	if _, err := web.applyShopAction(p, actionRequest{Action: "buy-box", BoxType: "wooden"}); err == nil {
+	p.Marks = 299
+	if _, err := web.applyShopAction(p, actionRequest{Action: "buy-box", BoxType: "wooden", Payment: "marks"}); err == nil {
 		t.Fatal("wooden box purchase succeeded without enough Marks")
 	}
-	if p.Marks != 999 || p.PendingBoxes["wooden"] != 1 {
+	if p.Marks != 299 || p.PendingBoxes["wooden"] != 1 {
 		t.Fatalf("failed purchase changed profile: marks:%d wooden:%d", p.Marks, p.PendingBoxes["wooden"])
+	}
+
+	p.Marks = 0
+	p.Crowns = 63
+	for _, purchase := range []actionRequest{
+		{Action: "buy-box", BoxType: "wooden", Payment: "crowns"},
+		{Action: "buy-box", BoxType: "gold", Payment: "crowns"},
+	} {
+		if _, err := web.applyShopAction(p, purchase); err != nil {
+			t.Fatalf("buy %s box with Crowns: %v", purchase.BoxType, err)
+		}
+	}
+	if p.Crowns != 0 || p.PendingBoxes["wooden"] != 2 || p.PendingBoxes["gold"] != 2 {
+		t.Fatalf("Crown box purchases left crowns:%d boxes:%v", p.Crowns, p.PendingBoxes)
+	}
+}
+
+func TestShopEnergyRechargeOptionsAndPurchases(t *testing.T) {
+	p, err := profile.New(time.Now())
+	if err != nil {
+		t.Fatal(err)
+	}
+	p.Energy = 0
+	p.EnergyUpdatedAt = time.Now()
+	p.Crowns = 225
+	web := &webServer{}
+	page := web.shopPage(p)
+	if len(page.EnergyOffers) != 2 ||
+		page.EnergyOffers[0] != (webShopEnergyOffer{Amount: 1, MarksCost: 500, CrownsCost: 25}) ||
+		page.EnergyOffers[1] != (webShopEnergyOffer{Amount: 10, MarksCost: 4500, CrownsCost: 225}) {
+		t.Fatalf("energy offers = %+v", page.EnergyOffers)
+	}
+	if _, err := web.applyShopAction(p, actionRequest{
+		Action: "buy-energy", Amount: 10, Payment: "crowns",
+	}); err != nil {
+		t.Fatal(err)
+	}
+	if p.Energy != p.MaxEnergy || p.Crowns != 0 {
+		t.Fatalf("energy purchase state: energy=%d/%d crowns=%d", p.Energy, p.MaxEnergy, p.Crowns)
+	}
+	if _, err := web.applyShopAction(p, actionRequest{
+		Action: "buy-energy", Amount: 1, Payment: "marks",
+	}); err == nil {
+		t.Fatal("energy purchase at max capacity succeeded")
+	}
+}
+
+func TestShopListsTieredHeroCrownsPrices(t *testing.T) {
+	p, err := profile.New(time.Now())
+	if err != nil {
+		t.Fatal(err)
+	}
+	p.Crowns = 400
+	page := (&webServer{}).shopPage(p)
+	want := map[string]struct {
+		price  int64
+		canBuy bool
+	}{
+		"warden":    {300, true},
+		"treasurer": {400, true},
+		"hater":     {500, false},
+		"recruit":   {0, false},
+	}
+	for _, item := range page.Heroes {
+		expected, ok := want[item.Hero.ID]
+		if !ok {
+			continue
+		}
+		if item.Price != expected.price || item.CanBuy != expected.canBuy {
+			t.Errorf("%s shop item = price %d, canBuy %t; want price %d, canBuy %t",
+				item.Hero.ID, item.Price, item.CanBuy, expected.price, expected.canBuy)
+		}
+		delete(want, item.Hero.ID)
+	}
+	if len(want) != 0 {
+		t.Fatalf("shop omitted hero prices for %v", want)
 	}
 }
 

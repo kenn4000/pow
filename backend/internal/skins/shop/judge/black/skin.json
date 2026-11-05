@@ -1,6 +1,7 @@
 {
   "id": "judge-black",
   "displayName": "Judges (black)",
+  "rarityRank": 0,
   "hexColor": "#5B5C5E",
   "price": 800,
   "currency": "crowns"

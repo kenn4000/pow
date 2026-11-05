@@ -1,6 +1,7 @@
 {
   "id": "goblin-purple",
   "displayName": "Goblin (purple)",
+  "rarityRank": 0,
   "hexColor": "#971EE3",
   "price": 900,
   "currency": "marks"

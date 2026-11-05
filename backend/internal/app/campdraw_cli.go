@@ -82,17 +82,21 @@ func formatCards(cards []game.Card) string {
 }
 
 func printBoxReward(reward lootbox.BoxOpenResult) {
-	switch {
-	case reward.ChromaID != "":
+	if reward.ChromaID != "" {
 		chromaName := reward.ChromaID
 		if chroma, ok := catalog.FindChroma(reward.ChromaID); ok {
 			chromaName = chroma.Name
 		}
 		fmt.Printf("+ Chroma: %s (%s)\n", chromaName, reward.ChromaRarity)
-	case reward.Crowns > 0:
-		fmt.Printf("+%s Crowns\n", formatLandingNumber(reward.Crowns))
-	default:
+	}
+	if reward.Marks > 0 {
 		fmt.Printf("+%s Marks\n", formatLandingNumber(reward.Marks))
+	}
+	if reward.Crowns > 0 {
+		fmt.Printf("+%s Crowns\n", formatLandingNumber(reward.Crowns))
+	}
+	if reward.Energy > 0 {
+		fmt.Printf("+%d Energy\n", reward.Energy)
 	}
 	if reward.FallbackReason != "" {
 		fmt.Printf("Chroma fallback: %s\n", reward.FallbackReason)

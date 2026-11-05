@@ -8,6 +8,21 @@ the `campaigns` package.
 The browser dashboard's **Campaigns** action and the terminal campaign menu
 both show the same saved unlock and mission-completion progress.
 
+The Shop sells Campaign Mission Skip tokens for 1,500 Marks or 75 Crowns.
+Using one on the next playable mission advances progression without mission
+Marks or completion rewards. Skipping the final mission completes the campaign
+but still withholds completion rewards. Completed missions cannot be skipped.
+
+The in-game token bar shows Restart Mission, Undo Last Move, Replace Any Card,
+and (during campaigns) Campaign Mission Skip inventories. When an inventory is
+empty, its button offers Crown-only quick purchases; Marks purchases are made
+in the Shop. These tokens are available only in campaigns and vs-CPU games,
+never in Human-vs-Human play. Replace Any Card discards a selected available
+card and draws a random replacement from the remaining deck in Main, Fog,
+Puzzler, Abandon, Rummy, Poker, Ladder, and Tug War, including CPU variants.
+Restart returns to the mission's original state without charging Energy again;
+Undo restores the state before the last move and any automatic CPU response.
+
 ## Basic Training
 
 **ID:** `basic`  

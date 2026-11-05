@@ -8,7 +8,7 @@ import (
 	"prisonersofwar/internal/profile"
 )
 
-func TestRecruitIsStarterAndBoxPoolContainsTieredUnlocks(t *testing.T) {
+func TestRecruitIsStarterAndHeroBoxContainsAllNonRecruitHeroes(t *testing.T) {
 	recruit, ok := ByID("recruit")
 	if !ok || recruit.Name != "The Recruit" || recruit.Unlock != "default" {
 		t.Fatalf("Recruit definition = %+v, found %t", recruit, ok)
@@ -20,28 +20,26 @@ func TestRecruitIsStarterAndBoxPoolContainsTieredUnlocks(t *testing.T) {
 	if p.DefaultHeroID != "recruit" || len(p.UnlockedHeroes) != 1 || p.UnlockedHeroes[0] != "recruit" {
 		t.Fatalf("new profile starter heroes = %q, %v", p.DefaultHeroID, p.UnlockedHeroes)
 	}
-	for tier, heroIDs := range heroBoxPool {
-		if len(heroIDs) == 0 {
-			t.Errorf("%s tier has no heroes", tier)
+	if len(heroBoxPool) != 10 {
+		t.Fatalf("Hero Box pool has %d heroes, want 10", len(heroBoxPool))
+	}
+	seen := make(map[string]bool)
+	for _, heroID := range heroBoxPool {
+		if _, ok := ByID(heroID); !ok || heroID == "recruit" || seen[heroID] {
+			t.Errorf("Hero Box pool contains invalid or duplicate hero %q", heroID)
 		}
-		for _, heroID := range heroIDs {
-			if _, ok := ByID(heroID); !ok || heroID == "recruit" {
-				t.Errorf("%s tier contains invalid hero %q", tier, heroID)
-			}
-		}
+		seen[heroID] = true
 	}
 }
 
-func TestOpenHeroBoxUsesTierWeightsAndDuplicateBonuses(t *testing.T) {
+func TestOpenHeroBoxSelectsAllHeroesUniformlyAndPaysHalfPriceForDuplicates(t *testing.T) {
 	p, err := profile.New(time.Now())
 	if err != nil {
 		t.Fatal(err)
 	}
 	p.Marks = HeroBoxMarksCost * 10000
-	for _, heroIDs := range heroBoxPool {
-		p.UnlockedHeroes = append(p.UnlockedHeroes, heroIDs...)
-	}
-	var counts = map[string]int{}
+	p.UnlockedHeroes = append(p.UnlockedHeroes, heroBoxPool...)
+	var counts = make(map[string]int)
 	rng := rand.New(rand.NewSource(42))
 	const samples = 10000
 	for index := 0; index < samples; index++ {
@@ -49,39 +47,21 @@ func TestOpenHeroBoxUsesTierWeightsAndDuplicateBonuses(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		if !result.Duplicate {
-			t.Fatalf("owned pool hero was awarded again: %+v", result)
+		if !result.Duplicate || !containsHero(p.UnlockedHeroes, result.HeroID) {
+			t.Fatalf("owned hero result = %+v", result)
 		}
-		counts[result.DuplicateTier]++
-	}
-	for tier, target := range map[string]float64{"early": .50, "mid": .30, "late": .20} {
-		rate := float64(counts[tier]) / samples
-		if rate < target-.025 || rate > target+.025 {
-			t.Errorf("%s tier frequency %.3f outside target %.2f±.025", tier, rate, target)
+		cost, ok := profile.HeroCrownsCost(result.HeroID)
+		if !ok || result.Crowns != cost/2 {
+			t.Fatalf("duplicate reward for %s = %d, want half price %d",
+				result.HeroID, result.Crowns, cost/2)
 		}
+		counts[result.HeroID]++
 	}
-
-	for _, test := range []struct {
-		tier  string
-		skill string
-		want  int64
-	}{
-		{"early", "", 100},
-		{"mid", "", 150},
-		{"late", "", 200},
-		{"early", "lucky_dupe", 125},
-		{"mid", "lucky_dupe", 187},
-		{"late", "lucky_dupe", 250},
-		{"early", "premium_dupe", 150},
-		{"mid", "premium_dupe", 225},
-		{"late", "premium_dupe", 300},
-	} {
-		t.Run(test.tier+"/"+test.skill, func(t *testing.T) {
-			result := openDuplicateTier(t, test.tier, test.skill)
-			if result.Crowns != test.want {
-				t.Fatalf("duplicate payout = %d, want %d", result.Crowns, test.want)
-			}
-		})
+	for _, heroID := range heroBoxPool {
+		rate := float64(counts[heroID]) / samples
+		if rate < .07 || rate > .13 {
+			t.Errorf("%s frequency %.3f outside target 0.10±0.03", heroID, rate)
+		}
 	}
 }
 
@@ -91,7 +71,7 @@ func TestOpenHeroBoxFreeDiscountAndInsufficientMarks(t *testing.T) {
 		t.Fatal(err)
 	}
 	p.Marks = HeroBoxDiscountedCost
-	p.SkillNodes["hero_broker"] = true
+	p.SkillNodes["hero-broker"] = true
 	if _, err := OpenHeroBox(p, rand.New(rand.NewSource(1))); err != nil {
 		t.Fatalf("discounted box: %v", err)
 	}
@@ -154,7 +134,7 @@ func TestBuyHeroWithCrownsValidatesOwnershipAndBalance(t *testing.T) {
 	if err := BuyHeroWithCrowns(p, "warden"); err == nil {
 		t.Fatal("purchase without Crowns should fail")
 	}
-	p.Crowns = DirectHeroCrownsCost
+	p.Crowns = 300
 	if err := BuyHeroWithCrowns(p, "warden"); err != nil {
 		t.Fatal(err)
 	}
@@ -164,30 +144,4 @@ func TestBuyHeroWithCrownsValidatesOwnershipAndBalance(t *testing.T) {
 	if err := BuyHeroWithCrowns(p, "warden"); err == nil {
 		t.Fatal("duplicate purchase should fail")
 	}
-}
-
-func openDuplicateTier(t *testing.T, tier, skill string) HeroBoxResult {
-	t.Helper()
-	for seed := int64(0); seed < 1000; seed++ {
-		p, err := profile.New(time.Now())
-		if err != nil {
-			t.Fatal(err)
-		}
-		p.HeroBoxesAvailable = 1
-		for _, heroIDs := range heroBoxPool {
-			p.UnlockedHeroes = append(p.UnlockedHeroes, heroIDs...)
-		}
-		if skill != "" {
-			p.SkillNodes[skill] = true
-		}
-		result, err := OpenHeroBox(p, rand.New(rand.NewSource(seed)))
-		if err != nil {
-			t.Fatal(err)
-		}
-		if result.DuplicateTier == tier {
-			return result
-		}
-	}
-	t.Fatalf("could not generate %s tier", tier)
-	return HeroBoxResult{}
 }

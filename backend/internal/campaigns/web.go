@@ -10,6 +10,16 @@ import (
 )
 
 func PrepareMission(p *profile.Profile, mission Mission, heroID string, rng *rand.Rand) (game.GameState, string, error) {
+	return PrepareMissionWithTuning(p, mission, heroID, nil, rng)
+}
+
+func PrepareMissionWithTuning(
+	p *profile.Profile,
+	mission Mission,
+	heroID string,
+	tuning heroes.Tuning,
+	rng *rand.Rand,
+) (game.GameState, string, error) {
 	if p == nil || rng == nil {
 		return game.GameState{}, "", fmt.Errorf("profile and random source are required")
 	}
@@ -31,7 +41,11 @@ func PrepareMission(p *profile.Profile, mission Mission, heroID string, rng *ran
 	if !ok {
 		return game.GameState{}, "", fmt.Errorf("unknown mission opponent")
 	}
-	mods, err := missionModifiers(mission, heroes.Combine(hero, cpu), rng)
+	combined, err := heroes.CombineWithTuning(hero, cpu, tuning, nil)
+	if err != nil {
+		return game.GameState{}, "", fmt.Errorf("combine mission hero modifiers: %w", err)
+	}
+	mods, err := missionModifiers(mission, combined, rng)
 	if err != nil {
 		return game.GameState{}, "", err
 	}

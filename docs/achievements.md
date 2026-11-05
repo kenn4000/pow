@@ -97,7 +97,8 @@ kept as specified rather than silently adjusted.
 In the terminal UI, choose **Achievements** to browse categories, progress,
 status, tier rewards, current role-color swatches, and set completion. Newly
 earned achievements and sets are reported after a match or progression event.
-Skill Tree Points can be used instead of Crowns for eligible skill unlocks.
+Skill Points are the only currency for skill unlocks; the Shop sells one for
+300 Crowns or ten for 2,400 Crowns.
 Collector tokens can be redeemed from the chroma shop by selecting `pick` and
 then an unowned chroma.
 

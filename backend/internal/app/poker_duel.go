@@ -632,6 +632,11 @@ func (s *webServer) finishPokerDuelTurn(previousPlayer int, now time.Time, actio
 		case 0, 1:
 			session.message = fmt.Sprintf("%s wins the Poker Duel.", s.playerName(duel.Winner))
 		}
+		score := 0
+		if len(duel.FinalScores) > 0 {
+			score = int(duel.FinalScores[0].FinalScore)
+		}
+		s.awardLocalMultiplayerPayout(score)
 		return
 	}
 	if session.mode == "hvh" && duel.ActivePlayer != previousPlayer {

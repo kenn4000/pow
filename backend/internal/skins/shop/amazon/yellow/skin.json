@@ -1,6 +1,7 @@
 {
   "id": "amazon-yellow",
   "displayName": "Amazon (yellow)",
+  "rarityRank": 0,
   "hexColor": "#DEE64C",
   "price": 1200,
   "currency": "marks"

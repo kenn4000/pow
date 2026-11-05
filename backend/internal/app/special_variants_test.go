@@ -136,176 +136,166 @@ func TestPuzzlePairPresentationShowsIncrementalScore(t *testing.T) {
 	}
 }
 
-func TestAbandonInitializationRevealTokensAndDrawDeck(t *testing.T) {
-	hero, _ := heroes.ByID("recruit")
-	state := newAbandonSession(hero, rand.New(rand.NewSource(12)))
-	if state.DrawTokens != clampInt(2+hero.Draft, 0, 4) {
-		t.Fatalf("draw tokens = %d", state.DrawTokens)
-	}
-	revealed := 0
-	for _, visible := range state.Revealed {
-		if visible {
-			revealed++
+func TestAbandonSetupRandomizesCardsAndRevealsOnlyRequiredCards(t *testing.T) {
+	hero := heroes.Hero{Draft: 1}
+	seenBoards := map[string]bool{}
+	for seed := int64(0); seed < 80; seed++ {
+		state, err := newAbandonSessionForMission(hero, rand.New(rand.NewSource(seed)), 5, 12, 45)
+		if err != nil {
+			t.Fatal(err)
 		}
-	}
-	lowestBountyBoardIndex := -1
-	for index, card := range state.Board {
-		if card.Suit == state.Bounty.Suit &&
-			(lowestBountyBoardIndex < 0 || card.Face < state.Board[lowestBountyBoardIndex].Face) {
-			lowestBountyBoardIndex = index
+		if len(state.Board) != 12 || len(state.PersonalPile) != 5 || state.PairCount != 5 ||
+			state.Target != 45 || state.RulesVersion != abandonRulesVersion {
+			t.Fatalf("setup sizes/rules = board %d pile %d pairs %d target %d version %d",
+				len(state.Board), len(state.PersonalPile), state.PairCount, state.Target, state.RulesVersion)
 		}
+		seen := map[game.Card]bool{state.Bounty: true}
+		suits := [3]bool{}
+		for _, card := range state.PersonalPile {
+			if seen[card] {
+				t.Fatalf("duplicate personal card %s", card)
+			}
+			seen[card] = true
+			suits[card.Suit] = true
+		}
+		for suit, present := range suits {
+			if !present {
+				t.Fatalf("personal pile omits suit %d", suit)
+			}
+		}
+		for _, card := range state.Board {
+			if seen[card] {
+				t.Fatalf("duplicate board/bounty/personal card %s", card)
+			}
+			seen[card] = true
+		}
+		highestBounty := -1
+		for index, card := range state.Board {
+			if card.Suit == state.Bounty.Suit &&
+				(highestBounty < 0 || card.Face > state.Board[highestBounty].Face) {
+				highestBounty = index
+			}
+		}
+		for index, card := range state.Board {
+			if state.Revealed[index] != (card.Suit == state.Bounty.Suit && index != highestBounty) {
+				t.Fatalf("board reveal for %s = %t; highest bounty index %d", card, state.Revealed[index], highestBounty)
+			}
+		}
+		for index, visible := range state.PileRevealed {
+			if visible != (index < clampInt(3+hero.Draft, 0, 5)) {
+				t.Fatalf("personal card %d reveal = %t", index, visible)
+			}
+		}
+		seenBoards[fmt.Sprint(state.Board)] = true
 	}
-	if revealed != 3 || lowestBountyBoardIndex < 0 || !state.Revealed[lowestBountyBoardIndex] {
-		t.Fatalf("revealed cards=%d board=%v", revealed, state.Revealed)
+	if len(seenBoards) < 2 {
+		t.Fatal("random setup produced the same board for every seed")
 	}
-	highestRevealedBountyFace := 0
-	for index, visible := range state.Revealed {
-		if !visible {
+}
+
+func TestAbandonFlipThenPairUsesStandardBattleAndPersonalPenalties(t *testing.T) {
+	hero := heroes.Hero{ID: "recruit"}
+	state := &abandonSession{
+		RulesVersion: abandonRulesVersion, PairCount: 1, Target: 3,
+		Board: []game.Card{{Suit: game.Blade, Face: 5}, {Suit: game.Shield, Face: 4}},
+		PersonalPile: []game.Card{
+			{Suit: game.Fang, Face: 3}, {Suit: game.Shield, Face: 1},
+			{Suit: game.Blade, Face: 2}, {Suit: game.Fang, Face: 4},
+			{Suit: game.Shield, Face: 6},
+		},
+		Bounty:   game.Card{Suit: game.Blade, Face: 9},
+		Revealed: []bool{false, false}, PileRevealed: make([]bool, 5),
+		Used: make([]bool, 2), PileUsed: make([]bool, 5), SelectedIndex: -1,
+		Pairings: []abandonPairing{}, Captured: []game.Card{}, Penalties: make([]int, 5),
+	}
+	if err := state.flipBoardCard(0); err != nil {
+		t.Fatal(err)
+	}
+	if err := state.flipBoardCard(0); err == nil {
+		t.Fatal("already revealed board card was flipped again")
+	}
+	if err := state.selectPairCard(abandonBoardSource, 0, hero); err != nil {
+		t.Fatal(err)
+	}
+	if err := state.selectPairCard(abandonBoardSource, 0, hero); err == nil {
+		t.Fatal("same card was selected twice for one battle")
+	}
+	if err := state.selectPairCard(abandonPileSource, 0, hero); err != nil {
+		t.Fatal(err)
+	}
+	if !state.Finished || len(state.Captured) != 1 ||
+		state.Captured[0] != (game.Card{Suit: game.Fang, Face: 3}) {
+		t.Fatalf("resolved battle = %+v", state)
+	}
+	mods := heroModifiers(hero)
+	wantScore := abandonCapturedScore(state.Captured, state.Bounty.Suit, hero)
+	for index, card := range state.PersonalPile {
+		if index == 0 {
+			if state.Penalties[index] != 0 {
+				t.Fatalf("used personal card penalty = %d", state.Penalties[index])
+			}
 			continue
 		}
-		if state.Board[index].Suit != state.Bounty.Suit {
-			t.Fatalf("initially revealed non-bounty card %s", state.Board[index])
+		wantPenalty := -modifiers.ScoringFace(card.Face, card.Suit == state.Bounty.Suit, mods)
+		if state.Penalties[index] != wantPenalty {
+			t.Fatalf("personal card %d penalty = %d, want %d", index, state.Penalties[index], wantPenalty)
 		}
-		if state.Board[index].Face > highestRevealedBountyFace {
-			highestRevealedBountyFace = state.Board[index].Face
-		}
+		wantScore += wantPenalty
 	}
-	for index, card := range state.Board {
-		if card.Suit == state.Bounty.Suit && !state.Revealed[index] && card.Face < highestRevealedBountyFace {
-			t.Fatalf("revealed cards were not the three lowest bounty cards: %v", state.Revealed)
-		}
-	}
-	if len(state.Board) != 9 || len(state.DrawPile) != 17 {
-		t.Fatalf("board/draw pile sizes = %d/%d, want 9/17", len(state.Board), len(state.DrawPile))
-	}
-	seen := map[game.Card]bool{state.Bounty: true}
-	for _, card := range state.Board {
-		seen[card] = true
-	}
-	for _, card := range state.DrawPile {
-		if seen[card] {
-			t.Fatalf("draw pile contains excluded or duplicate card %s", card)
-		}
-		seen[card] = true
-	}
-	if len(seen) != 27 {
-		t.Fatalf("board, bounty, and draw pile account for %d cards", len(seen))
-	}
-
-	if err := state.selectCard(8); err != nil {
-		t.Fatal(err)
-	}
-	if !state.Revealed[8] {
-		t.Fatal("selected hidden board card did not become visible")
-	}
-}
-
-func TestAbandonScoringTokensAndRemainingBoardPenalty(t *testing.T) {
-	hero := heroes.Hero{Bounty: 3, Shift: 1, Draft: 1}
-	if got := scoreAbandonPair(game.Card{Suit: game.Blade, Face: 1}, game.Card{Suit: game.Shield, Face: 1}, hero); got != 42 {
-		t.Fatalf("equal-face bounty pair = %d, want 42", got)
-	}
-	if got := scoreAbandonPair(game.Card{Suit: game.Blade, Face: 1}, game.Card{Suit: game.Shield, Face: 2}, hero); got != 3 {
-		t.Fatalf("non-matching pair = %d, want 3", got)
-	}
-	if got := abandonValue(game.Card{Suit: game.Blade, Face: 1}, heroes.Hero{Bounty: -3, Shift: 0}); got != -1 {
-		t.Fatalf("signed abandoned-card value = %d, want -1", got)
-	}
-
-	state := newAbandonSession(hero, rand.New(rand.NewSource(7)))
-	if state.DrawTokens != 3 {
-		t.Fatalf("draw tokens = %d, want 3", state.DrawTokens)
-	}
-	if err := state.selectCard(0); err != nil {
-		t.Fatal(err)
-	}
-	if err := state.pairDraw(hero); err != nil {
-		t.Fatal(err)
-	}
-	if state.DrawTokens != 2 || len(state.Pairings) != 1 {
-		t.Fatalf("after draw pairing tokens=%d pairings=%d", state.DrawTokens, len(state.Pairings))
-	}
-	if err := state.pairDraw(hero); err == nil {
-		t.Fatal("draw pairing succeeded without selecting a board card")
-	}
-
-	state = newAbandonSession(heroes.Hero{}, rand.New(rand.NewSource(7)))
-	expected := 0
-	for pairing := 0; pairing < 4; pairing++ {
-		first, second := pairing*2, pairing*2+1
-		expected += scoreAbandonPair(state.Board[first], state.Board[second], heroes.Hero{})
-		if err := state.selectCard(first); err != nil {
-			t.Fatal(err)
-		}
-		if err := state.pairBoard(second, heroes.Hero{}); err != nil {
-			t.Fatal(err)
-		}
-	}
-	expected -= abandonValue(state.Board[8], heroes.Hero{})
-	if !state.Finished || state.Score != expected {
-		t.Fatalf("finished=%t score=%d, want %d", state.Finished, state.Score, expected)
+	if state.Score != wantScore {
+		t.Fatalf("final score = %d, want %d", state.Score, wantScore)
 	}
 	view := state.webView()
-	if !view.Board[8].Revealed || view.Board[8].Penalty == nil ||
-		*view.Board[8].Penalty != -abandonValue(state.Board[8], heroes.Hero{}) {
-		t.Fatalf("final abandoned card details = %+v, want revealed card and its score penalty", view.Board[8])
+	if view.PersonalPile[1].Penalty == nil || *view.PersonalPile[1].Penalty >= 0 ||
+		view.Board[1].Penalty != nil {
+		t.Fatalf("final penalties should apply only to unused personal cards: %+v", view)
 	}
 }
 
-func TestAbandonSuitMappingCanSwapAndRotateBeforePlay(t *testing.T) {
-	rng := rand.New(rand.NewSource(12))
-	state := newAbandonSession(heroes.Hero{}, rng)
-	initial := state.CategorySuits
-	if err := state.assignCategorySuit(0, initial[2], rng); err != nil {
+func TestAbandonTieCapturesNoCard(t *testing.T) {
+	hero := heroes.Hero{}
+	state := &abandonSession{
+		RulesVersion: abandonRulesVersion, PairCount: 1, Target: 1,
+		Board: []game.Card{{Suit: game.Blade, Face: 4}, {Suit: game.Fang, Face: 8}},
+		PersonalPile: []game.Card{
+			{Suit: game.Shield, Face: 1}, {Suit: game.Fang, Face: 2},
+			{Suit: game.Blade, Face: 3}, {Suit: game.Shield, Face: 4},
+			{Suit: game.Fang, Face: 5},
+		},
+		Bounty:   game.Card{Suit: game.Blade, Face: 9},
+		Revealed: []bool{false, false}, PileRevealed: make([]bool, 5),
+		Used: make([]bool, 2), PileUsed: make([]bool, 5), SelectedIndex: -1,
+		Pairings: []abandonPairing{}, Captured: []game.Card{}, Penalties: make([]int, 5),
+	}
+	if err := state.flipBoardCard(0); err != nil {
 		t.Fatal(err)
 	}
-	if state.CategorySuits != [3]game.Suit{initial[2], initial[1], initial[0]} ||
-		state.Bounty.Suit != state.CategorySuits[0] {
-		t.Fatalf("swapped categories=%v bounty=%s", state.CategorySuits, state.Bounty)
-	}
-	if err := state.rotateCategorySuits(rng); err != nil {
+	if err := state.selectPairCard(abandonBoardSource, 0, hero); err != nil {
 		t.Fatal(err)
 	}
-	if state.CategorySuits != [3]game.Suit{initial[1], initial[0], initial[2]} ||
-		state.Bounty.Suit != state.CategorySuits[0] {
-		t.Fatalf("rotated categories=%v bounty=%s", state.CategorySuits, state.Bounty)
-	}
-	seen := map[game.Card]bool{state.Bounty: true}
-	for _, card := range append(append([]game.Card(nil), state.Board...), state.DrawPile...) {
-		if seen[card] {
-			t.Fatalf("suit remap produced duplicate card %s", card)
-		}
-		seen[card] = true
-	}
-	if len(seen) != 27 {
-		t.Fatalf("remapped cards account for %d cards, want 27", len(seen))
-	}
-	if state.webView().CanChangeSuits != true {
-		t.Fatal("suit mapping is unavailable before play")
-	}
-	if err := state.selectCard(0); err != nil {
+	if err := state.selectPairCard(abandonBoardSource, 1, hero); err != nil {
 		t.Fatal(err)
 	}
-	if err := state.rotateCategorySuits(rng); err == nil {
-		t.Fatal("suit rotation succeeded after selecting a card")
+	if !state.Finished || !state.Pairings[0].Tie || len(state.Captured) != 0 {
+		t.Fatalf("tied pair state = %+v", state)
 	}
 }
 
-func TestAbandonPairDisplayChoosesBountySuitForPairs(t *testing.T) {
-	first := game.Card{Suit: game.Fang, Face: 5}
-	bounty := game.Card{Suit: game.Blade, Face: 5}
-	if got, pair := abandonPairDisplayCard(first, bounty, game.Blade, 0); got != bounty || !pair {
-		t.Fatalf("bounty pair display = %s, pair=%t; want bounty card %s", got, pair, bounty)
+func TestAbandonCapturedScoreUsesStandardSuitCountAndHighestFace(t *testing.T) {
+	hero := heroes.Hero{Bounty: 1, Shift: 2}
+	captured := []game.Card{
+		{Suit: game.Shield, Face: 2}, {Suit: game.Shield, Face: 6},
+		{Suit: game.Blade, Face: 3},
 	}
-	lower := game.Card{Suit: game.Fang, Face: 3}
-	higher := game.Card{Suit: game.Shield, Face: 7}
-	if got, pair := abandonPairDisplayCard(lower, higher, game.Blade, 0); got != higher || pair {
-		t.Fatalf("non-pair display = %s, pair=%t; want high card %s", got, pair, higher)
+	var capturedByRound [3][3]int
+	capturedByRound[0][game.Shield] = 2
+	capturedByRound[0][game.Blade] = 1
+	want := game.ScoreWithModifiers(captured, capturedByRound, game.Blade, heroModifiers(hero)).Total
+	if want != 23 {
+		t.Fatalf("standard scoring fixture = %d, want 23", want)
 	}
-	if got, pair := abandonPairDisplayCard(
-		game.Card{Suit: game.Fang, Face: 1}, game.Card{Suit: game.Blade, Face: 2}, game.Blade, -8,
-	); got.Suit != game.Blade || !pair {
-		t.Fatalf("shifted equal-value pair display = %s, pair=%t; want bounty suit pair", got, pair)
+	if got := abandonCapturedScore(captured, game.Blade, hero); got != want {
+		t.Fatalf("Abandon prisoners score = %d, want standard score %d", got, want)
 	}
 }
 
@@ -354,156 +344,6 @@ func TestFogRedactionMasksCardFacesAndBattleValues(t *testing.T) {
 	}
 }
 
-func TestAbandonFirstSelectionPreservesBountySuit(t *testing.T) {
-	hero, ok := heroes.ByID("recruit")
-	if !ok {
-		t.Fatal("recruit hero is unavailable")
-	}
-	sawMatchingSuit := false
-	sawDifferentSuit := false
-	for seed := int64(1); seed <= 8; seed++ {
-		initial, err := newAbandonSessionForBoard(hero, rand.New(rand.NewSource(seed)), "board-01")
-		if err != nil {
-			t.Fatal(err)
-		}
-		for index, revealed := range initial.Revealed {
-			if revealed {
-				continue
-			}
-			abandon, err := newAbandonSessionForBoard(hero, rand.New(rand.NewSource(seed)), "board-01")
-			if err != nil {
-				t.Fatal(err)
-			}
-			bounty, categorySuits := abandon.Bounty, abandon.CategorySuits
-			matchesBounty := abandon.Board[index].Suit == bounty.Suit
-			if err := abandon.selectCard(index); err != nil {
-				t.Fatalf("select face-down card %d: %v", index, err)
-			}
-			if abandon.Bounty != bounty || abandon.CategorySuits != categorySuits {
-				t.Fatalf("selecting card %d changed bounty or suit mapping: bounty=%+v categories=%v",
-					index, abandon.Bounty, abandon.CategorySuits)
-			}
-			sawMatchingSuit = sawMatchingSuit || matchesBounty
-			sawDifferentSuit = sawDifferentSuit || !matchesBounty
-		}
-	}
-	if !sawMatchingSuit || !sawDifferentSuit {
-		t.Fatalf("test did not cover both bounty-suit cases: match=%t different=%t",
-			sawMatchingSuit, sawDifferentSuit)
-	}
-}
-
-func TestAbandonBoardCatalogLayoutsAndTargets(t *testing.T) {
-	expected := [][]abandonBoardCard{
-		{{1, 1}, {1, 2}, {9, 0}, {9, 1}, {8, 0}, {4, 0}, {3, 0}, {6, 1}, {2, 1}},
-		{{4, 1}, {4, 2}, {7, 0}, {7, 1}, {2, 0}, {3, 0}, {5, 0}, {8, 1}, {1, 1}},
-		{{8, 1}, {8, 2}, {9, 0}, {9, 1}, {7, 0}, {5, 0}, {2, 0}, {3, 1}, {4, 1}},
-		{{1, 1}, {1, 2}, {3, 0}, {3, 1}, {4, 0}, {7, 0}, {2, 0}, {6, 1}, {8, 1}},
-		{{8, 1}, {8, 2}, {1, 0}, {1, 1}, {7, 0}, {5, 0}, {6, 0}, {2, 1}, {9, 1}},
-		{{4, 1}, {4, 2}, {9, 0}, {9, 1}, {2, 0}, {6, 0}, {5, 0}, {8, 1}, {1, 1}},
-		{{7, 1}, {7, 2}, {2, 0}, {2, 1}, {5, 0}, {6, 0}, {8, 0}, {4, 1}, {3, 1}},
-		{{8, 1}, {8, 2}, {2, 0}, {2, 1}, {6, 0}, {7, 0}, {9, 0}, {5, 1}, {4, 1}},
-		{{3, 1}, {3, 2}, {1, 0}, {1, 1}, {2, 0}, {8, 0}, {9, 0}, {5, 1}, {7, 1}},
-		{{6, 1}, {6, 2}, {9, 0}, {9, 1}, {7, 0}, {3, 0}, {1, 0}, {2, 1}, {4, 1}},
-		{{7, 1}, {7, 2}, {2, 0}, {2, 1}, {1, 0}, {5, 0}, {8, 0}, {9, 1}, {3, 1}},
-		{{7, 1}, {7, 2}, {9, 0}, {9, 1}, {2, 0}, {1, 0}, {6, 0}, {8, 1}, {3, 1}},
-		{{7, 1}, {7, 2}, {9, 0}, {9, 1}, {1, 0}, {2, 0}, {4, 0}, {3, 1}, {8, 1}},
-		{{4, 1}, {4, 2}, {5, 0}, {5, 1}, {1, 0}, {8, 0}, {7, 0}, {2, 1}, {9, 1}},
-		{{7, 1}, {7, 2}, {4, 0}, {4, 1}, {9, 0}, {1, 0}, {8, 0}, {2, 1}, {5, 1}},
-	}
-	targets := []int{54, 58, 60, 61, 62, 63, 64, 65, 66, 67, 68, 70, 72, 75, 76}
-	if len(abandonBoardCatalog) != 15 || len(abandonBoardOptions()) != 15 {
-		t.Fatalf("catalog/options sizes = %d/%d, want 15", len(abandonBoardCatalog), len(abandonBoardOptions()))
-	}
-	for index, board := range abandonBoardCatalog {
-		if board.ID != fmt.Sprintf("board-%02d", index+1) ||
-			board.Name != fmt.Sprintf("Abandon Board %d", index+1) ||
-			board.Target != targets[index] || len(board.Cards) != 9 {
-			t.Fatalf("board %d metadata = %+v", index+1, board.abandonBoardOption)
-		}
-		for cardIndex, card := range board.Cards {
-			if card != expected[index][cardIndex] {
-				t.Fatalf("board %d card %d = %+v, want %+v", index+1, cardIndex, card, expected[index][cardIndex])
-			}
-		}
-	}
-}
-
-func TestAbandonRandomBountySuitMappingAndBoardSelection(t *testing.T) {
-	seenBountySuits := map[game.Suit]bool{}
-	for seed := int64(0); seed < 100; seed++ {
-		state, err := newAbandonSessionForBoard(heroes.Hero{}, rand.New(rand.NewSource(seed)), "board-08")
-		if err != nil {
-			t.Fatal(err)
-		}
-		if len(state.Board) != 9 || len(state.DrawPile) != 17 || state.BoardID != "board-08" ||
-			state.Target != 65 || state.Bounty.Suit != state.CategorySuits[0] {
-			t.Fatalf("selected board state = %+v", state)
-		}
-		seenBountySuits[state.Bounty.Suit] = true
-		for category := 0; category < 3; category++ {
-			want := game.Suit((int(state.CategorySuits[0]) + category) % 3)
-			if state.CategorySuits[category] != want {
-				t.Fatalf("category %d maps to %s, want %s", category, state.CategorySuits[category], want)
-			}
-		}
-		used := map[game.Card]bool{}
-		lowestBountyBoardFace := 10
-		for _, card := range state.Board {
-			if used[card] {
-				t.Fatalf("duplicate board card %s", card)
-			}
-			used[card] = true
-			if card.Suit == state.Bounty.Suit && card.Face < lowestBountyBoardFace {
-				lowestBountyBoardFace = card.Face
-			}
-		}
-		if used[state.Bounty] || state.Bounty.Face < 1 || state.Bounty.Face > 9 {
-			t.Fatalf("bounty card %s is invalid or present on board", state.Bounty)
-		}
-		for face := 1; face < state.Bounty.Face; face++ {
-			if !used[game.Card{Suit: state.Bounty.Suit, Face: face}] {
-				t.Fatalf("bounty %s is not the lowest available face", state.Bounty)
-			}
-		}
-		if lowestBountyBoardFace == 10 {
-			t.Fatal("board has no bounty-suited card")
-		}
-	}
-	if len(seenBountySuits) != 3 {
-		t.Fatalf("deterministic RNG seeds yielded bounty suits %v, want all three", seenBountySuits)
-	}
-	if _, err := newAbandonSessionForBoard(heroes.Hero{}, rand.New(rand.NewSource(1)), "missing"); err == nil {
-		t.Fatal("unknown board ID was accepted")
-	}
-}
-
-func TestAbandonTargetEvaluationIsAtLeast(t *testing.T) {
-	for _, testCase := range []struct {
-		score int
-		won   bool
-	}{{54, true}, {53, false}} {
-		state := newAbandonSession(heroes.Hero{}, rand.New(rand.NewSource(2)))
-		state.Score = testCase.score
-		state.Used = make([]bool, len(state.Board))
-		for index := range state.Used {
-			state.Used[index] = true
-		}
-		state.Pairings = make([]abandonPairing, 4)
-		state.finishIfReady(heroes.Hero{})
-		if !state.Evaluated || state.Won != testCase.won {
-			t.Fatalf("score %d evaluated=%t won=%t, want won=%t", testCase.score, state.Evaluated, state.Won, testCase.won)
-		}
-		wantEvaluation := "loss"
-		if testCase.won {
-			wantEvaluation = "win"
-		}
-		if got := state.webView().Evaluation; got != wantEvaluation {
-			t.Fatalf("score %d evaluation=%q, want %q", testCase.score, got, wantEvaluation)
-		}
-	}
-}
-
 func TestSessionSnapshotRoundTripsVariantsAndDefaultsOldSnapshots(t *testing.T) {
 	puzzle, _ := puzzleByID("gp6_balanced")
 	testCases := []struct {
@@ -533,11 +373,11 @@ func TestSessionSnapshotRoundTripsVariantsAndDefaultsOldSnapshots(t *testing.T) 
 				t.Fatalf("puzzler state was not restored: %+v", restored.puzzle)
 			}
 			if testCase.session.abandon != nil && (restored.abandon == nil ||
-				len(restored.abandon.DrawPile) != len(testCase.session.abandon.DrawPile) ||
-				restored.abandon.DrawTokens != testCase.session.abandon.DrawTokens ||
-				restored.abandon.BoardID != testCase.session.abandon.BoardID ||
+				len(restored.abandon.Board) != len(testCase.session.abandon.Board) ||
+				len(restored.abandon.PersonalPile) != len(testCase.session.abandon.PersonalPile) ||
+				restored.abandon.PairCount != testCase.session.abandon.PairCount ||
 				restored.abandon.Target != testCase.session.abandon.Target ||
-				restored.abandon.CategorySuits != testCase.session.abandon.CategorySuits ||
+				restored.abandon.RulesVersion != abandonRulesVersion ||
 				restored.abandon.Bounty != testCase.session.abandon.Bounty) {
 				t.Fatalf("abandon state was not restored: %+v", restored.abandon)
 			}
@@ -546,13 +386,15 @@ func TestSessionSnapshotRoundTripsVariantsAndDefaultsOldSnapshots(t *testing.T) 
 	if got := (&sessionSnapshot{}).restore().variant; got != "main" {
 		t.Fatalf("old snapshot variant = %q, want main", got)
 	}
-	legacyBoard := []game.Card{{Suit: game.Shield, Face: 2}, {Suit: game.Fang, Face: 4}}
-	legacy := (&sessionSnapshot{Abandon: &abandonSession{Board: legacyBoard}}).restore().abandon
-	if legacy.BoardID != "board-01" || legacy.Target != 54 ||
-		legacy.Bounty != (game.Card{Suit: game.Blade, Face: 9}) ||
-		legacy.CategorySuits != [3]game.Suit{game.Blade, game.Fang, game.Shield} ||
-		len(legacy.Board) != len(legacyBoard) || legacy.Board[0] != legacyBoard[0] {
-		t.Fatalf("legacy abandon snapshot did not default/preserve state: %+v", legacy)
+	legacy := (&sessionSnapshot{
+		Variant: "abandon", Abandon: &abandonSession{Board: []game.Card{{Suit: game.Shield, Face: 2}}},
+		Campaign: &webCampaignContext{ID: "abandon", Index: 10},
+	}).restore()
+	if legacy.abandon == nil || legacy.abandon.RulesVersion != abandonRulesVersion ||
+		legacy.abandon.PairCount != 4 || legacy.abandon.Target != 35 ||
+		len(legacy.abandon.Board) != 11 || legacy.phase != "abandon-reveal" ||
+		legacy.campaign.Index != 1 || legacy.message == "" {
+		t.Fatalf("legacy Abandon snapshot was not safely restarted: %+v", legacy)
 	}
 }
 

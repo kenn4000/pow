@@ -1,6 +1,7 @@
 {
   "id": "cholo-copper",
   "displayName": "Cholo (copper)",
+  "rarityRank": 0,
   "hexColor": "#C47C29",
   "price": 1200,
   "currency": "marks"

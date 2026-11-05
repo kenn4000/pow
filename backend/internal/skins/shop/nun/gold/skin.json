@@ -1,6 +1,7 @@
 {
   "id": "nun-gold",
   "displayName": "Nun (gold)",
+  "rarityRank": 0,
   "hexColor": "#AB951F",
   "price": 1000,
   "currency": "crowns"

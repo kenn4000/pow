@@ -121,19 +121,26 @@ func TestWebCampaignListingMapsSpecialCatalogAndDisablesHeroStubs(t *testing.T) 
 		byID[campaign.ID] = campaign
 	}
 	abandon := byID["abandon"]
-	targets := []int{54, 58, 60, 61, 62, 63, 64, 65, 66, 67, 68, 70, 72, 75, 76}
-	if abandon.Variant != "abandon" || len(abandon.Missions) != len(targets) {
+	targets := []int{35, 36, 37, 44, 45, 46, 53, 54, 55}
+	pairCounts := []int{4, 4, 4, 5, 5, 5, 6, 6, 6}
+	boardCounts := []int{11, 12, 13, 11, 12, 13, 11, 12, 13}
+	if abandon.Variant != "abandon" || len(abandon.Missions) != 15 {
 		t.Fatalf("abandon campaign listing = %+v", abandon)
 	}
-	for index, mission := range abandon.Missions {
-		wantID := fmt.Sprintf("board-%02d", index+1)
-		if mission.Variant != "abandon" || mission.VariantID != wantID ||
-			mission.Target != targets[index] || mission.Name != fmt.Sprintf("Abandon Board %d", index+1) ||
-			!mission.Enabled || mission.RewardMarks != 400 {
+	for index, mission := range abandon.Missions[:9] {
+		if mission.Variant != "abandon" || mission.Target != targets[index] ||
+			mission.PairCount != pairCounts[index] || mission.CardCount != boardCounts[index] ||
+			mission.Name != fmt.Sprintf("Mission %d", index+1) || !mission.Enabled ||
+			mission.RewardMarks != 400 {
 			t.Errorf("abandon API mission %d = %+v", index+1, mission)
 		}
 		if mission.CanPlay != (index == 0) {
 			t.Errorf("abandon mission %d canPlay = %v", index+1, mission.CanPlay)
+		}
+	}
+	for _, mission := range abandon.Missions[9:] {
+		if mission.Enabled || mission.CanPlay || mission.Status != "Coming Soon" {
+			t.Errorf("Abandon stub mission = %+v", mission)
 		}
 	}
 	puzzler := byID["puzzler"]
@@ -236,7 +243,7 @@ func TestSuccessfulSpecialCampaignMissionAwardsMarksOnlyOnce(t *testing.T) {
 	}
 }
 
-func TestAbandonCampaignLaunchUsesCatalogBoardAndPersistsCampaignContext(t *testing.T) {
+func TestAbandonCampaignLaunchUsesRandomMissionAndPersistsCampaignContext(t *testing.T) {
 	web := campaignTestServer(t)
 	if err := web.prepareWebMission(actionRequest{
 		CampaignID: "abandon", MissionIndex: 1, PlayerHeroID: "recruit",
@@ -244,14 +251,17 @@ func TestAbandonCampaignLaunchUsesCatalogBoardAndPersistsCampaignContext(t *test
 		t.Fatal(err)
 	}
 	if web.session.variant != "abandon" || web.session.abandon == nil ||
-		web.session.abandon.BoardID != "board-01" || web.session.abandon.Target != 54 ||
+		web.session.abandon.RulesVersion != abandonRulesVersion ||
+		web.session.abandon.PairCount != 4 || len(web.session.abandon.Board) != 11 ||
+		web.session.abandon.Target != 35 || web.session.phase != "abandon-reveal" ||
 		web.session.campaign == nil || web.session.campaign.Variant != "abandon" ||
-		web.session.campaign.VariantID != "board-01" {
+		web.session.campaign.VariantID != "" || !web.session.campaign.HasNextMission {
 		t.Fatalf("abandon campaign launch = %+v", web.session)
 	}
 	restored := snapshotSession(web.session).restore()
-	if restored.campaign == nil || restored.campaign.VariantID != "board-01" ||
-		restored.abandon.BoardID != "board-01" {
+	if restored.campaign == nil || restored.campaign.VariantID != "" ||
+		restored.abandon.RulesVersion != abandonRulesVersion ||
+		len(restored.abandon.PersonalPile) != 5 {
 		t.Fatalf("abandon campaign snapshot = %+v", restored)
 	}
 	marks := web.playerProfile.Marks
@@ -259,7 +269,7 @@ func TestAbandonCampaignLaunchUsesCatalogBoardAndPersistsCampaignContext(t *test
 	web.updateAbandonPhase()
 	if !missionIsComplete(web.playerProfile.Campaigns["abandon"], 1) ||
 		!campaigns.CanPlayMission(web.playerProfile, "abandon", 2) ||
-		web.playerProfile.Marks != marks+400 {
+		web.playerProfile.Marks != marks+400 || !web.session.campaign.HasNextMission {
 		t.Fatalf("successful Abandon completion did not advance with 400 Marks: %+v",
 			web.playerProfile.Campaigns["abandon"])
 	}
@@ -274,6 +284,48 @@ func TestAbandonCampaignLaunchUsesCatalogBoardAndPersistsCampaignContext(t *test
 	web.finishSpecialCampaignMission(true)
 	if web.playerProfile.Marks != marks+400 {
 		t.Fatalf("Abandon replay changed Marks to %d, want %d", web.playerProfile.Marks, marks+400)
+	}
+}
+
+func TestAbandonWebActionsRequireFlipThenTwoCards(t *testing.T) {
+	web := campaignTestServer(t)
+	if err := web.prepareWebMission(actionRequest{CampaignID: "abandon", MissionIndex: 1, PlayerHeroID: "recruit"}); err != nil {
+		t.Fatal(err)
+	}
+	if err := web.applyAction(actionRequest{Action: "abandon-pair-card", Source: abandonBoardSource, Index: 0}); err == nil {
+		t.Fatal("pairing was allowed before the reveal phase")
+	}
+	hiddenIndex := -1
+	for index, revealed := range web.session.abandon.Revealed {
+		if !revealed {
+			hiddenIndex = index
+			break
+		}
+	}
+	if hiddenIndex < 0 {
+		t.Fatal("random board has no face-down card")
+	}
+	if err := web.applyAction(actionRequest{Action: "abandon-flip", Index: hiddenIndex}); err != nil {
+		t.Fatal(err)
+	}
+	if web.session.phase != "abandon-pair-first" || !web.session.abandon.Revealed[hiddenIndex] {
+		t.Fatalf("reveal action did not advance to pairing: phase=%q", web.session.phase)
+	}
+	if err := web.applyAction(actionRequest{Action: "abandon-pair-card", Source: abandonBoardSource, Index: 0}); err != nil {
+		t.Fatal(err)
+	}
+	if web.session.phase != "abandon-pair-second" {
+		t.Fatalf("first card selection phase = %q", web.session.phase)
+	}
+	if err := web.applyAction(actionRequest{Action: "abandon-pair-card", Source: abandonBoardSource, Index: 0}); err == nil {
+		t.Fatal("same card was allowed twice in one pairing")
+	}
+	if err := web.applyAction(actionRequest{Action: "abandon-pair-card", Source: abandonPileSource, Index: 0}); err != nil {
+		t.Fatal(err)
+	}
+	if web.session.phase != "abandon-reveal" || len(web.session.abandon.Pairings) != 1 {
+		t.Fatalf("pair action did not advance to next turn: phase=%q pairs=%d",
+			web.session.phase, len(web.session.abandon.Pairings))
 	}
 }
 

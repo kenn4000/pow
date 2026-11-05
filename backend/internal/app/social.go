@@ -60,6 +60,34 @@ func (s *webServer) handleSocialOverview(w http.ResponseWriter, r *http.Request)
 	}
 	response["user"].(map[string]any)["elo"] = elo
 	response["user"].(map[string]any)["rank"] = rank
+	ratingRows, err := s.db.QueryContext(r.Context(), `
+		SELECT variant,rating FROM user_variant_ratings
+		WHERE user_id=$1 ORDER BY variant`, user.ID)
+	if err != nil {
+		databaseError(w, err)
+		return
+	}
+	ratings := make(map[string]int, 8)
+	for ratingRows.Next() {
+		var variant string
+		var rating int
+		if err := ratingRows.Scan(&variant, &rating); err != nil {
+			ratingRows.Close()
+			databaseError(w, err)
+			return
+		}
+		ratings[variant] = rating
+	}
+	if err := ratingRows.Err(); err != nil {
+		ratingRows.Close()
+		databaseError(w, err)
+		return
+	}
+	if err := ratingRows.Close(); err != nil {
+		databaseError(w, err)
+		return
+	}
+	response["user"].(map[string]any)["ratings"] = ratings
 
 	friends, err := s.querySocialPlayers(r, `
 		SELECT u.id,u.public_handle,u.elo_rating,f.created_at

@@ -1,18 +1,32 @@
 package campaigns
 
-import "fmt"
+import "strconv"
 
 func abandonCampaign() Campaign {
+	configs := []struct {
+		pairs, boardCards, target int
+	}{
+		{4, 11, 35}, {4, 12, 36}, {4, 13, 37},
+		{5, 11, 44}, {5, 12, 45}, {5, 13, 46},
+		{6, 11, 53}, {6, 12, 54}, {6, 13, 55},
+	}
 	missions := make([]Mission, 15)
-	for index := range missions {
-		boardID := fmt.Sprintf("board-%02d", index+1)
+	for index, config := range configs {
 		missions[index] = Mission{
-			Index: index + 1, Name: boardID, RewardMarks: 400,
-			Variant: "abandon", VariantID: boardID,
+			Index: index + 1, Name: "Mission " + strconv.Itoa(index+1),
+			Hint:    "Make the required pairs and reach the target score.",
+			Variant: "abandon", RewardMarks: 400, Target: config.target,
+			AbandonPairs: config.pairs, AbandonBoardCards: config.boardCards,
+		}
+	}
+	for index := len(configs); index < len(missions); index++ {
+		missions[index] = Mission{
+			Index: index + 1, Name: "Mission " + strconv.Itoa(index+1),
+			Hint: "Coming Soon", Variant: "abandon", Status: "Coming Soon", Disabled: true,
 		}
 	}
 	return Campaign{
-		ID: "abandon", Name: "Abandon", Description: "Survive the Abandon boards.",
+		ID: "abandon", Name: "Abandon", Description: "Reveal cards, battle for prisoners, and avoid abandoning your personal pile.",
 		Variant: "abandon", Missions: missions,
 	}
 }

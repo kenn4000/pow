@@ -1,6 +1,7 @@
 {
   "id": "nun-pink",
   "displayName": "Nun (pink)",
+  "rarityRank": 0,
   "hexColor": "#E85FC3",
   "price": 1000,
   "currency": "crowns"

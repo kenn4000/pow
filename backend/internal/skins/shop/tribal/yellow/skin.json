@@ -1,6 +1,7 @@
 {
   "id": "sunflower",
   "displayName": "Tribal (yellow)",
+  "rarityRank": 0,
   "hexColor": "#b58a06",
   "price": 250,
   "currency": "marks"

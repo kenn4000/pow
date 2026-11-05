@@ -146,6 +146,7 @@ func (s *webServer) finishLadderAction(previous ladder.PlayerID) {
 				session.message = "The opponent wins the Ladder game."
 			}
 		}
+		s.awardLocalMultiplayerPayout(0)
 		return
 	}
 	session.actor = int(state.Current)

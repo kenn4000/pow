@@ -9,7 +9,8 @@ Recruit during the v5-to-v6 profile migration.
 
 Warden, Hunter, and the Turtle unlock when Basic Training is completed. The other
 heroes are acquired from Hero Boxes; any non-Recruit hero can also be purchased
-individually for 1,200 Crowns. Marks cannot be converted to Crowns.
+individually for 300, 400, or 500 Crowns, depending on the hero. Marks cannot
+be converted to Crowns.
 
 ## Campaigns
 
@@ -46,20 +47,20 @@ first mission of each campaign cost no energy.
 
 ## Hero Boxes and direct purchase
 
-In Shop, select `hero-box` to open a Hero Box. The regular cost is 3,000 Marks;
-Hero Broker reduces it to 2,700. Any free boxes from campaigns or achievements
-are opened before Marks are spent.
+In Shop, a Hero Box costs 8,000 Marks; Hero Broker reduces it to 7,200. Each
+of the ten non-Recruit heroes has a 10% chance. If the selected hero is already
+owned, the base reward is 50% of that hero's listed Crown purchase price:
 
-| Tier | Chance | Possible heroes | Duplicate reward |
-| --- | ---: | --- | ---: |
-| Early | 50% | Treasurer, Gorilla | 100 Crowns |
-| Mid | 30% | Gambler, Diplomat, Bureaucrat | 150 Crowns |
-| Late | 20% | Bodybuilder, Hater | 200 Crowns |
+| Crown price | Heroes | Base duplicate reward |
+| ---: | --- | ---: |
+| 300 | Warden, Hunter, Turtle, Bureaucrat | 150 Crowns |
+| 400 | Treasurer, Gorilla, Diplomat | 200 Crowns |
+| 500 | Gambler, Bodybuilder, Hater | 250 Crowns |
 
 Lucky Duplicate raises duplicate compensation by 25%; Premium Duplicate
 (requires Lucky Duplicate) raises it by 50% instead. Fractional Crowns are
-rounded down. In Shop, `buy-hero` lists every unowned hero for direct purchase
-at 1,200 Crowns each. Both paid actions require confirmation.
+rounded down. In Shop, `buy-hero` lists every unowned hero at its listed
+300/400/500 Crown price. Paid purchases require confirmation.
 
 Achievements award unopened Hero Boxes: Long March awards one, and badge
 rewards include one additional box.
@@ -79,23 +80,14 @@ rewards include one additional box.
 Modifier tiers are independently earned: winning with a high modifier does
 not automatically unlock tiers for modifiers that were not used.
 
-## Skill tree additions
+## Skill tree collection branch
 
-The current project had nine skill nodes before this expansion. Per the agreed
-scope, the ten specified additions bring the tree to 19 nodes:
-
-| Node | Cost | Effect |
-| --- | ---: | --- |
-| Conductor I | 500 Crowns | Tune one modifier by +1 or -1 |
-| Conductor II | 1,200 Crowns | Tune two different modifiers; requires Conductor I |
-| Hero Broker | 300 Crowns | Hero Boxes cost 10% fewer Marks |
-| Curator | 400 Crowns | Campaign mission Marks +50% |
-| Lucky Duplicate | 400 Crowns | Duplicate Crowns +25% |
-| Premium Duplicate | 800 Crowns | Duplicate Crowns +50%; requires Lucky Duplicate |
-| Campaign Freebie | 300 Crowns | First mission in each campaign costs no energy |
-| Daily Rations | 500 Crowns | Gain 2 energy on first login each day |
-| Hero History | 400 Crowns | Show the opponent's last two hero picks |
-| Hero Preview | 600 Crowns | Preview modifiers during hero selection; requires Hero History |
+The six-branch, 27-node Skill Tree and its full reward effects are documented
+in [economy.md](./economy.md#skills-shop-and-chromas). The Collection branch
+contains Hero Broker (10% fewer Marks for Hero Boxes), Lucky Duplicate (+20%
+duplicate Crown refunds), and Premium Duplicate (an additional +30% refund).
+Unlocks require Skill Points: one for T1, two for T2, and three for T3. The
+Shop sells one Skill Point for 300 Crowns or ten for 2,400 Crowns.
 
 Conductor tuning is applied to the combined hero modifiers before the normal
 modifier envelope clamp. It changes the shared match modifiers and is not
@@ -105,7 +97,7 @@ Hero Box inventory are saved in profile schema v6.
 ## Terminal commands
 
 - Landing page: **[9] Campaigns**
-- Shop: `hero-box` to open a free or Marks-purchased box; `buy-hero` for direct
-  Crown purchases
+- Shop: `hero-box` to open a Marks-purchased box, `free-hero-box` to open an
+  awarded box, and `buy-hero` for direct Crown purchases
 - Heroes: choose an unlocked default hero; locked heroes show their campaign
   or acquisition hint

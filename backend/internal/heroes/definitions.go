@@ -145,31 +145,31 @@ func tuningValue(tuning Tuning, modifier string) (int, error) {
 		if key != "bounty" && key != "shift" && key != "favored" {
 			return 0, fmt.Errorf("unsupported tuning modifier %q", key)
 		}
-		if value < -1 || value > 1 {
-			return 0, fmt.Errorf("tuning for %s must be -1, 0, or +1", key)
+		if value < -2 || value > 2 {
+			return 0, fmt.Errorf("tuning for %s must be between -2 and +2", key)
 		}
 	}
 	return tuning[modifier], nil
 }
 
-func ValidateTuning(tuning Tuning, maxModifiers int) error {
-	if maxModifiers < 0 {
-		return fmt.Errorf("maximum tuned modifier count cannot be negative")
+func ValidateTuning(tuning Tuning, maxMagnitude int) error {
+	if maxMagnitude < 0 || maxMagnitude > 2 {
+		return fmt.Errorf("maximum tuning magnitude must be between zero and two")
 	}
 	used := 0
 	for key, value := range tuning {
 		if key != "bounty" && key != "shift" && key != "favored" {
 			return fmt.Errorf("unsupported tuning modifier %q", key)
 		}
-		if value < -1 || value > 1 {
-			return fmt.Errorf("tuning for %s must be -1, 0, or +1", key)
+		if value < -maxMagnitude || value > maxMagnitude {
+			return fmt.Errorf("tuning for %s must be between -%d and +%d", key, maxMagnitude, maxMagnitude)
 		}
 		if value != 0 {
 			used++
 		}
 	}
-	if used > maxModifiers {
-		return fmt.Errorf("cannot tune more than %d different modifiers", maxModifiers)
+	if used > 1 {
+		return fmt.Errorf("only one modifier can be tuned")
 	}
 	return nil
 }

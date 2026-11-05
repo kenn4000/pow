@@ -1,6 +1,7 @@
 {
   "id": "rockstar-yellow",
   "displayName": "Rockstar (yellow)",
+  "rarityRank": 0,
   "hexColor": "#E6E025",
   "price": 2000,
   "currency": "marks"

@@ -1,6 +1,7 @@
 {
   "id": "conq-gold",
   "displayName": "Conquistador (gold)",
+  "rarityRank": 0,
   "hexColor": "#d4a72c",
   "price": 600,
   "currency": "marks"

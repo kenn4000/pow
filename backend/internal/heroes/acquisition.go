@@ -10,33 +10,19 @@ import (
 )
 
 const (
-	HeroBoxMarksCost      int64 = 3000
-	HeroBoxDiscountedCost int64 = 2700
-	DirectHeroCrownsCost        = profile.DirectHeroCrownsCost
-
-	DuplicateEarlyCrowns int64 = 100
-	DuplicateMidCrowns   int64 = 150
-	DuplicateLateCrowns  int64 = 200
-
-	DuplicateSkillBonus1 = 25
-	DuplicateSkillBonus2 = 50
-
-	TierEarly = 50
-	TierMid   = 30
-	TierLate  = 20
+	HeroBoxMarksCost      int64 = 8000
+	HeroBoxDiscountedCost int64 = 7200
 )
 
 type HeroBoxResult struct {
-	HeroID        string
-	Crowns        int64
-	Duplicate     bool
-	DuplicateTier string
+	HeroID    string `json:"heroId,omitempty"`
+	Crowns    int64  `json:"crowns,omitempty"`
+	Duplicate bool   `json:"duplicate,omitempty"`
 }
 
-var heroBoxPool = map[string][]string{
-	"early": {"treasurer", "ascendant"},
-	"mid":   {"gambler", "diplomat", "ascetic"},
-	"late":  {"herald", "hater"},
+var heroBoxPool = []string{
+	"warden", "hunter", "treasurer", "ascendant", "anchor",
+	"gambler", "diplomat", "ascetic", "herald", "hater",
 }
 
 type BoxOdds struct {
@@ -45,25 +31,25 @@ type BoxOdds struct {
 }
 
 func HeroBoxOdds(p *profile.Profile) []BoxOdds {
-	entries := []BoxOdds{}
-	weights := map[string]int{"early": TierEarly, "mid": TierMid, "late": TierLate}
-	duplicates := map[string]int64{"early": DuplicateEarlyCrowns, "mid": DuplicateMidCrowns, "late": DuplicateLateCrowns}
-	bonus := skills.AggregateBonuses(p).DuplicateBonusPercent
-	for _, tier := range []string{"early", "mid", "late"} {
-		for _, id := range heroBoxPool[tier] {
-			hero, _ := ByID(id)
-			duplicate := duplicates[tier] * int64(100+bonus) / 100
-			entries = append(entries, BoxOdds{Label: fmt.Sprintf("%s (%s tier); duplicate: %d Crowns", hero.Name, tier, duplicate), Chance: float64(weights[tier]) / float64(len(heroBoxPool[tier]))})
+	entries := make([]BoxOdds, 0, len(heroBoxPool))
+	for _, id := range heroBoxPool {
+		hero, _ := ByID(id)
+		cost, _ := profile.HeroCrownsCost(id)
+		duplicate := cost / 2
+		if bonus := skills.AggregateBonuses(p).DuplicateBonusPercent; bonus > 0 {
+			duplicate += duplicate * int64(bonus) / 100
 		}
+		entries = append(entries, BoxOdds{
+			Label:  fmt.Sprintf("%s; duplicate: %d Crowns", hero.Name, duplicate),
+			Chance: 100 / float64(len(heroBoxPool)),
+		})
 	}
 	return entries
 }
 
 func HeroBoxCost(p *profile.Profile) int64 {
-	if skills.AggregateBonuses(p).HeroBroker {
-		return HeroBoxDiscountedCost
-	}
-	return HeroBoxMarksCost
+	discount := skills.AggregateBonuses(p).HeroBoxDiscountPercent
+	return HeroBoxMarksCost * int64(100-discount) / 100
 }
 
 func OpenHeroBox(p *profile.Profile, rng *rand.Rand) (HeroBoxResult, error) {
@@ -90,16 +76,7 @@ func openHeroBox(p *profile.Profile, rng *rand.Rand, consumeFree bool) (HeroBoxR
 		return HeroBoxResult{}, fmt.Errorf("need %d Marks; you have %d", cost, p.Marks)
 	}
 
-	roll := rng.Intn(TierEarly + TierMid + TierLate)
-	tier := "late"
-	switch {
-	case roll < TierEarly:
-		tier = "early"
-	case roll < TierEarly+TierMid:
-		tier = "mid"
-	}
-	pool := heroBoxPool[tier]
-	heroID := pool[rng.Intn(len(pool))]
+	heroID := heroBoxPool[rng.Intn(len(heroBoxPool))]
 	if free {
 		p.HeroBoxesAvailable--
 	} else {
@@ -110,17 +87,16 @@ func openHeroBox(p *profile.Profile, rng *rand.Rand, consumeFree bool) (HeroBoxR
 		return HeroBoxResult{HeroID: heroID}, nil
 	}
 
-	duplicateCrowns := map[string]int64{
-		"early": DuplicateEarlyCrowns,
-		"mid":   DuplicateMidCrowns,
-		"late":  DuplicateLateCrowns,
-	}[tier]
-	duplicateBonus := skills.AggregateBonuses(p).DuplicateBonusPercent
-	if duplicateBonus > 0 {
-		duplicateCrowns += duplicateCrowns * int64(duplicateBonus) / 100
+	heroCost, ok := profile.HeroCrownsCost(heroID)
+	if !ok {
+		return HeroBoxResult{}, fmt.Errorf("hero %q has no Crown purchase price", heroID)
+	}
+	duplicateCrowns := heroCost / 2
+	if bonus := skills.AggregateBonuses(p).DuplicateBonusPercent; bonus > 0 {
+		duplicateCrowns += duplicateCrowns * int64(bonus) / 100
 	}
 	p.Crowns += duplicateCrowns
-	return HeroBoxResult{Crowns: duplicateCrowns, Duplicate: true, DuplicateTier: tier}, nil
+	return HeroBoxResult{HeroID: heroID, Crowns: duplicateCrowns, Duplicate: true}, nil
 }
 
 func BuyHeroWithCrowns(p *profile.Profile, heroID string) error {

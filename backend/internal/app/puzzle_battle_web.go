@@ -20,6 +20,7 @@ import (
 	"prisonersofwar/internal/lootbox"
 	"prisonersofwar/internal/profile"
 	"prisonersofwar/internal/puzzlebattle"
+	"prisonersofwar/internal/ranked"
 )
 
 const puzzleBattleInviteLifetime = 10 * time.Minute
@@ -30,6 +31,7 @@ type puzzleBattleQueryRower interface {
 
 type puzzleBattleRequest struct {
 	Action    string `json:"action"`
+	MatchMode string `json:"matchMode"`
 	HeroID    string `json:"heroId"`
 	Recipient string `json:"recipient"`
 	InviteID  string `json:"inviteId"`
@@ -66,12 +68,13 @@ type puzzleBattleHistoryEntry struct {
 }
 
 type puzzleBattleResponse struct {
-	Status   string                     `json:"status"`
-	Match    *puzzleBattlePublicMatch   `json:"match,omitempty"`
-	Incoming []puzzleBattleInvite       `json:"incomingInvites"`
-	Outgoing []puzzleBattleInvite       `json:"outgoingInvites"`
-	History  []puzzleBattleHistoryEntry `json:"history"`
-	InviteID string                     `json:"inviteId,omitempty"`
+	Status    string                     `json:"status"`
+	MatchMode string                     `json:"matchMode,omitempty"`
+	Match     *puzzleBattlePublicMatch   `json:"match,omitempty"`
+	Incoming  []puzzleBattleInvite       `json:"incomingInvites"`
+	Outgoing  []puzzleBattleInvite       `json:"outgoingInvites"`
+	History   []puzzleBattleHistoryEntry `json:"history"`
+	InviteID  string                     `json:"inviteId,omitempty"`
 }
 
 type puzzleBattleHistoryResponse struct {
@@ -184,15 +187,16 @@ func (s *webServer) getPuzzleBattle(w http.ResponseWriter, r *http.Request, user
 			return
 		}
 		response.Match = &public
-		response.Status = match.Status
+		response.Status, response.MatchMode = match.Status, match.MatchMode
 	} else {
-		var queued bool
-		if err := tx.QueryRowContext(r.Context(), "SELECT EXISTS(SELECT 1 FROM puzzle_battle_queue WHERE user_id=$1)", user.ID).Scan(&queued); err != nil {
+		var queuedMode string
+		if err := tx.QueryRowContext(r.Context(), "SELECT match_mode FROM puzzle_battle_queue WHERE user_id=$1", user.ID).Scan(&queuedMode); err != nil && !errors.Is(err, sql.ErrNoRows) {
 			databaseError(w, err)
 			return
 		}
+		queued := queuedMode != ""
 		if queued {
-			response.Status = "queued"
+			response.Status, response.MatchMode = "queued", queuedMode
 			if _, err := tx.ExecContext(r.Context(), "UPDATE puzzle_battle_queue SET last_seen=$1 WHERE user_id=$2", now, user.ID); err != nil {
 				databaseError(w, err)
 				return
@@ -237,6 +241,13 @@ func (s *webServer) getPuzzleBattle(w http.ResponseWriter, r *http.Request, user
 }
 
 func (s *webServer) queuePuzzleBattle(w http.ResponseWriter, r *http.Request, user account, request puzzleBattleRequest) {
+	if request.MatchMode == "" {
+		request.MatchMode = "online"
+	}
+	if request.MatchMode != "online" && request.MatchMode != "ranked" {
+		writeError(w, http.StatusBadRequest, errors.New("choose online or ranked matchmaking"))
+		return
+	}
 	tx, err := s.db.BeginTx(r.Context(), nil)
 	if err != nil {
 		databaseError(w, err)
@@ -264,6 +275,7 @@ func (s *webServer) queuePuzzleBattle(w http.ResponseWriter, r *http.Request, us
 		FROM puzzle_battle_queue q
 		WHERE q.user_id<>$1
 		  AND q.last_seen>$2
+		  AND q.match_mode=$3
 		  AND NOT EXISTS (
 			SELECT 1 FROM player_blocks b
 			WHERE (b.blocker_id=$1 AND b.blocked_id=q.user_id)
@@ -271,7 +283,7 @@ func (s *webServer) queuePuzzleBattle(w http.ResponseWriter, r *http.Request, us
 		  )
 		ORDER BY q.queued_at,q.user_id
 		LIMIT 1
-		`, user.ID, now.Add(-puzzlebattle.HeartbeatTimeout)).Scan(&opponentID, &opponentHeroID)
+		`, user.ID, now.Add(-puzzlebattle.HeartbeatTimeout), request.MatchMode).Scan(&opponentID, &opponentHeroID)
 	if errors.Is(err, sql.ErrNoRows) {
 		if err := lockPuzzleBattlePlayers(r.Context(), tx, user.ID); err != nil {
 			databaseError(w, err)
@@ -287,10 +299,11 @@ func (s *webServer) queuePuzzleBattle(w http.ResponseWriter, r *http.Request, us
 			return
 		}
 		if _, err := tx.ExecContext(r.Context(), `
-			INSERT INTO puzzle_battle_queue(user_id,hero_id,queued_at,last_seen)
-			VALUES($1,$2,$3,$3)
-			ON CONFLICT(user_id) DO UPDATE SET hero_id=EXCLUDED.hero_id,queued_at=EXCLUDED.queued_at,last_seen=EXCLUDED.last_seen`,
-			user.ID, hero.ID, now); err != nil {
+			INSERT INTO puzzle_battle_queue(user_id,hero_id,queued_at,last_seen,match_mode)
+			VALUES($1,$2,$3,$3,$4)
+			ON CONFLICT(user_id) DO UPDATE SET hero_id=EXCLUDED.hero_id,queued_at=EXCLUDED.queued_at,
+				last_seen=EXCLUDED.last_seen,match_mode=EXCLUDED.match_mode`,
+			user.ID, hero.ID, now, request.MatchMode); err != nil {
 			databaseError(w, err)
 			return
 		}
@@ -302,7 +315,7 @@ func (s *webServer) queuePuzzleBattle(w http.ResponseWriter, r *http.Request, us
 			databaseError(w, err)
 			return
 		}
-		writeJSON(w, http.StatusOK, puzzleBattleResponse{Status: "queued", Incoming: []puzzleBattleInvite{}, Outgoing: []puzzleBattleInvite{}, History: []puzzleBattleHistoryEntry{}})
+		writeJSON(w, http.StatusOK, puzzleBattleResponse{Status: "queued", MatchMode: request.MatchMode, Incoming: []puzzleBattleInvite{}, Outgoing: []puzzleBattleInvite{}, History: []puzzleBattleHistoryEntry{}})
 		return
 	}
 	if err != nil {
@@ -345,10 +358,11 @@ func (s *webServer) queuePuzzleBattle(w http.ResponseWriter, r *http.Request, us
 			return
 		}
 		if _, err := tx.ExecContext(r.Context(), `
-			INSERT INTO puzzle_battle_queue(user_id,hero_id,queued_at,last_seen)
-			VALUES($1,$2,$3,$3)
-			ON CONFLICT(user_id) DO UPDATE SET hero_id=EXCLUDED.hero_id,queued_at=EXCLUDED.queued_at,last_seen=EXCLUDED.last_seen`,
-			user.ID, hero.ID, now); err != nil {
+			INSERT INTO puzzle_battle_queue(user_id,hero_id,queued_at,last_seen,match_mode)
+			VALUES($1,$2,$3,$3,$4)
+			ON CONFLICT(user_id) DO UPDATE SET hero_id=EXCLUDED.hero_id,queued_at=EXCLUDED.queued_at,
+				last_seen=EXCLUDED.last_seen,match_mode=EXCLUDED.match_mode`,
+			user.ID, hero.ID, now, request.MatchMode); err != nil {
 			databaseError(w, err)
 			return
 		}
@@ -356,20 +370,21 @@ func (s *webServer) queuePuzzleBattle(w http.ResponseWriter, r *http.Request, us
 			databaseError(w, err)
 			return
 		}
-		writeJSON(w, http.StatusOK, puzzleBattleResponse{Status: "queued", Incoming: []puzzleBattleInvite{}, Outgoing: []puzzleBattleInvite{}, History: []puzzleBattleHistoryEntry{}})
+		writeJSON(w, http.StatusOK, puzzleBattleResponse{Status: "queued", MatchMode: request.MatchMode, Incoming: []puzzleBattleInvite{}, Outgoing: []puzzleBattleInvite{}, History: []puzzleBattleHistoryEntry{}})
 		return
 	}
 	if _, err := tx.ExecContext(r.Context(), `
-		INSERT INTO puzzle_battle_queue(user_id,hero_id,queued_at,last_seen)
-		VALUES($1,$2,$3,$3)
-		ON CONFLICT(user_id) DO UPDATE SET hero_id=EXCLUDED.hero_id,last_seen=EXCLUDED.last_seen`,
-		user.ID, hero.ID, now); err != nil {
+		INSERT INTO puzzle_battle_queue(user_id,hero_id,queued_at,last_seen,match_mode)
+		VALUES($1,$2,$3,$3,$4)
+		ON CONFLICT(user_id) DO UPDATE SET hero_id=EXCLUDED.hero_id,last_seen=EXCLUDED.last_seen,
+			match_mode=EXCLUDED.match_mode`,
+		user.ID, hero.ID, now, request.MatchMode); err != nil {
 		databaseError(w, err)
 		return
 	}
 	rows, err := tx.QueryContext(r.Context(), `
 		SELECT user_id,hero_id FROM puzzle_battle_queue
-		WHERE user_id IN ($1,$2) ORDER BY user_id FOR UPDATE`, user.ID, opponentID)
+		WHERE user_id IN ($1,$2) AND match_mode=$3 ORDER BY user_id FOR UPDATE`, user.ID, opponentID, request.MatchMode)
 	if err != nil {
 		databaseError(w, err)
 		return
@@ -392,10 +407,11 @@ func (s *webServer) queuePuzzleBattle(w http.ResponseWriter, r *http.Request, us
 	rows.Close()
 	if queueHeroes[user.ID] == "" || queueHeroes[opponentID] == "" {
 		if _, err := tx.ExecContext(r.Context(), `
-			INSERT INTO puzzle_battle_queue(user_id,hero_id,queued_at,last_seen)
-			VALUES($1,$2,$3,$3)
-			ON CONFLICT(user_id) DO UPDATE SET hero_id=EXCLUDED.hero_id,queued_at=EXCLUDED.queued_at,last_seen=EXCLUDED.last_seen`,
-			user.ID, hero.ID, now); err != nil {
+			INSERT INTO puzzle_battle_queue(user_id,hero_id,queued_at,last_seen,match_mode)
+			VALUES($1,$2,$3,$3,$4)
+			ON CONFLICT(user_id) DO UPDATE SET hero_id=EXCLUDED.hero_id,queued_at=EXCLUDED.queued_at,
+				last_seen=EXCLUDED.last_seen,match_mode=EXCLUDED.match_mode`,
+			user.ID, hero.ID, now, request.MatchMode); err != nil {
 			databaseError(w, err)
 			return
 		}
@@ -403,19 +419,20 @@ func (s *webServer) queuePuzzleBattle(w http.ResponseWriter, r *http.Request, us
 			databaseError(w, err)
 			return
 		}
-		writeJSON(w, http.StatusOK, puzzleBattleResponse{Status: "queued", Incoming: []puzzleBattleInvite{}, Outgoing: []puzzleBattleInvite{}, History: []puzzleBattleHistoryEntry{}})
+		writeJSON(w, http.StatusOK, puzzleBattleResponse{Status: "queued", MatchMode: request.MatchMode, Incoming: []puzzleBattleInvite{}, Outgoing: []puzzleBattleInvite{}, History: []puzzleBattleHistoryEntry{}})
 		return
 	}
 	opponentHeroID = queueHeroes[opponentID]
 	if _, err := tx.ExecContext(r.Context(), `
-		INSERT INTO puzzle_battle_queue(user_id,hero_id,queued_at,last_seen)
-		VALUES($1,$2,$3,$3)
-		ON CONFLICT(user_id) DO UPDATE SET hero_id=EXCLUDED.hero_id,queued_at=EXCLUDED.queued_at,last_seen=EXCLUDED.last_seen`,
-		user.ID, hero.ID, now); err != nil {
+		INSERT INTO puzzle_battle_queue(user_id,hero_id,queued_at,last_seen,match_mode)
+		VALUES($1,$2,$3,$3,$4)
+		ON CONFLICT(user_id) DO UPDATE SET hero_id=EXCLUDED.hero_id,queued_at=EXCLUDED.queued_at,
+			last_seen=EXCLUDED.last_seen,match_mode=EXCLUDED.match_mode`,
+		user.ID, hero.ID, now, request.MatchMode); err != nil {
 		databaseError(w, err)
 		return
 	}
-	match, err := s.createPuzzleBattleTx(r.Context(), tx, [2]string{opponentID, user.ID}, [2]string{opponentHeroID, hero.ID}, now)
+	match, err := s.createPuzzleBattleTx(r.Context(), tx, [2]string{opponentID, user.ID}, [2]string{opponentHeroID, hero.ID}, request.MatchMode, now)
 	if err != nil {
 		writeError(w, http.StatusConflict, err)
 		return
@@ -429,7 +446,7 @@ func (s *webServer) queuePuzzleBattle(w http.ResponseWriter, r *http.Request, us
 		databaseError(w, err)
 		return
 	}
-	writeJSON(w, http.StatusCreated, puzzleBattleResponse{Status: match.Status, Match: &public})
+	writeJSON(w, http.StatusCreated, puzzleBattleResponse{Status: match.Status, MatchMode: match.MatchMode, Match: &public})
 }
 
 func (s *webServer) cancelPuzzleBattleQueue(w http.ResponseWriter, r *http.Request, user account) {
@@ -634,7 +651,7 @@ func (s *webServer) respondPuzzleBattleInvite(w http.ResponseWriter, r *http.Req
 			databaseError(w, err)
 			return
 		}
-		match, err := s.createPuzzleBattleTx(r.Context(), tx, [2]string{senderID, user.ID}, [2]string{senderHeroID, hero.ID}, now)
+		match, err := s.createPuzzleBattleTx(r.Context(), tx, [2]string{senderID, user.ID}, [2]string{senderHeroID, hero.ID}, "friend", now)
 		if err != nil {
 			writeError(w, http.StatusConflict, err)
 			return
@@ -648,7 +665,7 @@ func (s *webServer) respondPuzzleBattleInvite(w http.ResponseWriter, r *http.Req
 			databaseError(w, err)
 			return
 		}
-		writeJSON(w, http.StatusCreated, puzzleBattleResponse{Status: match.Status, Match: &public})
+		writeJSON(w, http.StatusCreated, puzzleBattleResponse{Status: match.Status, MatchMode: "friend", Match: &public})
 		return
 	}
 	status := "declined"
@@ -728,6 +745,45 @@ func (s *webServer) handlePuzzleBattleAction(w http.ResponseWriter, r *http.Requ
 			return
 		}
 	}
+	if match.Status == puzzlebattle.PhaseComplete && match.MatchMode == "ranked" && match.RankedSeries != nil {
+		if match.Result == nil {
+			databaseError(w, errors.New("completed ranked Puzzler game has no result"))
+			return
+		}
+		series := match.RankedSeries
+		if err := series.RecordGame(match.Result.Winner, match.Result.Scores); err != nil {
+			databaseError(w, err)
+			return
+		}
+		if series.Complete {
+			match.Result.Winner = series.Winner
+			match.Result.Draw = series.Draw
+			match.Result.Scores = series.Scores
+		} else {
+			var playerHeroes [2]heroes.Hero
+			for index, heroID := range match.PlayerHeroIDs {
+				hero, ok := heroes.ByID(heroID)
+				if !ok {
+					databaseError(w, fmt.Errorf("unknown ranked Puzzler hero %q", heroID))
+					return
+				}
+				playerHeroes[index] = hero
+			}
+			rng, err := secureRand()
+			if err != nil {
+				databaseError(w, fmt.Errorf("create next ranked Puzzler game: %w", err))
+				return
+			}
+			nextGame, err := puzzlebattle.New(match.ID, match.PlayerIDs, match.PlayerHeroIDs, playerHeroes, rng, now)
+			if err != nil {
+				databaseError(w, fmt.Errorf("create next ranked Puzzler game: %w", err))
+				return
+			}
+			nextGame.MatchMode = match.MatchMode
+			nextGame.RankedSeries = series
+			match = nextGame
+		}
+	}
 	if err := s.savePuzzleBattleTx(r.Context(), tx, match, wasActive, now); err != nil {
 		databaseError(w, err)
 		return
@@ -741,7 +797,7 @@ func (s *webServer) handlePuzzleBattleAction(w http.ResponseWriter, r *http.Requ
 		databaseError(w, err)
 		return
 	}
-	writeJSON(w, http.StatusOK, puzzleBattleResponse{Status: match.Status, Match: &public})
+	writeJSON(w, http.StatusOK, puzzleBattleResponse{Status: match.Status, MatchMode: match.MatchMode, Match: &public})
 }
 
 func (s *webServer) handlePuzzleBattleHistory(w http.ResponseWriter, r *http.Request) {
@@ -757,7 +813,7 @@ func (s *webServer) handlePuzzleBattleHistory(w http.ResponseWriter, r *http.Req
 	writeJSON(w, http.StatusOK, puzzleBattleHistoryResponse{Matches: matches})
 }
 
-func (s *webServer) createPuzzleBattleTx(ctx context.Context, tx *sql.Tx, ids, heroIDs [2]string, now time.Time) (*puzzlebattle.Match, error) {
+func (s *webServer) createPuzzleBattleTx(ctx context.Context, tx *sql.Tx, ids, heroIDs [2]string, matchMode string, now time.Time) (*puzzlebattle.Match, error) {
 	if err := lockPuzzleBattlePlayers(ctx, tx, ids[0], ids[1]); err != nil {
 		return nil, err
 	}
@@ -783,13 +839,17 @@ func (s *webServer) createPuzzleBattleTx(ctx context.Context, tx *sql.Tx, ids, h
 	if err != nil {
 		return nil, fmt.Errorf("create Puzzle Battle: %w", err)
 	}
+	match.MatchMode = matchMode
+	if matchMode == "ranked" {
+		match.RankedSeries = ranked.NewSeries()
+	}
 	state, err := json.Marshal(match)
 	if err != nil {
 		return nil, fmt.Errorf("encode Puzzle Battle state: %w", err)
 	}
 	if _, err := tx.ExecContext(ctx, `
-		INSERT INTO puzzle_battle_matches(id,player_a_id,player_b_id,player_a_hero_id,player_b_hero_id,state,status)
-		VALUES($1,$2,$3,$4,$5,$6,'active')`, match.ID, ids[0], ids[1], heroIDs[0], heroIDs[1], state); err != nil {
+		INSERT INTO puzzle_battle_matches(id,player_a_id,player_b_id,player_a_hero_id,player_b_hero_id,state,status,match_mode)
+		VALUES($1,$2,$3,$4,$5,$6,'active',$7)`, match.ID, ids[0], ids[1], heroIDs[0], heroIDs[1], state, matchMode); err != nil {
 		return nil, fmt.Errorf("save new Puzzle Battle: %w", err)
 	}
 	if _, err := tx.ExecContext(ctx, "DELETE FROM puzzle_battle_queue WHERE user_id IN ($1,$2)", ids[0], ids[1]); err != nil {
@@ -838,12 +898,12 @@ func loadLatestCompletedPuzzleBattle(ctx context.Context, tx *sql.Tx, userID str
 }
 
 func loadPuzzleBattleMatch(ctx context.Context, tx *sql.Tx, matchID, userID string) (*puzzlebattle.Match, int, error) {
-	var playerA, playerB string
+	var playerA, playerB, matchMode string
 	var state []byte
 	err := tx.QueryRowContext(ctx, `
-		SELECT player_a_id,player_b_id,state FROM puzzle_battle_matches
+		SELECT player_a_id,player_b_id,state,match_mode FROM puzzle_battle_matches
 		WHERE id=$1 AND (player_a_id=$2 OR player_b_id=$2) FOR UPDATE`, matchID, userID).
-		Scan(&playerA, &playerB, &state)
+		Scan(&playerA, &playerB, &state, &matchMode)
 	if err != nil {
 		return nil, 0, err
 	}
@@ -854,6 +914,7 @@ func loadPuzzleBattleMatch(ctx context.Context, tx *sql.Tx, matchID, userID stri
 	if match.ID != matchID || match.PlayerIDs != [2]string{playerA, playerB} {
 		return nil, 0, errors.New("stored Puzzle Battle participants do not match its state")
 	}
+	match.MatchMode = matchMode
 	if userID == playerA {
 		return &match, 0, nil
 	}
@@ -901,7 +962,7 @@ func (s *webServer) savePuzzleBattleTx(ctx context.Context, tx *sql.Tx, match *p
 	_, err = tx.ExecContext(ctx, `
 		UPDATE puzzle_battle_matches
 		SET state=$1,result=$2,status=$3,player_a_last_seen=$4,player_b_last_seen=$5,
-			updated_at=$6,completed_at=COALESCE(completed_at,$7)
+			updated_at=$6,completed_at=CASE WHEN $3='completed' THEN COALESCE(completed_at,$7) ELSE NULL END
 		WHERE id=$8 AND status='active'`,
 		state, result, status, match.LastHeartbeatAt[0], match.LastHeartbeatAt[1], now, completedAt, match.ID)
 	if err != nil {
@@ -1055,7 +1116,9 @@ func creditPuzzleBattleProfiles(ctx context.Context, tx *sql.Tx, match *puzzleba
 	}
 	for player, p := range players {
 		opponent := 1 - player
-		won := match.Result.Winner == player
+		seriesTie := match.MatchMode == "ranked" && match.RankedSeries != nil &&
+			match.RankedSeries.Complete && match.RankedSeries.Draw
+		won := match.Result.Winner == player || seriesTie
 		tied := match.Result.Draw
 		playerScore, opponentScore := match.Result.Scores[player], match.Result.Scores[opponent]
 		seat := game.SeatX
@@ -1077,28 +1140,36 @@ func creditPuzzleBattleProfiles(ctx context.Context, tx *sql.Tx, match *puzzleba
 			}},
 		}
 		mode := economy.ModeFriendCasual
+		if match.MatchMode == "ranked" {
+			mode = economy.ModeRanked
+		}
 		updateAchievementStats(p, gameResult, mode)
-		if tied {
-			p.TotalDraws++
-			p.CurrentStreak = 0
-		} else if won {
+		if won {
 			p.TotalWins++
 			p.CurrentStreak++
 			p.WinsSinceCampDraw++
-			if p.WinsSinceCampDraw >= lootbox.WinsPerCampDraw {
+			if p.WinsSinceCampDraw >= lootbox.RequiredWins(p) {
 				if p.DrawsAvailable < lootbox.MaxDrawsStored {
 					p.DrawsAvailable++
 				}
-				p.WinsSinceCampDraw -= lootbox.WinsPerCampDraw
+				p.WinsSinceCampDraw = 0
 			}
 			if p.CurrentStreak > p.BestStreak {
 				p.BestStreak = p.CurrentStreak
 			}
+		} else if tied {
+			p.TotalDraws++
+			p.CurrentStreak = 0
 		} else {
 			p.TotalLosses++
 			p.CurrentStreak = 0
 		}
-		payout := awardWebMatchMarks(p, playerScore, won)
+		payout, err := economy.CalculateMultiplayerPayout(
+			"puzzle-battle", playerScore, won, tied, won, "", mode, p, match.Result.CompletedAt,
+		)
+		if err != nil {
+			return fmt.Errorf("calculate Puzzle Battle rewards: %w", err)
+		}
 		achievementContext := achievements.NewMatchContext(p, gameResult, economy.ModeID(mode), seat.String())
 		achievementContext.Now = match.Result.CompletedAt
 		for _, event := range achievements.EvaluateAll(achievementContext) {
@@ -1131,6 +1202,11 @@ func creditPuzzleBattleProfiles(ctx context.Context, tx *sql.Tx, match *puzzleba
 			UPDATE player_data SET profile=$1,updated_at=$2,version=version+1
 			WHERE user_id=$3`, data, match.Result.CompletedAt, match.PlayerIDs[player]); err != nil {
 			return fmt.Errorf("save Puzzle Battle rewards: %w", err)
+		}
+	}
+	if match.MatchMode == "ranked" && match.Result.Winner >= 0 {
+		if err := updateVariantRatingsTx(ctx, tx, match.PlayerIDs, "puzzle-battle", match.Result.Winner, match.Result.CompletedAt); err != nil {
+			return err
 		}
 	}
 	return nil

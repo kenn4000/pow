@@ -1,6 +1,7 @@
 {
   "id": "bird-red",
   "displayName": "Bird (red)",
+  "rarityRank": 0,
   "hexColor": "#7D2227",
   "price": 1200,
   "currency": "marks"

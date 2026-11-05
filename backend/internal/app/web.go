@@ -8,7 +8,6 @@ import (
 	"fmt"
 	"io"
 	"io/fs"
-	"math"
 	"math/rand"
 	"mime"
 	"net"
@@ -34,6 +33,7 @@ import (
 	"prisonersofwar/internal/ladder"
 	"prisonersofwar/internal/lootbox"
 	"prisonersofwar/internal/profile"
+	"prisonersofwar/internal/ranked"
 	"prisonersofwar/internal/skills"
 	"prisonersofwar/internal/skins"
 	"prisonersofwar/internal/storage"
@@ -88,10 +88,13 @@ func (s *webServer) draftTurnMessage(playerIndex int) string {
 
 type webSession struct {
 	state               game.GameState
+	restartSnapshot     *webSession
+	undoSnapshot        *webSession
 	mode                string
 	variant             string
 	puzzle              *puzzleSession
 	abandon             *abandonSession
+	abandonDuel         *abandonDuelGame
 	rummy               *rummySession
 	ladder              *ladder.LadderGame
 	poker               *pokerSession
@@ -117,21 +120,29 @@ type webSession struct {
 	tiebreak            string
 	playerHeroID        string
 	opponentHeroID      string
+	conductorTunings    [2]heroes.Tuning
 	profileError        string
 	payout              *webMatchPayout
 	campaign            *webCampaignContext
 	battles             []webBattleRecord
 	initialAchievements map[string]int
 	achievementUpdates  []string
+	rankedSeries        *ranked.Series
 }
 
 type webMatchPayout struct {
-	PlayerScore   int   `json:"playerScore"`
-	PlayerWon     bool  `json:"playerWon"`
-	BaseMarks     int64 `json:"baseMarks"`
-	WinMultiplier int   `json:"winMultiplier"`
-	SkillBonusPct int   `json:"skillBonusPercent"`
-	TotalMarks    int64 `json:"totalMarks"`
+	PlayerScore         int     `json:"playerScore"`
+	PlayerWon           bool    `json:"playerWon"`
+	Draw                bool    `json:"draw"`
+	BaseMarks           int64   `json:"baseMarks"`
+	WinMultiplier       int     `json:"winMultiplier"`
+	SkillBonusPct       int     `json:"skillBonusPercent"`
+	AIMultiplier        float64 `json:"aiMultiplier"`
+	TotalMarks          int64   `json:"totalMarks"`
+	MatchCrowns         int64   `json:"matchCrowns"`
+	DailyWinBonusCrowns int64   `json:"dailyWinBonusCrowns"`
+	TotalCrowns         int64   `json:"totalCrowns"`
+	FirstWinOfDay       bool    `json:"firstWinOfDay"`
 }
 
 type webBattleOutcome struct {
@@ -193,9 +204,9 @@ type webView struct {
 	Mode               string                 `json:"mode,omitempty"`
 	Variant            string                 `json:"variant"`
 	PuzzleOptions      []puzzleDefinition     `json:"puzzleOptions"`
-	AbandonOptions     []abandonBoardOption   `json:"abandonOptions"`
 	Puzzle             *webPuzzleState        `json:"puzzle,omitempty"`
 	Abandon            *webAbandonState       `json:"abandon,omitempty"`
+	AbandonDuel        *webAbandonDuelState   `json:"abandonDuel,omitempty"`
 	Rummy              *webRummyState         `json:"rummy,omitempty"`
 	Ladder             *webLadderState        `json:"ladder,omitempty"`
 	Poker              *webPokerState         `json:"poker,omitempty"`
@@ -224,6 +235,7 @@ type webView struct {
 	CanContinue        bool                   `json:"canContinue"`
 	Winner             int                    `json:"winner"`
 	Payout             *webMatchPayout        `json:"payout,omitempty"`
+	RankedSeries       *ranked.Series         `json:"rankedSeries,omitempty"`
 	Tiebreak           string                 `json:"tiebreak,omitempty"`
 	Modifiers          game.GameModifiers     `json:"modifiers"`
 	PlayerHero         string                 `json:"playerHero,omitempty"`
@@ -259,8 +271,18 @@ type webDashboard struct {
 	WinsSinceCampDraw  int                       `json:"winsSinceCampDraw"`
 	WinsPerCampDraw    int                       `json:"winsPerCampDraw"`
 	DrawsAvailable     int                       `json:"drawsAvailable"`
+	RestartTokens      int                       `json:"restartMissionTokens"`
+	UndoTokens         int                       `json:"undoMoveTokens"`
+	CampaignSkipTokens int                       `json:"campaignSkipTokens"`
+	ReplaceTokens      int                       `json:"replaceCardTokens"`
+	MatchTokensAllowed bool                      `json:"matchTokensAllowed"`
+	CanSkipMission     bool                      `json:"canSkipMission"`
+	ReplaceOptions     []webReplaceOption        `json:"replaceOptions,omitempty"`
+	CanRestart         bool                      `json:"canRestart"`
+	CanUndo            bool                      `json:"canUndo"`
 	PendingBoxes       int                       `json:"pendingBoxes"`
 	SkillPoints        int                       `json:"skillPoints"`
+	ConductorLevel     int                       `json:"conductorLevel"`
 	UnseenAchievements int                       `json:"unseenAchievements"`
 	GamesPlayed        int                       `json:"gamesPlayed"`
 }
@@ -291,23 +313,27 @@ type webHeroOption struct {
 }
 
 type actionRequest struct {
-	Action         string `json:"action"`
-	Mode           string `json:"mode"`
-	Variant        string `json:"variant"`
-	Index          int    `json:"index"`
-	Slot           int    `json:"slot"`
-	Cards          []int  `json:"cards"`
-	PlayerHeroID   string `json:"playerHeroId"`
-	OpponentHeroID string `json:"opponentHeroId"`
-	ID             string `json:"id"`
-	Payment        string `json:"payment"`
-	BoxType        string `json:"boxType"`
-	Suit           string `json:"suit"`
-	SuitIndex      int    `json:"suitIndex"`
-	FaceUpIndex    int    `json:"faceUpIndex"`
-	BuriedIndex    int    `json:"buriedIndex"`
-	CampaignID     string `json:"campaignId"`
-	MissionIndex   int    `json:"missionIndex"`
+	Action            string `json:"action"`
+	Mode              string `json:"mode"`
+	Variant           string `json:"variant"`
+	Index             int    `json:"index"`
+	Amount            int    `json:"amount"`
+	Slot              int    `json:"slot"`
+	Cards             []int  `json:"cards"`
+	PlayerHeroID      string `json:"playerHeroId"`
+	OpponentHeroID    string `json:"opponentHeroId"`
+	ConductorModifier string `json:"conductorModifier"`
+	ConductorAmount   int    `json:"conductorAmount"`
+	ID                string `json:"id"`
+	Payment           string `json:"payment"`
+	BoxType           string `json:"boxType"`
+	Suit              string `json:"suit"`
+	SuitIndex         int    `json:"suitIndex"`
+	Source            string `json:"source"`
+	FaceUpIndex       int    `json:"faceUpIndex"`
+	BuriedIndex       int    `json:"buriedIndex"`
+	CampaignID        string `json:"campaignId"`
+	MissionIndex      int    `json:"missionIndex"`
 }
 
 type webAchievement struct {
@@ -356,44 +382,72 @@ type webShopHero struct {
 	Hero   webHeroOption `json:"hero"`
 	Owned  bool          `json:"owned"`
 	CanBuy bool          `json:"canBuy"`
+	Price  int64         `json:"price"`
 	Plays  int           `json:"plays"`
 	Wins   int           `json:"wins"`
 }
 
 type webShopBoxOffer struct {
-	Type      string `json:"type"`
-	Name      string `json:"name"`
-	Currency  string `json:"currency"`
-	Cost      int64  `json:"cost"`
-	Available int    `json:"available"`
+	Type       string `json:"type"`
+	Name       string `json:"name"`
+	MarksCost  int64  `json:"marksCost,omitempty"`
+	CrownsCost int64  `json:"crownsCost,omitempty"`
+	Available  int    `json:"available"`
 }
 
 const (
-	shopBoxMarksCost        int64 = 1000
-	shopGoldenBoxCrownsCost int64 = 1000
+	shopWoodenBoxMarksCost  int64 = 300
+	shopWoodenBoxCrownsCost int64 = 13
+	shopSilverBoxMarksCost  int64 = 600
+	shopSilverBoxCrownsCost int64 = 25
+	shopGoldBoxMarksCost    int64 = 1200
+	shopGoldBoxCrownsCost   int64 = 50
 )
+
+type webShopEnergyOffer struct {
+	Amount     int   `json:"amount"`
+	MarksCost  int64 `json:"marksCost"`
+	CrownsCost int64 `json:"crownsCost"`
+}
+
+type webShopSkillPointOffer struct {
+	ID         string `json:"id"`
+	Name       string `json:"name"`
+	Quantity   int    `json:"quantity"`
+	CrownsCost int64  `json:"crownsCost"`
+}
 
 type webShopPage struct {
 	RewardTables       map[string][]webBoxReward `json:"rewardTables"`
 	Chromas            []webShopChroma           `json:"chromas"`
 	Heroes             []webShopHero             `json:"heroes"`
 	BoxOffers          []webShopBoxOffer         `json:"boxOffers"`
+	EnergyOffers       []webShopEnergyOffer      `json:"energyOffers"`
+	ConsumableOffers   []webShopConsumableOffer  `json:"consumableOffers"`
+	SkillPointOffers   []webShopSkillPointOffer  `json:"skillPointOffers"`
 	Dashboard          *webDashboard             `json:"dashboard"`
 	HeroBoxesAvailable int                       `json:"heroBoxesAvailable"`
 	HeroBoxCost        int64                     `json:"heroBoxCost"`
-	DirectHeroCost     int64                     `json:"directHeroCost"`
 	ChromaPickTokens   int                       `json:"chromaPickTokens"`
 	Message            string                    `json:"message,omitempty"`
 	HeroBoxResult      *heroes.HeroBoxResult     `json:"heroBoxResult,omitempty"`
 }
 
+type webShopConsumableOffer struct {
+	ID         string `json:"id"`
+	Name       string `json:"name"`
+	Quantity   int    `json:"quantity"`
+	Available  int    `json:"available"`
+	MarksCost  int64  `json:"marksCost"`
+	CrownsCost int64  `json:"crownsCost"`
+	CanBuy     bool   `json:"canBuy"`
+}
+
 type webSkillNode struct {
-	Node                skills.Node `json:"node"`
-	Unlocked            bool        `json:"unlocked"`
-	CanUnlockCrowns     bool        `json:"canUnlockCrowns"`
-	CanUnlockSkillPoint bool        `json:"canUnlockSkillPoint"`
-	CrownsReason        string      `json:"crownsReason,omitempty"`
-	SkillPointReason    string      `json:"skillPointReason,omitempty"`
+	Node      skills.Node `json:"node"`
+	Unlocked  bool        `json:"unlocked"`
+	CanUnlock bool        `json:"canUnlock"`
+	Reason    string      `json:"reason,omitempty"`
 }
 
 type webSkillsPage struct {
@@ -440,8 +494,10 @@ type webCommanderPage struct {
 }
 
 type webCampaignPage struct {
-	Dashboard *webDashboard        `json:"dashboard"`
-	Campaigns []webCampaignSummary `json:"campaigns"`
+	Dashboard  *webDashboard        `json:"dashboard"`
+	Campaigns  []webCampaignSummary `json:"campaigns"`
+	SkipTokens int                  `json:"skipTokens"`
+	Message    string               `json:"message,omitempty"`
 }
 
 type webCampaignSummary struct {
@@ -470,6 +526,7 @@ type webCampaignMission struct {
 	Enabled     bool            `json:"enabled"`
 	Target      int             `json:"target,omitempty"`
 	CardCount   int             `json:"cardCount,omitempty"`
+	PairCount   int             `json:"pairCount,omitempty"`
 	RewardMarks int64           `json:"rewardMarks"`
 	Completed   bool            `json:"completed"`
 	CanPlay     bool            `json:"canPlay"`
@@ -716,6 +773,11 @@ func (s *webServer) handleNewGame(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusBadRequest, fmt.Errorf("player hero %q is not unlocked", playerHeroID))
 		return
 	}
+	tuning, err := webConductorTuning(s.playerProfile, request.ConductorModifier, request.ConductorAmount)
+	if err != nil {
+		writeError(w, http.StatusBadRequest, err)
+		return
+	}
 	unlockedIDs := s.unlockedHeroIDs()
 	opponentHero, chooseErr := heroes.ChooseForOpponent(unlockedIDs, playerHeroID, s.rng)
 	if chooseErr != nil {
@@ -723,7 +785,22 @@ func (s *webServer) handleNewGame(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	opponentHeroID := opponentHero.ID
-	if variant == "poker-duel" {
+	if variant == "abandon-duel" {
+		playerHero = applyWebHeroTuning(playerHero, tuning)
+		duel, err := newAbandonDuelGame(playerHero, opponentHero, s.rng)
+		if err != nil {
+			writeError(w, http.StatusInternalServerError, err)
+			return
+		}
+		s.session = &webSession{
+			mode: mode, variant: variant, abandonDuel: duel,
+			phase: duel.phase(), actor: duel.ActivePlayer, winner: -1,
+			playerHeroID: playerHeroID, opponentHeroID: opponentHeroID,
+			message:             "Flip a face-down board card, then choose two cards to battle.",
+			initialAchievements: achievementLevels(s.playerProfile),
+		}
+	} else if variant == "poker-duel" {
+		playerHero = applyWebHeroTuning(playerHero, tuning)
 		duel, err := newPokerDuelGame(playerHero, opponentHero, s.rng, time.Now())
 		if err != nil {
 			writeError(w, http.StatusInternalServerError, err)
@@ -738,19 +815,22 @@ func (s *webServer) handleNewGame(w http.ResponseWriter, r *http.Request) {
 			initialAchievements: achievementLevels(s.playerProfile),
 		}
 	} else if variant == "tug-war" {
+		playerHero = applyWebHeroTuning(playerHero, tuning)
 		if err := s.startWebTugWar(mode, playerHeroID, opponentHeroID, playerHero, opponentHero); err != nil {
 			writeError(w, http.StatusInternalServerError, err)
 			return
 		}
 	} else if variant == "rummy" {
+		playerHero = applyWebHeroTuning(playerHero, tuning)
 		s.startWebRummy(mode, playerHeroID, opponentHeroID, playerHero, opponentHero)
 	} else if variant == "ladder" {
+		playerHero = applyWebHeroTuning(playerHero, tuning)
 		if err := s.startWebLadder(mode, playerHeroID, opponentHeroID, playerHero, opponentHero); err != nil {
 			writeError(w, http.StatusInternalServerError, err)
 			return
 		}
 	} else {
-		gameModifiers, err := heroes.GameModifiersFor(playerHero, opponentHero, s.rng)
+		gameModifiers, err := heroes.GameModifiersForWithTuning(playerHero, opponentHero, tuning, nil, s.rng)
 		if err != nil {
 			writeError(w, http.StatusInternalServerError, err)
 			return
@@ -778,6 +858,10 @@ func (s *webServer) handleNewGame(w http.ResponseWriter, r *http.Request) {
 			writeError(w, http.StatusInternalServerError, err)
 			return
 		}
+	}
+	if err := s.captureRestartSnapshot(); err != nil {
+		writeError(w, http.StatusInternalServerError, err)
+		return
 	}
 	if err := s.advanceAI(); err != nil {
 		writeError(w, http.StatusInternalServerError, err)
@@ -845,13 +929,32 @@ func (s *webServer) handleAction(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusConflict, errors.New("start a game first"))
 		return
 	}
+	recordUndoPoint := !isAutomaticWebAction(request.Action) && !isConsumableWebAction(request.Action)
+	var previous *webSession
+	if recordUndoPoint && canUseWebMatchTokens(s.session, s.onlineViewer) && s.session.phase != "gameover" {
+		var err error
+		previous, err = cloneWebSession(s.session)
+		if err != nil {
+			writeError(w, http.StatusInternalServerError, fmt.Errorf("save undo point: %w", err))
+			return
+		}
+	}
 	if err := s.applyAction(request); err != nil {
 		writeError(w, http.StatusBadRequest, err)
 		return
 	}
-	if err := s.advanceAI(); err != nil {
-		writeError(w, http.StatusInternalServerError, err)
-		return
+	if !isConsumableWebAction(request.Action) || request.Action == "use-restart-token" {
+		if err := s.advanceAI(); err != nil {
+			writeError(w, http.StatusInternalServerError, err)
+			return
+		}
+		if canUseWebMatchTokens(s.session, s.onlineViewer) && s.session.phase != "gameover" {
+			if recordUndoPoint {
+				s.session.undoSnapshot = previous
+			}
+		} else if s.session != nil {
+			s.session.undoSnapshot = nil
+		}
 	}
 	writeJSON(w, http.StatusOK, s.view())
 }
@@ -1161,23 +1264,30 @@ func (s *webServer) shopPage(p *profile.Profile) webShopPage {
 		Chromas:      make([]webShopChroma, 0, len(catalog.AllChromas())),
 		Heroes:       make([]webShopHero, 0, len(heroes.All())),
 		Dashboard:    dashboardFor(p), HeroBoxesAvailable: p.HeroBoxesAvailable,
-		HeroBoxCost: heroes.HeroBoxCost(p), DirectHeroCost: heroes.DirectHeroCrownsCost,
+		HeroBoxCost:      heroes.HeroBoxCost(p),
 		ChromaPickTokens: p.ChromaPickTokens,
 		BoxOffers: []webShopBoxOffer{
-			{Type: "wooden", Name: "Wooden Box", Currency: "marks", Cost: shopBoxMarksCost, Available: p.PendingBoxes["wooden"]},
-			{Type: "silver", Name: "Silver Box", Currency: "marks", Cost: shopBoxMarksCost, Available: p.PendingBoxes["silver"]},
-			{Type: "hero", Name: "Hero Box", Currency: "marks", Cost: shopBoxMarksCost, Available: p.HeroBoxesAvailable},
-			{Type: "gold", Name: "Golden Box", Currency: "crowns", Cost: shopGoldenBoxCrownsCost, Available: p.PendingBoxes["gold"]},
+			{Type: "wooden", Name: "Wooden Box", MarksCost: shopChestMarksCost(p, shopWoodenBoxMarksCost), CrownsCost: shopWoodenBoxCrownsCost, Available: p.PendingBoxes["wooden"]},
+			{Type: "silver", Name: "Silver Box", MarksCost: shopChestMarksCost(p, shopSilverBoxMarksCost), CrownsCost: shopSilverBoxCrownsCost, Available: p.PendingBoxes["silver"]},
+			{Type: "hero", Name: "Hero Box", MarksCost: heroes.HeroBoxCost(p), Available: p.HeroBoxesAvailable},
+			{Type: "gold", Name: "Gold Box", MarksCost: shopChestMarksCost(p, shopGoldBoxMarksCost), CrownsCost: shopGoldBoxCrownsCost, Available: p.PendingBoxes["gold"]},
 		},
+		EnergyOffers: []webShopEnergyOffer{
+			{Amount: energy.OneEnergyRecharge, MarksCost: energy.MarksPerEnergy, CrownsCost: energy.CrownsPerEnergy},
+			{Amount: energy.TenEnergyRecharge, MarksCost: energy.MarksPerTenEnergy, CrownsCost: energy.CrownsPerTenEnergy},
+		},
+		ConsumableOffers: shopConsumableOffers(p),
+		SkillPointOffers: shopSkillPointOffers(),
 	}
 	for _, chroma := range catalog.AllChromas() {
 		page.Chromas = append(page.Chromas, webShopChroma{Chroma: chroma, Owned: p.OwnedChromas[chroma.ID]})
 	}
 	for _, hero := range heroes.All() {
 		owned := containsHeroID(p.UnlockedHeroes, hero.ID)
+		price, purchasable := profile.HeroCrownsCost(hero.ID)
 		page.Heroes = append(page.Heroes, webShopHero{
 			Hero:  heroOption(hero, owned),
-			Owned: owned, CanBuy: !owned && hero.ID != "recruit" && p.Crowns >= heroes.DirectHeroCrownsCost,
+			Owned: owned, CanBuy: !owned && purchasable && p.Crowns >= price, Price: price,
 			Plays: p.HeroPlayCounts[hero.ID], Wins: p.HeroWinCounts[hero.ID],
 		})
 	}
@@ -1208,7 +1318,32 @@ func (s *webServer) applyShopAction(p *profile.Profile, request actionRequest) (
 		}
 		return fmt.Sprintf("Purchased family colors for %d %s.", cost, currencyName), nil
 	case "buy-box":
-		return buyShopBox(p, request.BoxType)
+		return buyShopBox(p, request.BoxType, request.Payment)
+	case "buy-energy":
+		if err := energy.BuyEnergy(p, request.Amount, request.Payment, time.Now()); err != nil {
+			return "", err
+		}
+		evaluateAchievementEvent(p, achievements.EventPurchase, "shop")
+		currencyName := "Marks"
+		if request.Payment == "crowns" {
+			currencyName = "Crowns"
+		}
+		return fmt.Sprintf("Purchased %d energy for %d %s.",
+			request.Amount, energyPurchaseCost(request.Amount, request.Payment), currencyName), nil
+	case "buy-consumable":
+		message, err := buyShopConsumable(p, request.ID, request.Payment)
+		if err != nil {
+			return "", err
+		}
+		evaluateAchievementEvent(p, achievements.EventPurchase, "shop")
+		return message, nil
+	case "buy-skill-points":
+		message, err := buyShopSkillPoints(p, request.ID)
+		if err != nil {
+			return "", err
+		}
+		evaluateAchievementEvent(p, achievements.EventPurchase, "shop")
+		return message, nil
 	case "open-hero-box":
 		var result heroes.HeroBoxResult
 		var err error
@@ -1223,7 +1358,11 @@ func (s *webServer) applyShopAction(p *profile.Profile, request actionRequest) (
 			return "", err
 		}
 		if result.Duplicate {
-			return fmt.Sprintf("Duplicate %s-tier hero: +%d Crowns.", result.DuplicateTier, result.Crowns), nil
+			hero, ok := heroes.ByID(result.HeroID)
+			if !ok {
+				return "", fmt.Errorf("Hero Box returned unknown duplicate hero %q", result.HeroID)
+			}
+			return fmt.Sprintf("Duplicate %s: +%d Crowns.", hero.Name, result.Crowns), nil
 		}
 		hero, ok := heroes.ByID(result.HeroID)
 		if !ok {
@@ -1252,35 +1391,75 @@ func (s *webServer) applyShopAction(p *profile.Profile, request actionRequest) (
 	}
 }
 
-func buyShopBox(p *profile.Profile, boxType string) (string, error) {
+func buyShopBox(p *profile.Profile, boxType, payment string) (string, error) {
+	if p == nil {
+		return "", errors.New("profile is required")
+	}
+	var cost int64
 	switch boxType {
-	case "wooden", "silver":
-		if p.Marks < shopBoxMarksCost {
-			return "", fmt.Errorf("need %d Marks; you have %d", shopBoxMarksCost, p.Marks)
+	case "wooden":
+		if payment == "marks" {
+			cost = shopChestMarksCost(p, shopWoodenBoxMarksCost)
+		} else if payment == "crowns" {
+			cost = shopWoodenBoxCrownsCost
 		}
-		if err := p.GrantBox(boxType, 1); err != nil {
-			return "", err
+	case "silver":
+		if payment == "marks" {
+			cost = shopChestMarksCost(p, shopSilverBoxMarksCost)
+		} else if payment == "crowns" {
+			cost = shopSilverBoxCrownsCost
 		}
-		p.Marks -= shopBoxMarksCost
 	case "gold":
-		if p.Crowns < shopGoldenBoxCrownsCost {
-			return "", fmt.Errorf("need %d Crowns; you have %d", shopGoldenBoxCrownsCost, p.Crowns)
+		if payment == "marks" {
+			cost = shopChestMarksCost(p, shopGoldBoxMarksCost)
+		} else if payment == "crowns" {
+			cost = shopGoldBoxCrownsCost
 		}
-		if err := p.GrantBox(boxType, 1); err != nil {
-			return "", err
-		}
-		p.Crowns -= shopGoldenBoxCrownsCost
 	case "hero":
-		if p.Marks < shopBoxMarksCost {
-			return "", fmt.Errorf("need %d Marks; you have %d", shopBoxMarksCost, p.Marks)
+		if payment == "marks" {
+			cost = heroes.HeroBoxCost(p)
 		}
-		p.Marks -= shopBoxMarksCost
-		p.HeroBoxesAvailable++
 	default:
 		return "", fmt.Errorf("unknown box type %q", boxType)
 	}
+	if cost == 0 {
+		return "", fmt.Errorf("unsupported payment %q for %s box", payment, boxType)
+	}
+	if payment == "marks" && p.Marks < cost {
+		return "", fmt.Errorf("need %d Marks; you have %d", cost, p.Marks)
+	}
+	if payment == "crowns" && p.Crowns < cost {
+		return "", fmt.Errorf("need %d Crowns; you have %d", cost, p.Crowns)
+	}
+	if boxType == "hero" {
+		p.HeroBoxesAvailable++
+	} else if err := p.GrantBox(boxType, 1); err != nil {
+		return "", err
+	}
+	if payment == "marks" {
+		p.Marks -= cost
+	} else {
+		p.Crowns -= cost
+	}
 	evaluateAchievementEvent(p, achievements.EventPurchase, "shop")
 	return "Purchased " + boxType + " box.", nil
+}
+
+func energyPurchaseCost(amount int, currency string) int64 {
+	switch amount {
+	case energy.OneEnergyRecharge:
+		if currency == "crowns" {
+			return energy.CrownsPerEnergy
+		}
+		return energy.MarksPerEnergy
+	case energy.TenEnergyRecharge:
+		if currency == "crowns" {
+			return energy.CrownsPerTenEnergy
+		}
+		return energy.MarksPerTenEnergy
+	default:
+		return 0
+	}
 }
 
 func (s *webServer) handleSkills(w http.ResponseWriter, r *http.Request) {
@@ -1307,12 +1486,10 @@ func (s *webServer) handleSkills(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		switch request.Payment {
-		case "crowns":
-			err = skills.UnlockNode(p, request.ID)
 		case "skill-point":
 			err = skills.UnlockNodeWithSkillPoint(p, request.ID)
 		default:
-			err = errors.New("choose Crowns or a Skill Tree Point")
+			err = errors.New("skill nodes can only be unlocked with Skill Points")
 		}
 		if err != nil {
 			writeError(w, http.StatusBadRequest, err)
@@ -1332,11 +1509,9 @@ func (s *webServer) handleSkills(w http.ResponseWriter, r *http.Request) {
 func (s *webServer) skillsPage(p *profile.Profile) webSkillsPage {
 	page := webSkillsPage{Nodes: make([]webSkillNode, 0, len(skills.AllNodes())), Dashboard: dashboardFor(p)}
 	for _, node := range skills.AllNodes() {
-		canCrowns, crownReason := skills.CanUnlock(p, node.ID)
 		canPoint, pointReason := skills.CanUnlockWithSkillPoint(p, node.ID)
 		page.Nodes = append(page.Nodes, webSkillNode{
-			Node: node, Unlocked: p.SkillNodes[node.ID], CanUnlockCrowns: canCrowns,
-			CanUnlockSkillPoint: canPoint, CrownsReason: crownReason, SkillPointReason: pointReason,
+			Node: node, Unlocked: p.SkillNodes[node.ID], CanUnlock: canPoint, Reason: pointReason,
 		})
 	}
 	return page
@@ -1430,20 +1605,41 @@ func (s *webServer) handleProfile(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *webServer) handleCampaigns(w http.ResponseWriter, r *http.Request) {
-	if r.Method != http.MethodGet {
+	if r.Method != http.MethodGet && r.Method != http.MethodPost {
 		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
 		return
 	}
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	p, _, err := s.profileForRequest(r)
+	p, preview, err := s.profileForRequest(r)
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, err)
 		return
 	}
+	message := ""
+	if r.Method == http.MethodPost {
+		var request actionRequest
+		if err := decodeJSON(r, &request); err != nil {
+			writeError(w, http.StatusBadRequest, err)
+			return
+		}
+		if request.Action != "skip-mission" {
+			writeError(w, http.StatusBadRequest, errors.New("unknown campaign action"))
+			return
+		}
+		message, err = skipCampaignMission(p, request.CampaignID, request.MissionIndex)
+		if err != nil {
+			writeError(w, http.StatusBadRequest, err)
+			return
+		}
+		if err := saveWebProfile(p, preview); err != nil {
+			writeError(w, http.StatusInternalServerError, fmt.Errorf("save skipped campaign mission: %w", err))
+			return
+		}
+	}
 	definitions := campaigns.All()
 	page := webCampaignPage{
-		Dashboard: dashboardFor(p),
+		Dashboard: dashboardFor(p), SkipTokens: p.CampaignSkipTokens, Message: message,
 		Campaigns: make([]webCampaignSummary, 0, len(definitions)),
 	}
 	for _, campaign := range definitions {
@@ -1476,10 +1672,10 @@ func (s *webServer) handleCampaigns(w http.ResponseWriter, r *http.Request) {
 				Index:  mission.Index, Name: name, Description: description,
 				Variant: missionVariant(mission), VariantID: mission.VariantID,
 				Status: mission.Status, Enabled: !mission.Disabled,
-				Target: target, CardCount: cardCount,
+				Target: target, CardCount: cardCount, PairCount: mission.AbandonPairs,
 				RewardMarks: mission.RewardMarks, Completed: completed,
 				CanPlay:    campaigns.CanPlayMission(p, campaign.ID, mission.Index),
-				EnergyCost: campaignMissionEnergyCost(p, mission),
+				EnergyCost: campaignMissionEnergyCost(mission),
 			})
 		}
 		page.Campaigns = append(page.Campaigns, summary)
@@ -1533,6 +1729,21 @@ func webHistoryModeName(modeID int) string {
 
 func (s *webServer) applyAction(request actionRequest) error {
 	session := s.session
+	if request.Action == "use-restart-token" {
+		return s.useRestartMissionToken()
+	}
+	if request.Action == "use-undo-token" {
+		return s.useUndoMoveToken()
+	}
+	if request.Action == "use-replace-token" {
+		return s.useReplaceCardToken(request.Source, request.Index)
+	}
+	if request.Action == "use-campaign-skip-token" {
+		return s.useCampaignSkipToken()
+	}
+	if request.Action == "quick-buy-token" {
+		return s.quickBuyToken(request.ID)
+	}
 	if session.variant == "tug-war" {
 		return s.applyTugWarAction(request)
 	}
@@ -1589,37 +1800,80 @@ func (s *webServer) applyAction(request actionRequest) error {
 		if !ok {
 			return errors.New("selected hero is unavailable")
 		}
+		if session.abandon == nil {
+			return errors.New("Abandon game state is unavailable")
+		}
 		switch request.Action {
-		case "abandon-suit":
-			if err := session.abandon.assignCategorySuit(request.Index, game.Suit(request.SuitIndex), s.rng); err != nil {
+		case "abandon-flip":
+			if session.phase != "abandon-reveal" {
+				return errors.New("flip a board card at the start of each turn")
+			}
+			if err := session.abandon.flipBoardCard(request.Index); err != nil {
 				return err
 			}
-			s.session.phase = "abandon-select"
-			s.session.message = "Choose the first board card."
-		case "abandon-rotate":
-			if err := session.abandon.rotateCategorySuits(s.rng); err != nil {
+			session.phase = "abandon-pair-first"
+			session.message = "Choose the first card for the battle."
+		case "abandon-pair-card":
+			if session.phase != "abandon-pair-first" && session.phase != "abandon-pair-second" {
+				return errors.New("flip a board card before pairing")
+			}
+			if err := session.abandon.selectPairCard(request.Source, request.Index, hero); err != nil {
 				return err
 			}
-			s.session.phase = "abandon-select"
-			s.session.message = "Choose the first board card."
-		case "abandon-select":
-			if err := session.abandon.selectCard(request.Index); err != nil {
-				return err
+			if session.abandon.SelectedSource != "" {
+				session.phase = "abandon-pair-second"
+				session.message = "Choose a second, different card."
+			} else {
+				s.updateAbandonPhase()
 			}
-			session.phase = "abandon-pair"
-			session.message = "Choose a board card or spend a draw token."
-		case "abandon-pair-board":
-			if err := session.abandon.pairBoard(request.Index, hero); err != nil {
-				return err
-			}
-			s.updateAbandonPhase()
-		case "abandon-pair-draw":
-			if err := session.abandon.pairDraw(hero); err != nil {
-				return err
-			}
-			s.updateAbandonPhase()
 		default:
 			return errors.New("unknown abandon action")
+		}
+		return nil
+	}
+	if session.variant == "abandon-duel" {
+		duel := session.abandonDuel
+		if duel == nil {
+			return errors.New("Abandon Duel state is unavailable")
+		}
+		if session.actor != duel.ActivePlayer || !s.onlineViewer && isAI(session.mode, duel.ActivePlayer) {
+			return errors.New("it is not your Abandon Duel turn")
+		}
+		switch request.Action {
+		case "abandon-duel-flip":
+			if session.phase != "abandon-duel-reveal" {
+				return errors.New("flip a board card before pairing")
+			}
+			if err := duel.flipBoardCard(request.Index); err != nil {
+				return err
+			}
+			session.phase = "abandon-duel-pair-first"
+			session.message = "Choose the first card for the battle."
+		case "abandon-duel-pair-card":
+			if session.phase != "abandon-duel-pair-first" && session.phase != "abandon-duel-pair-second" {
+				return errors.New("flip a board card before pairing")
+			}
+			movingPlayer := duel.ActivePlayer
+			previousRound := duel.Round
+			completed, err := duel.selectPairCard(request.Source, request.Index, s.rng)
+			if err != nil {
+				return err
+			}
+			session.actor = duel.ActivePlayer
+			session.phase = duel.phase()
+			if duel.GameOver {
+				session.winner = duel.Winner
+				session.message = abandonDuelResultMessage(duel, s.playerName)
+				s.awardLocalMultiplayerPayout(duel.TotalScores[0])
+			} else if previousRound != duel.Round {
+				session.message = "Round 1 complete. Seats swapped; Round 2 begins."
+			} else if completed {
+				session.message = fmt.Sprintf("%s completed a pair.", s.playerName(movingPlayer))
+			} else {
+				session.message = "Choose a second, different card."
+			}
+		default:
+			return errors.New("unknown Abandon Duel action")
 		}
 		return nil
 	}
@@ -1737,6 +1991,9 @@ func (s *webServer) advanceAI() error {
 	if session != nil && session.variant == "poker-duel" {
 		return s.schedulePokerDuelCPU()
 	}
+	if session.variant == "abandon-duel" {
+		return s.advanceAbandonDuelAI()
+	}
 	if session != nil && (session.variant == "puzzler" || session.variant == "abandon" || session.variant == "poker") {
 		return nil
 	}
@@ -1799,8 +2056,8 @@ func (s *webServer) updateAbandonPhase() {
 		s.finishSpecialCampaignMission(session.abandon.Won)
 		return
 	}
-	session.phase = "abandon-select"
-	session.message = "Choose the first board card."
+	session.phase = "abandon-reveal"
+	session.message = "Flip a face-down board card."
 }
 
 func (s *webServer) draftPickAction(index int) error {
@@ -2107,8 +2364,15 @@ func (s *webServer) finishGame() {
 	session.winner, session.tiebreak = finalWinner(p1, p2, s.rng)
 	session.phase = "gameover"
 	session.message = "The three rounds are complete."
-	payout := awardWebMatchMarks(s.playerProfile, p1.Total, session.winner == 0)
-	session.payout = &payout
+	payout, payoutErr := awardWebMultiplayerPayout(
+		s.playerProfile, session.variant, p1.Total, session.winner == 0,
+		session.winner == -1, session.winner == 0, session.mode,
+	)
+	if payoutErr != nil {
+		session.profileError = "Match reward calculation failed: " + payoutErr.Error()
+	} else {
+		session.payout = &payout
+	}
 	if s.playerProfile != nil {
 		p := s.playerProfile
 		won := session.winner == 0
@@ -2154,27 +2418,31 @@ func (s *webServer) finishGame() {
 	session.achievementUpdates = s.matchAchievementUpdates()
 }
 
-func awardWebMatchMarks(p *profile.Profile, score int, won bool) webMatchPayout {
-	if score < 0 {
-		score = 0
+func awardWebMultiplayerPayout(
+	p *profile.Profile,
+	variant string,
+	score int,
+	won, draw, dailyEligible bool,
+	mode string,
+) (webMatchPayout, error) {
+	difficulty := ""
+	if mode == "easy" || mode == "normal" || mode == "hard" {
+		difficulty = mode
 	}
-	payout := webMatchPayout{
-		PlayerScore: score, PlayerWon: won,
-		BaseMarks: int64(50 + score), WinMultiplier: 1,
+	result, err := economy.CalculateMultiplayerPayout(
+		variant, score, won, draw, dailyEligible, difficulty, multiplayerEconomyMode(mode), p, time.Now(),
+	)
+	if err != nil {
+		return webMatchPayout{}, err
 	}
-	if won {
-		payout.WinMultiplier = 3
-	}
-	if p != nil {
-		payout.SkillBonusPct = skills.AggregateBonuses(p).MarksBasePercent
-	}
-	multiplier := float64(100+payout.SkillBonusPct) / 100
-	payout.TotalMarks = int64(math.Floor(float64(payout.BaseMarks) *
-		float64(payout.WinMultiplier) * multiplier))
-	if p != nil {
-		p.Marks += payout.TotalMarks
-	}
-	return payout
+	return webMatchPayout{
+		PlayerScore: result.PlayerScore, PlayerWon: won, Draw: draw,
+		BaseMarks: result.BaseMarks, WinMultiplier: 1,
+		SkillBonusPct: result.MarksSkillPercent, AIMultiplier: result.AIMultiplier,
+		TotalMarks: result.TotalMarks, MatchCrowns: result.MatchCrowns,
+		DailyWinBonusCrowns: result.DailyWinBonusCrowns, TotalCrowns: result.TotalCrowns,
+		FirstWinOfDay: result.FirstWinOfDay,
+	}, nil
 }
 
 func (s *webServer) view() webView {
@@ -2186,7 +2454,7 @@ func (s *webServer) view() webView {
 		return webView{
 			Started: false, Dashboard: s.dashboard(), Mode: s.defaultMode, Winner: -1, DefaultHeroID: defaultHeroID,
 			OpponentHint: s.opponentLastHeroName(), Heroes: s.heroOptions(),
-			Variant: "main", PuzzleOptions: puzzleOptions(), AbandonOptions: abandonBoardOptions(),
+			Variant: "main", PuzzleOptions: puzzleOptions(),
 		}
 	}
 	session := s.session
@@ -2223,7 +2491,7 @@ func (s *webServer) view() webView {
 			Message: message, PlayerHero: heroName(session.playerHeroID),
 			OpponentHero: heroName(session.opponentHeroID), PlayerHeroID: session.playerHeroID,
 			OpponentHeroID: session.opponentHeroID, DefaultHeroID: session.playerHeroID,
-			Heroes: s.heroOptions(), TugWar: tugWarView,
+			Heroes: s.heroOptions(), TugWar: tugWarView, Payout: session.payout,
 		}
 	}
 	if variant == "rummy" {
@@ -2234,6 +2502,7 @@ func (s *webServer) view() webView {
 			OpponentHero: heroName(session.opponentHeroID), PlayerHeroID: session.playerHeroID,
 			OpponentHeroID: session.opponentHeroID, DefaultHeroID: session.playerHeroID,
 			Heroes: s.heroOptions(), Rummy: session.rummy.webView(session, s.viewerPlayer, s.onlineViewer),
+			Payout: session.payout,
 		}
 	}
 	if variant == "ladder" {
@@ -2244,6 +2513,7 @@ func (s *webServer) view() webView {
 			OpponentHero: heroName(session.opponentHeroID), PlayerHeroID: session.playerHeroID,
 			OpponentHeroID: session.opponentHeroID, DefaultHeroID: session.playerHeroID,
 			Heroes: s.heroOptions(), Ladder: ladderWebView(session, s.viewerPlayer, s.onlineViewer),
+			Payout: session.payout,
 		}
 	}
 	if variant == "poker-duel" {
@@ -2265,13 +2535,35 @@ func (s *webServer) view() webView {
 				duelView.CPUThinkRemainingMS = (remaining + time.Millisecond - 1).Milliseconds()
 			}
 		}
+		if variant == "abandon-duel" {
+			if session.abandonDuel == nil {
+				return webView{Started: true, Variant: variant, Phase: "gameover", Winner: -1, Message: "Abandon Duel state is unavailable."}
+			}
+			canAct := !session.abandonDuel.GameOver &&
+				((s.onlineViewer && session.abandonDuel.ActivePlayer == s.viewerPlayer) ||
+					(!s.onlineViewer && session.abandonDuel.ActivePlayer == 0 &&
+						!isAI(session.mode, session.abandonDuel.ActivePlayer)))
+			duelView := session.abandonDuel.webView(
+				session.phase, session.abandonDuel.ActivePlayer,
+				canAct,
+			)
+			return webView{
+				GameID: s.gameID, Started: true, CanAct: canAct,
+				Dashboard: s.dashboard(), Mode: session.mode, Variant: variant,
+				Phase: session.phase, Actor: session.actor, Winner: session.abandonDuel.Winner,
+				Message: session.message, PlayerHero: heroName(session.playerHeroID),
+				OpponentHero: heroName(session.opponentHeroID), PlayerHeroID: session.playerHeroID,
+				OpponentHeroID: session.opponentHeroID, DefaultHeroID: session.playerHeroID,
+				Heroes: s.heroOptions(), AbandonDuel: duelView, Payout: session.payout,
+			}
+		}
 		return webView{
 			GameID: s.gameID, Started: true, Dashboard: s.dashboard(), Mode: session.mode,
 			Variant: variant, Phase: session.phase, Actor: session.actor, Winner: session.pokerDuel.Winner,
 			Message: session.message, PlayerHero: heroName(session.playerHeroID),
 			OpponentHero: heroName(session.opponentHeroID), PlayerHeroID: session.playerHeroID,
 			OpponentHeroID: session.opponentHeroID, DefaultHeroID: session.playerHeroID,
-			Heroes: s.heroOptions(), PokerDuel: duelView,
+			Heroes: s.heroOptions(), PokerDuel: duelView, Payout: session.payout,
 		}
 	}
 	if variant == "poker" {
@@ -2286,7 +2578,7 @@ func (s *webServer) view() webView {
 	if variant == "puzzler" || variant == "abandon" {
 		result := webView{
 			GameID: s.gameID, Started: true, Dashboard: s.dashboard(), Mode: session.mode,
-			Variant: variant, PuzzleOptions: puzzleOptions(), AbandonOptions: abandonBoardOptions(), Phase: session.phase,
+			Variant: variant, PuzzleOptions: puzzleOptions(), Phase: session.phase,
 			Actor: session.actor, Winner: session.winner, Message: session.message,
 			PlayerHero: heroName(session.playerHeroID), PlayerHeroID: session.playerHeroID,
 			DefaultHeroID: session.playerHeroID, Heroes: s.heroOptions(),
@@ -2313,7 +2605,6 @@ func (s *webServer) view() webView {
 		Mode:           session.mode,
 		Variant:        variant,
 		PuzzleOptions:  puzzleOptions(),
-		AbandonOptions: abandonBoardOptions(),
 		Phase:          session.phase,
 		Round:          session.state.Round,
 		DraftMode:      session.state.DraftMode,
@@ -2326,6 +2617,7 @@ func (s *webServer) view() webView {
 		CanContinue:    session.phase == "result",
 		Winner:         session.winner,
 		Payout:         session.payout,
+		RankedSeries:   session.rankedSeries,
 		Tiebreak:       session.tiebreak,
 		Modifiers:      session.state.Modifiers,
 		PlayerHero:     heroName(session.playerHeroID),
@@ -2585,7 +2877,7 @@ func (s *webServer) viewForRequest(r *http.Request) (webView, error) {
 	if err != nil {
 		return webView{}, err
 	}
-	view.Dashboard = dashboardFor(p)
+	view.Dashboard = s.dashboardFor(p)
 	view.DefaultHeroID = p.DefaultHeroID
 	if s.session == nil {
 		view.Heroes = s.heroOptionsFor(p)
@@ -2598,7 +2890,24 @@ func (s *webServer) dashboard() *webDashboard {
 	if p == nil {
 		return nil
 	}
-	return dashboardFor(p)
+	return s.dashboardFor(p)
+}
+
+func (s *webServer) dashboardFor(p *profile.Profile) *webDashboard {
+	dashboard := dashboardFor(p)
+	if dashboard == nil {
+		return nil
+	}
+	if s.session != nil && canUseWebMatchTokens(s.session, s.onlineViewer) {
+		dashboard.MatchTokensAllowed = true
+		dashboard.CanRestart = s.session.phase != "gameover" && s.session.restartSnapshot != nil
+		dashboard.CanUndo = s.session.phase != "gameover" && s.session.undoSnapshot != nil
+		dashboard.ReplaceOptions = s.replaceCardOptions()
+		dashboard.CanSkipMission = s.session.campaign != nil &&
+			!s.session.campaign.Replay &&
+			!missionIsComplete(p.Campaigns[s.session.campaign.ID], s.session.campaign.Index)
+	}
+	return dashboard
 }
 
 func dashboardFor(p *profile.Profile) *webDashboard {
@@ -2648,7 +2957,7 @@ func dashboardFor(p *profile.Profile) *webDashboard {
 		Marks:              p.Marks,
 		Crowns:             p.Crowns,
 		Energy:             currentEnergy,
-		MaxEnergy:          p.MaxEnergy,
+		MaxEnergy:          profile.EnergyStorageCap(p),
 		EnergyNextSeconds:  nextSeconds,
 		AdsLeft:            adsLeft,
 		DailyFeaturedItem:  dailyFeaturedShopItem(p, now),
@@ -2657,8 +2966,13 @@ func dashboardFor(p *profile.Profile) *webDashboard {
 		WinsSinceCampDraw:  p.WinsSinceCampDraw,
 		WinsPerCampDraw:    lootbox.RequiredWins(p),
 		DrawsAvailable:     p.DrawsAvailable,
+		RestartTokens:      p.RestartMissionTokens,
+		UndoTokens:         p.UndoMoveTokens,
+		CampaignSkipTokens: p.CampaignSkipTokens,
+		ReplaceTokens:      p.ReplaceCardTokens,
 		PendingBoxes:       p.TotalPendingBoxes(),
 		SkillPoints:        p.SkillPoints,
+		ConductorLevel:     skills.AggregateBonuses(p).ConductorLevel,
 		UnseenAchievements: len(unseenAchievementIDs(p)),
 		GamesPlayed:        p.TotalGames,
 	}

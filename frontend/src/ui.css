@@ -268,9 +268,20 @@ button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible
 .poker-duel-final-score { padding: 10px; border: 1px solid #344159; border-radius: 8px; }
 .poker-duel-final-score h3, .poker-duel-final-score p { margin: 4px 0; }
 .poker-duel-result-log { text-align: left; }
+.abandon-duel-overview { display: grid; gap: 12px; width: min(100%, 1120px); margin-inline: auto; text-align: left; }
+.abandon-duel-overview .variant-panel { display: grid; gap: 8px; }
+.abandon-duel-overview .variant-panel > p { margin: 0; }
+.abandon-duel-scores { display: flex; flex-wrap: wrap; gap: 8px 18px; color: #d3d9e4; }
+.abandon-duel-board { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+.abandon-duel-players { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
+.abandon-duel-player { display: grid; align-content: start; gap: 10px; min-width: 0; }
+.abandon-duel-prisoners { display: grid; gap: 6px; color: #d3d9e4; font-size: 13px; }
+.abandon-duel-prisoner-cards { display: flex; flex-wrap: wrap; gap: 5px; min-height: 54px; }
+.abandon-duel-prisoner-cards .card { width: 38px; height: 52px; }
 @media (max-width: 760px) {
   .poker-duel-players { grid-template-columns: minmax(0, 1fr); }
   .poker-duel-score, .poker-duel-log { grid-column: auto; }
+  .abandon-duel-players { grid-template-columns: minmax(0, 1fr); }
 }
 @media (max-width: 560px) {
   .poker-duel-final-scores { grid-template-columns: minmax(0, 1fr); }

@@ -1,6 +1,7 @@
 {
   "id": "amazon-green",
   "displayName": "Amazon (green)",
+  "rarityRank": 0,
   "hexColor": "#24834f",
   "price": 1200,
   "currency": "marks"

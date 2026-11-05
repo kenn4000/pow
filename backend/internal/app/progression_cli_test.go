@@ -36,21 +36,15 @@ func TestAssignInitialSeatsPreservesCardAccounting(t *testing.T) {
 	}
 }
 
-func TestCampaignEnergyCostSkillOnlyCoversFirstMission(t *testing.T) {
-	p, err := profile.New(time.Now())
-	if err != nil {
-		t.Fatal(err)
+func TestCampaignMissionEnergyCost(t *testing.T) {
+	if got := campaignMissionEnergyCost(campaigns.Mission{Index: 1}); got != 1 {
+		t.Fatalf("first mission energy cost = %d, want 1", got)
 	}
-	p.SkillNodes["campaign_free"] = true
-	if got := campaignMissionEnergyCost(p, campaigns.Mission{Index: 1}); got != 0 {
-		t.Fatalf("first mission energy cost = %d, want 0", got)
-	}
-	if got := campaignMissionEnergyCost(p, campaigns.Mission{Index: 2}); got != 1 {
+	if got := campaignMissionEnergyCost(campaigns.Mission{Index: 2}); got != 1 {
 		t.Fatalf("later mission energy cost = %d, want 1", got)
 	}
-	p.SkillNodes["campaign_free"] = false
-	if got := campaignMissionEnergyCost(p, campaigns.Mission{Index: 1}); got != 1 {
-		t.Fatalf("first mission without skill costs %d, want 1", got)
+	if got := campaignMissionEnergyCost(campaigns.Mission{Disabled: true}); got != 0 {
+		t.Fatalf("disabled mission energy cost = %d, want 0", got)
 	}
 }
 
@@ -79,9 +73,23 @@ func TestDumpEconomyProducesAuditableJSON(t *testing.T) {
 	if err := json.Unmarshal(output.Bytes(), &config); err != nil {
 		t.Fatalf("dump is not JSON: %v", err)
 	}
-	for _, section := range []string{"payouts", "energy", "camp_draw_and_catalog", "skills", "chromas", "achievements", "achievement_sets"} {
+	for _, section := range []string{"payouts", "energy", "shop_boxes", "camp_draw_and_catalog", "skills", "chromas", "achievements", "achievement_sets"} {
 		if _, ok := config[section]; !ok {
 			t.Errorf("dump is missing %q", section)
+		}
+	}
+	energyConfig, ok := config["energy"].(map[string]any)
+	if !ok {
+		t.Fatal("energy configuration has an unexpected shape")
+	}
+	recharges, ok := energyConfig["shop_recharges"].([]any)
+	if !ok || len(recharges) != 2 {
+		t.Fatalf("energy shop recharge options = %#v", energyConfig["shop_recharges"])
+	}
+	for index, want := range [][3]float64{{1, 500, 25}, {10, 4500, 225}} {
+		option, ok := recharges[index].(map[string]any)
+		if !ok || option["energy"] != want[0] || option["marks"] != want[1] || option["crowns"] != want[2] {
+			t.Errorf("energy recharge %d = %#v, want energy/Marks/Crowns %v", index, recharges[index], want)
 		}
 	}
 	if _, ok := config["bundles"]; ok {
@@ -91,7 +99,7 @@ func TestDumpEconomyProducesAuditableJSON(t *testing.T) {
 
 func TestBuyHeroWithCrownsAndRecordHeroProgress(t *testing.T) {
 	p := &profile.Profile{
-		Crowns:         1200,
+		Crowns:         400,
 		UnlockedHeroes: []string{"warden", "hunter", "anchor"},
 		HeroPlayCounts: make(map[string]int),
 		HeroWinCounts:  make(map[string]int),

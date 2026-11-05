@@ -58,43 +58,65 @@ use the existing DOM renderer.
   they were won. Ties are broken by distinct suits, then highest effective
   scoring face, then coin flip.
 
-## Run the graphical UI
+## Run the game with Docker Compose
 
-Copy `.env.example` to `.env`, replace the database and admin passwords, then
-start PostgreSQL and the backend from the repository root:
+Docker Compose runs PostgreSQL, the Go API, and the built mobile-friendly web
+app together. Copy `.env.example` to `.env` (`Copy-Item .env.example .env` in
+PowerShell or `cp .env.example .env` on macOS/Linux), then set unique values
+for `POSTGRES_PASSWORD` and `BOOTSTRAP_ADMIN_PASSWORD`.
+
+Build and start the stack:
 
 ```sh
-docker compose up -d --wait postgres
+docker compose up --build -d
+docker compose ps
+```
+
+Open `http://localhost:8088/prisoner-of-war/` on the computer. To play on a
+phone, connect it to the same trusted Wi-Fi and open
+`http://<computer-LAN-IP>:8088/prisoner-of-war/`. `APP_PORT` in `.env` changes
+the host port. Only the web app and PostgreSQL's loopback-only development
+port are published; the API is private to the Compose network. PostgreSQL data
+persists in the `postgres-data` volume across restarts. `docker compose down`
+stops the app without deleting that data.
+
+Sign up or sign in with the bootstrap admin account configured in `.env`.
+Administrators have an **Admin** page for listing users and changing their
+roles. **Saved games** lists active, completed, and abandoned matches with
+their state-transition history. An unfinished match resumes after refreshing
+or restarting the backend.
+
+To inspect logs or stop the stack:
+
+```sh
+docker compose logs -f backend frontend postgres
+docker compose down
+```
+
+For frontend hot reload, use the same `.env` and run the backend and Vite from
+the host instead. Start the database with `docker compose up -d postgres`, then
+load `.env` into the shell before starting the Go server:
+
+```sh
 set -a
 . ./.env
 set +a
 GOWORK=off go -C backend run ./cmd/prisoners-of-war
 ```
 
-In another terminal, start Vite:
-
-```sh
-npm --prefix frontend ci
-npm --prefix frontend run dev
-```
-
-Open `http://localhost:5173/prisoner-of-war/`. Vite proxies API and artwork
-requests to the Go server at `127.0.0.1:8080`. Sign up or sign in with the
-bootstrap admin account configured in `.env`. Administrators have an **Admin**
-page for listing users and changing their roles. **Saved games** lists your
-active, completed, and abandoned matches with their state-transition history.
-An unfinished match resumes after refreshing or restarting the backend.
+In another terminal, run `npm --prefix frontend ci` and
+`npm --prefix frontend run dev`. Open `http://localhost:5173/prisoner-of-war/`.
 
 The development login page also has a **Sign in as any user** side panel.
 It loads every account, including administrators, supports email/role search,
 and opens a real session for the selected account without a password. The
 development endpoints are `GET /api/auth/users` (cursor-paginated) and
-`POST /api/auth/assume` with `{"userId":"…"}`. This workspace intentionally
-enables this account-switching workflow while the game is being developed.
-The picker is off unless `DEVELOPMENT_LOGIN=true` (set in `.env.example`, and by
-the Helm value `developmentLogin.enabled`). When off, both endpoints return 404 and
-the sign-in page hides the panel. Never enable it on a host other people can reach:
-it signs anyone in as any account, including administrators.
+`POST /api/auth/assume` with `{"userId":"…"}`. The picker is off by default
+(`DEVELOPMENT_LOGIN=false` in `.env.example` and
+`developmentLogin.enabled=false` in Helm). Set it to `true` only on a private
+development environment. When off, both endpoints return 404 and the sign-in
+page hides the panel. Never enable it on a host other people can reach: it
+signs anyone in as any account, including administrators.
 
 Screens have shareable hash routes, such as `#/campaigns`, `#/shop/boxes`,
 `#/skills/energy`, `#/saved-games`, and `#/password`. Refresh and browser

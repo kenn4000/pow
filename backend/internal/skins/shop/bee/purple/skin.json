@@ -1,6 +1,7 @@
 {
   "id": "bee-purple",
   "displayName": "Bee (purple)",
+  "rarityRank": 0,
   "hexColor": "#7E2AA1",
   "price": 1200,
   "currency": "marks"

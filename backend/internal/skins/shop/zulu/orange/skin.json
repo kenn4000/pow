@@ -1,7 +1,8 @@
 {
   "id": "zulu-orange",
   "displayName": "Zulu (orange)",
+  "rarityRank": 0,
   "hexColor": "#c76516",
-  "price": 250,
+  "price": 1250,
   "currency": "marks"
 }

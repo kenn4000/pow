@@ -1,6 +1,7 @@
 {
   "id": "dog-gray",
   "displayName": "Dog (gray)",
+  "rarityRank": 0,
   "hexColor": "#7b8086",
   "price": 600,
   "currency": "marks"

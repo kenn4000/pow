@@ -14,14 +14,15 @@ import (
 )
 
 type Chroma struct {
-	ID       string `json:"id"`
-	Name     string `json:"name"`
-	Color    string `json:"color"`
-	Skin     string `json:"skin,omitempty"`
-	HexColor string `json:"hexColor,omitempty"`
-	Rarity   string `json:"rarity"`
-	Cost     int64  `json:"cost"`
-	Currency string `json:"currency"`
+	ID         string `json:"id"`
+	Name       string `json:"name"`
+	Color      string `json:"color"`
+	Skin       string `json:"skin,omitempty"`
+	HexColor   string `json:"hexColor,omitempty"`
+	Rarity     string `json:"rarity"`
+	RarityRank int    `json:"rarityRank"`
+	Cost       int64  `json:"cost"`
+	Currency   string `json:"currency"`
 }
 
 type Currency string
@@ -41,6 +42,7 @@ type skinManifest struct {
 	Price       int64  `json:"price"`
 	Currency    string `json:"currency"`
 	Rarity      string `json:"rarity"`
+	RarityRank  int    `json:"rarityRank"`
 }
 
 var (
@@ -123,6 +125,9 @@ func readSkinManifest(assets fs.FS, skinPath, family, variant string) (Chroma, e
 	if manifest.Rarity == "" {
 		manifest.Rarity = "common"
 	}
+	if manifest.RarityRank < 0 || manifest.RarityRank > 4 {
+		return Chroma{}, fmt.Errorf("skin manifest %q rarityRank must be between 0 and 4", manifestPath)
+	}
 	switch manifest.Rarity {
 	case "common", "uncommon", "rare", "epic", "legendary", "seasonal", "super-rare":
 	default:
@@ -153,7 +158,7 @@ func readSkinManifest(assets fs.FS, skinPath, family, variant string) (Chroma, e
 	}
 	return Chroma{
 		ID: manifest.ID, Name: manifest.DisplayName, Color: color, Skin: skinPath,
-		HexColor: manifest.HexColor, Rarity: manifest.Rarity, Cost: manifest.Price,
+		HexColor: manifest.HexColor, Rarity: manifest.Rarity, RarityRank: manifest.RarityRank, Cost: manifest.Price,
 		Currency: manifest.Currency,
 	}, nil
 }

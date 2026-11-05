@@ -36,6 +36,8 @@ type SharedStats struct {
 type LadderState struct {
 	HandA                    []game.Card `json:"handA"`
 	HandB                    []game.Card `json:"handB"`
+	Deck                     []game.Card `json:"deck"`
+	Discard                  []game.Card `json:"discard"`
 	ChainValue               *int        `json:"chainValue,omitempty"`
 	ChainSuit                *game.Suit  `json:"chainSuit,omitempty"`
 	ChainIsWild              bool        `json:"chainIsWild"`
@@ -53,6 +55,8 @@ type LadderState struct {
 type LadderGame struct {
 	handA                    []game.Card
 	handB                    []game.Card
+	deck                     []game.Card
+	discard                  []game.Card
 	chainValue               *int
 	chainSuit                *game.Suit
 	chainIsWild              bool
@@ -120,7 +124,8 @@ func NewLadderGame(heroA, heroB heroes.Hero, deck []game.Card, seed int64) (*Lad
 
 	leader := chooseLeader(handA, handB, initiativeSuit, fallbackNoInitiativeSuit)
 	result := &LadderGame{
-		handA: handA, handB: handB, sharedStats: stats, wildFaceRaw: bountyCard.Face,
+		handA: handA, handB: handB, deck: append([]game.Card(nil), deck...),
+		sharedStats: stats, wildFaceRaw: bountyCard.Face,
 		bountyCard: bountyCard, initiativeSuit: initiativeSuit,
 		fallbackNoInitiativeSuit: fallbackNoInitiativeSuit,
 	}
@@ -138,6 +143,8 @@ func (g *LadderGame) State() LadderState {
 	return LadderState{
 		HandA:      append([]game.Card(nil), g.handA...),
 		HandB:      append([]game.Card(nil), g.handB...),
+		Deck:       append([]game.Card(nil), g.deck...),
+		Discard:    append([]game.Card(nil), g.discard...),
 		ChainValue: cloneInt(g.chainValue), ChainSuit: cloneSuit(g.chainSuit),
 		ChainIsWild: g.chainIsWild, Current: g.current, SharedStats: g.sharedStats,
 		SharedShift: g.sharedStats.Shift, SharedFavor: g.sharedStats.Favor,
@@ -152,6 +159,8 @@ func Restore(state LadderState) *LadderGame {
 	return &LadderGame{
 		handA:                    append([]game.Card(nil), state.HandA...),
 		handB:                    append([]game.Card(nil), state.HandB...),
+		deck:                     append([]game.Card(nil), state.Deck...),
+		discard:                  append([]game.Card(nil), state.Discard...),
 		chainValue:               cloneInt(state.ChainValue),
 		chainSuit:                cloneSuit(state.ChainSuit),
 		chainIsWild:              state.ChainIsWild,
@@ -163,6 +172,34 @@ func Restore(state LadderState) *LadderGame {
 		fallbackNoInitiativeSuit: state.FallbackNoInitiativeSuit,
 		winner:                   clonePlayerID(state.Winner),
 	}
+}
+
+func (g *LadderGame) ReplaceCard(player PlayerID, index int, rng *rand.Rand) error {
+	if g == nil || g.winner != nil {
+		return ErrGameOver
+	}
+	if !validPlayer(player) {
+		return fmt.Errorf("%w: unknown player %d", ErrIllegalPlay, player)
+	}
+	if player != g.current {
+		return ErrWrongTurn
+	}
+	if rng == nil {
+		return errors.New("random source is required")
+	}
+	hand := g.handFor(player)
+	if index < 0 || index >= len(hand) {
+		return ErrCardNotInHand
+	}
+	if len(g.deck) == 0 {
+		return errors.New("there are no cards left to draw")
+	}
+	deckIndex := rng.Intn(len(g.deck))
+	hand[index], g.deck[deckIndex] = g.deck[deckIndex], hand[index]
+	g.discard = append(g.discard, g.deck[deckIndex])
+	g.deck = append(g.deck[:deckIndex], g.deck[deckIndex+1:]...)
+	g.setHand(player, hand)
+	return nil
 }
 
 func (g *LadderGame) LegalPlays(player PlayerID) []game.Card {

@@ -1,6 +1,7 @@
 {
   "id": "fireman-red",
   "displayName": "Fireman (red)",
+  "rarityRank": 0,
   "hexColor": "#D41E1E",
   "price": 1500,
   "currency": "marks"

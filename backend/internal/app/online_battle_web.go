@@ -16,6 +16,7 @@ import (
 	"prisonersofwar/internal/game"
 	"prisonersofwar/internal/heroes"
 	"prisonersofwar/internal/profile"
+	"prisonersofwar/internal/ranked"
 )
 
 const (
@@ -26,19 +27,24 @@ const (
 
 var onlineBattleVariants = map[string]bool{
 	"main": true, "fog": true, "rummy": true, "ladder": true, "poker-duel": true, "tug-war": true,
+	"abandon-duel": true,
 }
 
 type onlineBattleRequest struct {
-	Action    string `json:"action"`
-	Variant   string `json:"variant"`
-	HeroID    string `json:"heroId"`
-	Recipient string `json:"recipient"`
-	InviteID  string `json:"inviteId"`
-	Index     int    `json:"index"`
-	Slot      int    `json:"slot"`
-	Cards     []int  `json:"cards"`
-	FaceUp    int    `json:"faceUpIndex"`
-	Buried    int    `json:"buriedIndex"`
+	Action            string `json:"action"`
+	Variant           string `json:"variant"`
+	MatchMode         string `json:"matchMode"`
+	HeroID            string `json:"heroId"`
+	ConductorModifier string `json:"conductorModifier"`
+	ConductorAmount   int    `json:"conductorAmount"`
+	Recipient         string `json:"recipient"`
+	InviteID          string `json:"inviteId"`
+	Index             int    `json:"index"`
+	Slot              int    `json:"slot"`
+	Source            string `json:"source"`
+	Cards             []int  `json:"cards"`
+	FaceUp            int    `json:"faceUpIndex"`
+	Buried            int    `json:"buriedIndex"`
 }
 
 type onlineBattleInvite struct {
@@ -56,21 +62,23 @@ type onlineBattlePlayer struct {
 }
 
 type onlineBattlePublicMatch struct {
-	ID      string                `json:"id"`
-	Variant string                `json:"variant"`
-	Status  string                `json:"status"`
-	Player  int                   `json:"player"`
-	Players [2]onlineBattlePlayer `json:"players"`
-	View    webView               `json:"view"`
+	ID        string                `json:"id"`
+	Variant   string                `json:"variant"`
+	MatchMode string                `json:"matchMode"`
+	Status    string                `json:"status"`
+	Player    int                   `json:"player"`
+	Players   [2]onlineBattlePlayer `json:"players"`
+	View      webView               `json:"view"`
 }
 
 type onlineBattleResponse struct {
-	Status   string                   `json:"status"`
-	Variant  string                   `json:"variant,omitempty"`
-	Match    *onlineBattlePublicMatch `json:"match,omitempty"`
-	Incoming []onlineBattleInvite     `json:"incomingInvites"`
-	Outgoing []onlineBattleInvite     `json:"outgoingInvites"`
-	InviteID string                   `json:"inviteId,omitempty"`
+	Status    string                   `json:"status"`
+	Variant   string                   `json:"variant,omitempty"`
+	MatchMode string                   `json:"matchMode,omitempty"`
+	Match     *onlineBattlePublicMatch `json:"match,omitempty"`
+	Incoming  []onlineBattleInvite     `json:"incomingInvites"`
+	Outgoing  []onlineBattleInvite     `json:"outgoingInvites"`
+	InviteID  string                   `json:"inviteId,omitempty"`
 }
 
 type onlineBattleState struct {
@@ -146,7 +154,7 @@ func (s *webServer) handleOnlineBattleAction(w http.ResponseWriter, r *http.Requ
 			databaseError(w, err)
 			return
 		}
-		writeJSON(w, http.StatusOK, onlineBattleResponse{Status: "completed", Variant: variant, Match: &public})
+		writeJSON(w, http.StatusOK, onlineBattleResponse{Status: "completed", Variant: variant, MatchMode: match.MatchMode, Match: &public})
 		return
 	}
 	profileData, err := onlineBattleProfile(r.Context(), tx, user.ID)
@@ -165,7 +173,8 @@ func (s *webServer) handleOnlineBattleAction(w http.ResponseWriter, r *http.Requ
 	}
 	if err := engine.applyAction(actionRequest{
 		Action: request.Action, Index: request.Index, Slot: request.Slot,
-		Cards: request.Cards, FaceUpIndex: request.FaceUp, BuriedIndex: request.Buried,
+		Source: request.Source, Cards: request.Cards,
+		FaceUpIndex: request.FaceUp, BuriedIndex: request.Buried,
 	}); err != nil {
 		writeError(w, http.StatusBadRequest, err)
 		return
@@ -174,14 +183,56 @@ func (s *webServer) handleOnlineBattleAction(w http.ResponseWriter, r *http.Requ
 		writeError(w, http.StatusInternalServerError, err)
 		return
 	}
-	state, err = encodeOnlineBattleState(engine.session)
-	if err != nil {
-		databaseError(w, err)
-		return
+	if engine.session.phase == "gameover" && match.MatchMode == "ranked" {
+		series := engine.session.rankedSeries
+		if series == nil {
+			databaseError(w, errors.New("ranked online battle has no series state"))
+			return
+		}
+		if err := series.RecordGame(engine.session.winner, onlineBattleScores(engine)); err != nil {
+			databaseError(w, err)
+			return
+		}
+		if !series.Complete {
+			engine, err = s.newOnlineBattleEngine(
+				r.Context(), tx, variant,
+				[2]string{match.PlayerA, match.PlayerB},
+				[2]string{match.HeroA, match.HeroB},
+				engine.session.conductorTunings,
+				time.Now().UTC(),
+			)
+			if err != nil {
+				databaseError(w, fmt.Errorf("start next ranked game: %w", err))
+				return
+			}
+			engine.session.rankedSeries = series
+			if err := advanceOnlineBattle(engine); err != nil {
+				databaseError(w, err)
+				return
+			}
+		} else {
+			engine.session.winner = series.Winner
+			if series.Draw {
+				engine.session.message = "The ranked series is tied. Both players receive the win payout."
+			} else {
+				engine.session.message = fmt.Sprintf("Player %d wins the ranked series.", series.Winner+1)
+			}
+		}
 	}
 	status := "active"
 	if engine.session.phase == "gameover" {
 		status = "completed"
+		if match.Status == "active" {
+			if err := s.creditOnlineBattleProfiles(r.Context(), tx, match, engine, time.Now().UTC()); err != nil {
+				databaseError(w, err)
+				return
+			}
+		}
+	}
+	state, err = encodeOnlineBattleState(engine.session)
+	if err != nil {
+		databaseError(w, err)
+		return
 	}
 	if err := saveOnlineBattleState(r.Context(), tx, match.ID, state, status); err != nil {
 		databaseError(w, err)
@@ -198,19 +249,20 @@ func (s *webServer) handleOnlineBattleAction(w http.ResponseWriter, r *http.Requ
 		databaseError(w, err)
 		return
 	}
-	writeJSON(w, http.StatusOK, onlineBattleResponse{Status: status, Variant: variant, Match: &public})
+	writeJSON(w, http.StatusOK, onlineBattleResponse{Status: status, Variant: variant, MatchMode: match.MatchMode, Match: &public})
 }
 
 type onlineBattleStoredMatch struct {
-	ID      string
-	Variant string
-	PlayerA string
-	PlayerB string
-	HeroA   string
-	HeroB   string
-	Status  string
-	State   []byte
-	Created time.Time
+	ID        string
+	Variant   string
+	MatchMode string
+	PlayerA   string
+	PlayerB   string
+	HeroA     string
+	HeroB     string
+	Status    string
+	State     []byte
+	Created   time.Time
 }
 
 func (s *webServer) getOnlineBattle(w http.ResponseWriter, r *http.Request, user account) {
@@ -241,18 +293,18 @@ func (s *webServer) getOnlineBattle(w http.ResponseWriter, r *http.Request, user
 			databaseError(w, err)
 			return
 		}
-		response.Status, response.Variant, response.Match = match.Status, match.Variant, &public
+		response.Status, response.Variant, response.MatchMode, response.Match = match.Status, match.Variant, match.MatchMode, &public
 	} else {
-		var queuedVariant string
+		var queuedVariant, queuedMode string
 		err = tx.QueryRowContext(r.Context(), `
-			SELECT variant FROM online_battle_queue
-			WHERE user_id=$1 AND last_seen>$2`, user.ID, now.Add(-onlineBattleQueueLifetime)).Scan(&queuedVariant)
+			SELECT variant,match_mode FROM online_battle_queue
+			WHERE user_id=$1 AND last_seen>$2`, user.ID, now.Add(-onlineBattleQueueLifetime)).Scan(&queuedVariant, &queuedMode)
 		if err != nil && !errors.Is(err, sql.ErrNoRows) {
 			databaseError(w, err)
 			return
 		}
 		if err == nil {
-			response.Status, response.Variant = "queued", queuedVariant
+			response.Status, response.Variant, response.MatchMode = "queued", queuedVariant, queuedMode
 			if _, err := tx.ExecContext(r.Context(), "UPDATE online_battle_queue SET last_seen=$1 WHERE user_id=$2", now, user.ID); err != nil {
 				databaseError(w, err)
 				return
@@ -273,7 +325,7 @@ func (s *webServer) getOnlineBattle(w http.ResponseWriter, r *http.Request, user
 					databaseError(w, err)
 					return
 				}
-				response.Status, response.Variant, response.Match = match.Status, match.Variant, &public
+				response.Status, response.Variant, response.MatchMode, response.Match = match.Status, match.Variant, match.MatchMode, &public
 			}
 		}
 	}
@@ -299,6 +351,13 @@ func (s *webServer) queueOnlineBattle(w http.ResponseWriter, r *http.Request, us
 		writeError(w, http.StatusBadRequest, errors.New("choose a supported online battle variant"))
 		return
 	}
+	if request.MatchMode == "" {
+		request.MatchMode = "online"
+	}
+	if request.MatchMode != "online" && request.MatchMode != "ranked" {
+		writeError(w, http.StatusBadRequest, errors.New("choose online or ranked matchmaking"))
+		return
+	}
 	tx, err := s.db.BeginTx(r.Context(), nil)
 	if err != nil {
 		databaseError(w, err)
@@ -314,22 +373,26 @@ func (s *webServer) queueOnlineBattle(w http.ResponseWriter, r *http.Request, us
 		databaseError(w, err)
 		return
 	}
-	hero, err := puzzleBattleHero(r.Context(), tx, user.ID, request.HeroID)
+	hero, tuning, err := onlineBattleHeroWithConductor(
+		r.Context(), tx, user.ID, request.HeroID, request.ConductorModifier, request.ConductorAmount,
+	)
 	if err != nil {
 		writeError(w, http.StatusBadRequest, err)
 		return
 	}
-	var opponentID, opponentHeroID string
+	var opponentID, opponentHeroID, opponentModifier string
+	var opponentAmount int
 	err = tx.QueryRowContext(r.Context(), `
-		SELECT q.user_id,q.hero_id FROM online_battle_queue q
-		WHERE q.user_id<>$1 AND q.variant=$2 AND q.last_seen>$3
+		SELECT q.user_id,q.hero_id,q.conductor_modifier,q.conductor_amount FROM online_battle_queue q
+		WHERE q.user_id<>$1 AND q.variant=$2 AND q.last_seen>$3 AND q.match_mode=$4
 		  AND NOT EXISTS (
 			SELECT 1 FROM player_blocks b
 			WHERE (b.blocker_id=$1 AND b.blocked_id=q.user_id)
 			   OR (b.blocker_id=q.user_id AND b.blocked_id=$1)
 		  )
 		ORDER BY q.queued_at,q.user_id LIMIT 1`,
-		user.ID, request.Variant, now.Add(-onlineBattleQueueLifetime)).Scan(&opponentID, &opponentHeroID)
+		user.ID, request.Variant, now.Add(-onlineBattleQueueLifetime), request.MatchMode).
+		Scan(&opponentID, &opponentHeroID, &opponentModifier, &opponentAmount)
 	if errors.Is(err, sql.ErrNoRows) {
 		if err := lockPuzzleBattlePlayers(r.Context(), tx, user.ID); err != nil {
 			databaseError(w, err)
@@ -349,11 +412,14 @@ func (s *webServer) queueOnlineBattle(w http.ResponseWriter, r *http.Request, us
 			return
 		}
 		_, err = tx.ExecContext(r.Context(), `
-			INSERT INTO online_battle_queue(user_id,variant,hero_id,queued_at,last_seen)
-			VALUES($1,$2,$3,$4,$4)
+			INSERT INTO online_battle_queue(
+				user_id,variant,hero_id,queued_at,last_seen,match_mode,conductor_modifier,conductor_amount
+			) VALUES($1,$2,$3,$4,$4,$5,$6,$7)
 			ON CONFLICT(user_id) DO UPDATE SET variant=EXCLUDED.variant,hero_id=EXCLUDED.hero_id,
-				queued_at=EXCLUDED.queued_at,last_seen=EXCLUDED.last_seen`,
-			user.ID, request.Variant, hero.ID, now)
+				queued_at=EXCLUDED.queued_at,last_seen=EXCLUDED.last_seen,match_mode=EXCLUDED.match_mode,
+				conductor_modifier=EXCLUDED.conductor_modifier,conductor_amount=EXCLUDED.conductor_amount`,
+			user.ID, request.Variant, hero.ID, now, request.MatchMode,
+			request.ConductorModifier, request.ConductorAmount)
 		if err != nil {
 			databaseError(w, err)
 			return
@@ -362,7 +428,7 @@ func (s *webServer) queueOnlineBattle(w http.ResponseWriter, r *http.Request, us
 			databaseError(w, err)
 			return
 		}
-		writeJSON(w, http.StatusOK, onlineBattleResponse{Status: "queued", Variant: request.Variant})
+		writeJSON(w, http.StatusOK, onlineBattleResponse{Status: "queued", Variant: request.Variant, MatchMode: request.MatchMode})
 		return
 	}
 	if err != nil {
@@ -382,11 +448,14 @@ func (s *webServer) queueOnlineBattle(w http.ResponseWriter, r *http.Request, us
 		_, err = tx.ExecContext(r.Context(), "DELETE FROM online_battle_queue WHERE user_id=$1", opponentID)
 		if err == nil {
 			_, err = tx.ExecContext(r.Context(), `
-				INSERT INTO online_battle_queue(user_id,variant,hero_id,queued_at,last_seen)
-				VALUES($1,$2,$3,$4,$4)
+				INSERT INTO online_battle_queue(
+					user_id,variant,hero_id,queued_at,last_seen,match_mode,conductor_modifier,conductor_amount
+				) VALUES($1,$2,$3,$4,$4,$5,$6,$7)
 				ON CONFLICT(user_id) DO UPDATE SET variant=EXCLUDED.variant,hero_id=EXCLUDED.hero_id,
-					queued_at=EXCLUDED.queued_at,last_seen=EXCLUDED.last_seen`,
-				user.ID, request.Variant, hero.ID, now)
+					queued_at=EXCLUDED.queued_at,last_seen=EXCLUDED.last_seen,match_mode=EXCLUDED.match_mode,
+					conductor_modifier=EXCLUDED.conductor_modifier,conductor_amount=EXCLUDED.conductor_amount`,
+				user.ID, request.Variant, hero.ID, now, request.MatchMode,
+				request.ConductorModifier, request.ConductorAmount)
 		}
 		if err != nil {
 			databaseError(w, err)
@@ -396,12 +465,19 @@ func (s *webServer) queueOnlineBattle(w http.ResponseWriter, r *http.Request, us
 			databaseError(w, err)
 			return
 		}
-		writeJSON(w, http.StatusOK, onlineBattleResponse{Status: "queued", Variant: request.Variant})
+		writeJSON(w, http.StatusOK, onlineBattleResponse{Status: "queued", Variant: request.Variant, MatchMode: request.MatchMode})
 		return
 	}
 	ids := [2]string{opponentID, user.ID}
 	heroIDs := [2]string{opponentHeroID, hero.ID}
-	public, err := s.createOnlineBattleTx(r.Context(), tx, request.Variant, ids, heroIDs, 1, now)
+	opponentTuning := heroes.Tuning{}
+	if opponentModifier != "" {
+		opponentTuning[opponentModifier] = opponentAmount
+	}
+	tunings := [2]heroes.Tuning{opponentTuning, tuning}
+	public, err := s.createOnlineBattleTx(
+		r.Context(), tx, request.Variant, request.MatchMode, ids, heroIDs, tunings, 1, now,
+	)
 	if err != nil {
 		if strings.Contains(err.Error(), "already has an active match") {
 			writeError(w, http.StatusConflict, err)
@@ -414,7 +490,7 @@ func (s *webServer) queueOnlineBattle(w http.ResponseWriter, r *http.Request, us
 		databaseError(w, err)
 		return
 	}
-	writeJSON(w, http.StatusCreated, onlineBattleResponse{Status: "active", Variant: request.Variant, Match: &public})
+	writeJSON(w, http.StatusCreated, onlineBattleResponse{Status: "active", Variant: request.Variant, MatchMode: request.MatchMode, Match: &public})
 }
 
 func (s *webServer) cancelOnlineBattleQueue(w http.ResponseWriter, r *http.Request, user account) {
@@ -489,7 +565,9 @@ func (s *webServer) inviteOnlineBattleFriend(w http.ResponseWriter, r *http.Requ
 		writeError(w, http.StatusConflict, errors.New("one of these players already has an active match"))
 		return
 	}
-	hero, err := puzzleBattleHero(r.Context(), tx, user.ID, request.HeroID)
+	hero, _, err := onlineBattleHeroWithConductor(
+		r.Context(), tx, user.ID, request.HeroID, request.ConductorModifier, request.ConductorAmount,
+	)
 	if err != nil {
 		writeError(w, http.StatusBadRequest, err)
 		return
@@ -504,8 +582,11 @@ func (s *webServer) inviteOnlineBattleFriend(w http.ResponseWriter, r *http.Requ
 	}
 	inviteID := randomID()
 	if _, err := tx.ExecContext(r.Context(), `
-		INSERT INTO online_battle_invites(id,variant,sender_id,recipient_id,sender_hero_id)
-		VALUES($1,$2,$3,$4,$5)`, inviteID, request.Variant, user.ID, recipientID, hero.ID); err != nil {
+		INSERT INTO online_battle_invites(
+			id,variant,sender_id,recipient_id,sender_hero_id,sender_conductor_modifier,sender_conductor_amount
+		) VALUES($1,$2,$3,$4,$5,$6,$7)`,
+		inviteID, request.Variant, user.ID, recipientID, hero.ID,
+		request.ConductorModifier, request.ConductorAmount); err != nil {
 		var pgErr *pgconn.PgError
 		if errors.As(err, &pgErr) && pgErr.Code == "23505" {
 			writeError(w, http.StatusConflict, errors.New("a pending invitation already exists for this friend and variant"))
@@ -540,12 +621,14 @@ func (s *webServer) respondOnlineBattleInvite(w http.ResponseWriter, r *http.Req
 	if !accept && request.Action == "cancel-invite" {
 		ownerColumn = "sender_id"
 	}
-	var senderID, variant, senderHeroID string
+	var senderID, variant, senderHeroID, senderModifier string
+	var senderAmount int
 	err = tx.QueryRowContext(r.Context(), fmt.Sprintf(`
-		SELECT sender_id,variant,sender_hero_id FROM online_battle_invites
+		SELECT sender_id,variant,sender_hero_id,sender_conductor_modifier,sender_conductor_amount
+		FROM online_battle_invites
 		WHERE id=$1 AND %s=$2 AND status='pending' AND created_at>$3 FOR UPDATE`, ownerColumn),
 		request.InviteID, user.ID, time.Now().UTC().Add(-onlineBattleInviteLifetime)).
-		Scan(&senderID, &variant, &senderHeroID)
+		Scan(&senderID, &variant, &senderHeroID, &senderModifier, &senderAmount)
 	if err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
 			writeError(w, http.StatusNotFound, errors.New("pending invitation not found"))
@@ -572,14 +655,23 @@ func (s *webServer) respondOnlineBattleInvite(w http.ResponseWriter, r *http.Req
 			writeError(w, http.StatusConflict, errors.New("one of these players already has an active match"))
 			return
 		}
-		hero, err := puzzleBattleHero(r.Context(), tx, user.ID, request.HeroID)
+		hero, tuning, err := onlineBattleHeroWithConductor(
+			r.Context(), tx, user.ID, request.HeroID, request.ConductorModifier, request.ConductorAmount,
+		)
 		if err != nil {
 			writeError(w, http.StatusBadRequest, err)
 			return
 		}
 		now := time.Now().UTC()
 		ids, heroIDs := [2]string{senderID, user.ID}, [2]string{senderHeroID, hero.ID}
-		public, err := s.createOnlineBattleTx(r.Context(), tx, variant, ids, heroIDs, 1, now)
+		senderTuning := heroes.Tuning{}
+		if senderModifier != "" {
+			senderTuning[senderModifier] = senderAmount
+		}
+		tunings := [2]heroes.Tuning{senderTuning, tuning}
+		public, err := s.createOnlineBattleTx(
+			r.Context(), tx, variant, "friend", ids, heroIDs, tunings, 1, now,
+		)
 		if err != nil {
 			writeError(w, http.StatusConflict, err)
 			return
@@ -594,7 +686,7 @@ func (s *webServer) respondOnlineBattleInvite(w http.ResponseWriter, r *http.Req
 			databaseError(w, err)
 			return
 		}
-		writeJSON(w, http.StatusCreated, onlineBattleResponse{Status: "active", Variant: variant, Match: &public})
+		writeJSON(w, http.StatusCreated, onlineBattleResponse{Status: "active", Variant: variant, MatchMode: "friend", Match: &public})
 		return
 	}
 	status := "declined"
@@ -658,7 +750,9 @@ func (s *webServer) createOnlineBattleTx(
 	ctx context.Context,
 	tx *sql.Tx,
 	variant string,
+	matchMode string,
 	ids, heroIDs [2]string,
+	tunings [2]heroes.Tuning,
 	viewer int,
 	now time.Time,
 ) (onlineBattlePublicMatch, error) {
@@ -672,12 +766,15 @@ func (s *webServer) createOnlineBattleTx(
 	if active {
 		return onlineBattlePublicMatch{}, errors.New("one of these players already has an active match")
 	}
-	engine, err := s.newOnlineBattleEngine(ctx, tx, variant, ids, heroIDs, now)
+	engine, err := s.newOnlineBattleEngine(ctx, tx, variant, ids, heroIDs, tunings, now)
 	if err != nil {
 		return onlineBattlePublicMatch{}, err
 	}
 	if err := advanceOnlineBattle(engine); err != nil {
 		return onlineBattlePublicMatch{}, err
+	}
+	if matchMode == "ranked" {
+		engine.session.rankedSeries = ranked.NewSeries()
 	}
 	state, err := encodeOnlineBattleState(engine.session)
 	if err != nil {
@@ -685,8 +782,8 @@ func (s *webServer) createOnlineBattleTx(
 	}
 	matchID := randomID()
 	_, err = tx.ExecContext(ctx, `
-		INSERT INTO online_battle_matches(id,variant,player_a_id,player_b_id,player_a_hero_id,player_b_hero_id,state)
-		VALUES($1,$2,$3,$4,$5,$6,$7)`, matchID, variant, ids[0], ids[1], heroIDs[0], heroIDs[1], state)
+		INSERT INTO online_battle_matches(id,variant,player_a_id,player_b_id,player_a_hero_id,player_b_hero_id,state,match_mode)
+		VALUES($1,$2,$3,$4,$5,$6,$7,$8)`, matchID, variant, ids[0], ids[1], heroIDs[0], heroIDs[1], state, matchMode)
 	if err != nil {
 		return onlineBattlePublicMatch{}, fmt.Errorf("save new online battle: %w", err)
 	}
@@ -714,7 +811,7 @@ func (s *webServer) createOnlineBattleTx(
 		return onlineBattlePublicMatch{}, err
 	}
 	match := onlineBattleStoredMatch{
-		ID: matchID, Variant: variant, PlayerA: ids[0], PlayerB: ids[1],
+		ID: matchID, Variant: variant, MatchMode: matchMode, PlayerA: ids[0], PlayerB: ids[1],
 		HeroA: heroIDs[0], HeroB: heroIDs[1], Status: "active", State: state, Created: now,
 	}
 	return s.onlineBattlePublicMatch(ctx, tx, match, viewer, variant, state)
@@ -725,6 +822,7 @@ func (s *webServer) newOnlineBattleEngine(
 	tx *sql.Tx,
 	variant string,
 	ids, heroIDs [2]string,
+	tunings [2]heroes.Tuning,
 	now time.Time,
 ) (*webServer, error) {
 	profiles := [2]*profile.Profile{}
@@ -739,6 +837,9 @@ func (s *webServer) newOnlineBattleEngine(
 		if err != nil {
 			return nil, err
 		}
+		if err := validateWebConductorTuning(p, tunings[player]); err != nil {
+			return nil, fmt.Errorf("player %d Conductor tuning: %w", player+1, err)
+		}
 	}
 	rng, err := secureRand()
 	if err != nil {
@@ -750,7 +851,9 @@ func (s *webServer) newOnlineBattleEngine(
 	}
 	switch variant {
 	case "main", "fog":
-		modifiers, err := heroes.GameModifiersFor(playerHeroes[0], playerHeroes[1], rng)
+		modifiers, err := heroes.GameModifiersForWithTuning(
+			playerHeroes[0], playerHeroes[1], tunings[0], tunings[1], rng,
+		)
 		if err != nil {
 			return nil, err
 		}
@@ -763,13 +866,20 @@ func (s *webServer) newOnlineBattleEngine(
 		}
 		engine.session.variant = variant
 	case "rummy":
-		engine.startWebRummy("hvh", heroIDs[0], heroIDs[1], playerHeroes[0], playerHeroes[1])
+		engine.startWebRummy("hvh", heroIDs[0], heroIDs[1],
+			applyWebHeroTuning(playerHeroes[0], tunings[0]),
+			applyWebHeroTuning(playerHeroes[1], tunings[1]))
 	case "ladder":
-		if err := engine.startWebLadder("hvh", heroIDs[0], heroIDs[1], playerHeroes[0], playerHeroes[1]); err != nil {
+		if err := engine.startWebLadder("hvh", heroIDs[0], heroIDs[1],
+			applyWebHeroTuning(playerHeroes[0], tunings[0]),
+			applyWebHeroTuning(playerHeroes[1], tunings[1])); err != nil {
 			return nil, err
 		}
 	case "poker-duel":
-		duel, err := newPokerDuelGame(playerHeroes[0], playerHeroes[1], rng, now)
+		duel, err := newPokerDuelGame(
+			applyWebHeroTuning(playerHeroes[0], tunings[0]),
+			applyWebHeroTuning(playerHeroes[1], tunings[1]), rng, now,
+		)
 		if err != nil {
 			return nil, err
 		}
@@ -780,8 +890,25 @@ func (s *webServer) newOnlineBattleEngine(
 			opponentHeroID: heroIDs[1], message: fmt.Sprintf("Player %d is up.", duel.ActivePlayer+1),
 			initialAchievements: achievementLevels(profiles[0]),
 		}
+	case "abandon-duel":
+		duel, err := newAbandonDuelGame(
+			applyWebHeroTuning(playerHeroes[0], tunings[0]),
+			applyWebHeroTuning(playerHeroes[1], tunings[1]), rng,
+		)
+		if err != nil {
+			return nil, err
+		}
+		engine.session = &webSession{
+			mode: "hvh", variant: variant, abandonDuel: duel, phase: duel.phase(),
+			actor: duel.ActivePlayer, winner: -1,
+			playerHeroID: heroIDs[0], opponentHeroID: heroIDs[1],
+			message:             "Flip a face-down board card, then choose two cards to battle.",
+			initialAchievements: achievementLevels(profiles[0]),
+		}
 	case "tug-war":
-		if err := engine.startWebTugWar("hvh", heroIDs[0], heroIDs[1], playerHeroes[0], playerHeroes[1]); err != nil {
+		if err := engine.startWebTugWar("hvh", heroIDs[0], heroIDs[1],
+			applyWebHeroTuning(playerHeroes[0], tunings[0]),
+			applyWebHeroTuning(playerHeroes[1], tunings[1])); err != nil {
 			return nil, err
 		}
 	default:
@@ -790,6 +917,7 @@ func (s *webServer) newOnlineBattleEngine(
 	engine.gameID = randomID()
 	engine.session.mode = "hvh"
 	engine.session.initialAchievements = achievementLevels(profiles[0])
+	engine.session.conductorTunings = tunings
 	return engine, nil
 }
 
@@ -826,6 +954,36 @@ func onlineBattleProfile(ctx context.Context, queryer puzzleBattleQueryRower, us
 	return &p, nil
 }
 
+func onlineBattleHeroWithConductor(
+	ctx context.Context,
+	queryer puzzleBattleQueryRower,
+	userID, heroID, modifier string,
+	amount int,
+) (heroes.Hero, heroes.Tuning, error) {
+	p, err := onlineBattleProfile(ctx, queryer, userID)
+	if err != nil {
+		return heroes.Hero{}, nil, err
+	}
+	if heroID == "" {
+		heroID = p.DefaultHeroID
+	}
+	if heroID == "" {
+		heroID = profile.DefaultHeroID
+	}
+	if !containsHeroID(p.UnlockedHeroes, heroID) {
+		return heroes.Hero{}, nil, fmt.Errorf("hero %q is not unlocked", heroID)
+	}
+	hero, ok := heroes.ByID(heroID)
+	if !ok {
+		return heroes.Hero{}, nil, fmt.Errorf("unknown hero %q", heroID)
+	}
+	tuning, err := webConductorTuning(p, modifier, amount)
+	if err != nil {
+		return heroes.Hero{}, nil, err
+	}
+	return hero, tuning, nil
+}
+
 func loadCurrentOnlineBattle(ctx context.Context, tx *sql.Tx, userID string) (onlineBattleStoredMatch, int, error) {
 	var matchID string
 	err := tx.QueryRowContext(ctx, "SELECT match_id FROM online_battle_active_users WHERE user_id=$1 FOR UPDATE", userID).Scan(&matchID)
@@ -858,11 +1016,11 @@ func loadOnlineBattleMatch(ctx context.Context, tx *sql.Tx, matchID, userID stri
 func loadOnlineBattleByID(ctx context.Context, tx *sql.Tx, matchID, userID string) (onlineBattleStoredMatch, int, error) {
 	var match onlineBattleStoredMatch
 	err := tx.QueryRowContext(ctx, `
-		SELECT id,variant,player_a_id,player_b_id,player_a_hero_id,player_b_hero_id,status,state,created_at
+		SELECT id,variant,match_mode,player_a_id,player_b_id,player_a_hero_id,player_b_hero_id,status,state,created_at
 		FROM online_battle_matches
 		WHERE id=$1 AND (player_a_id=$2 OR player_b_id=$2)
 		FOR UPDATE`, matchID, userID).Scan(
-		&match.ID, &match.Variant, &match.PlayerA, &match.PlayerB, &match.HeroA, &match.HeroB,
+		&match.ID, &match.Variant, &match.MatchMode, &match.PlayerA, &match.PlayerB, &match.HeroA, &match.HeroB,
 		&match.Status, &match.State, &match.Created)
 	if err != nil {
 		return onlineBattleStoredMatch{}, 0, err
@@ -906,6 +1064,9 @@ func (s *webServer) restoreOnlineBattleEngine(viewerProfile *profile.Profile, ma
 	if engine.session.variant == "tug-war" && engine.session.tugWar == nil {
 		return nil, errors.New("online Tug War state is unavailable")
 	}
+	if engine.session.variant == "abandon-duel" && engine.session.abandonDuel == nil {
+		return nil, errors.New("online Abandon Duel state is unavailable")
+	}
 	engine.session.mode = "hvh"
 	return engine, nil
 }
@@ -930,7 +1091,7 @@ func (s *webServer) onlineBattlePublicMatch(
 	}
 	publicView := onlineBattleView(engine, player)
 	result := onlineBattlePublicMatch{
-		ID: match.ID, Variant: variant, Status: match.Status, Player: 0, View: publicView,
+		ID: match.ID, Variant: variant, MatchMode: match.MatchMode, Status: match.Status, Player: 0, View: publicView,
 	}
 	ids, heroIDs := [2]string{match.PlayerA, match.PlayerB}, [2]string{match.HeroA, match.HeroB}
 	for index := range result.Players {
@@ -955,12 +1116,20 @@ func onlineBattleView(engine *webServer, viewer int) webView {
 	session := engine.session
 	flip := viewer == 1
 	view.Mode = "online"
+	view.RankedSeries = session.rankedSeries
 	view.CanAct = session.phase != "gameover" && session.actor == viewer
 	view.Viewer = 0
 	view.Actor = onlineRelativePlayer(view.Actor, flip)
 	view.Attacker = onlineRelativePlayer(view.Attacker, flip)
 	view.Winner = onlineRelativePlayer(view.Winner, flip)
 	if flip {
+		if view.RankedSeries != nil {
+			series := *view.RankedSeries
+			series.Wins[0], series.Wins[1] = series.Wins[1], series.Wins[0]
+			series.Scores[0], series.Scores[1] = series.Scores[1], series.Scores[0]
+			series.Winner = onlineRelativePlayer(series.Winner, true)
+			view.RankedSeries = &series
+		}
 		view.Message = strings.NewReplacer("Player 1", "\x00", "Player 2", "Player 1", "\x00", "Player 2").
 			Replace(view.Message)
 		view.PlayerHero, view.OpponentHero = view.OpponentHero, view.PlayerHero
@@ -1004,6 +1173,9 @@ func onlineBattleView(engine *webServer, viewer int) webView {
 			}
 		}
 	}
+	if view.AbandonDuel != nil {
+		orientAbandonDuelView(view.AbandonDuel, flip)
+	}
 	if view.TugWar != nil {
 		tugWar := view.TugWar
 		tugWar.Viewer = onlineRelativePlayer(tugWar.Viewer, flip)
@@ -1034,6 +1206,29 @@ func onlineBattleView(engine *webServer, viewer int) webView {
 		}
 	}
 	return view
+}
+
+func orientAbandonDuelView(duel *webAbandonDuelState, flip bool) {
+	if duel == nil {
+		return
+	}
+	duel.ActivePlayer = onlineRelativePlayer(duel.ActivePlayer, flip)
+	duel.StartingPlayer = onlineRelativePlayer(duel.StartingPlayer, flip)
+	duel.Winner = onlineRelativePlayer(duel.Winner, flip)
+	if !flip {
+		return
+	}
+	duel.Players[0], duel.Players[1] = duel.Players[1], duel.Players[0]
+	duel.TotalScores[0], duel.TotalScores[1] = duel.TotalScores[1], duel.TotalScores[0]
+	for index := range duel.RoundScores {
+		duel.RoundScores[index][0], duel.RoundScores[index][1] =
+			duel.RoundScores[index][1], duel.RoundScores[index][0]
+		duel.RoundPairCounts[index][0], duel.RoundPairCounts[index][1] =
+			duel.RoundPairCounts[index][1], duel.RoundPairCounts[index][0]
+	}
+	for index := range duel.Pairings {
+		duel.Pairings[index].Player = onlineRelativePlayer(duel.Pairings[index].Player, true)
+	}
 }
 
 func onlineRelativePlayer(player int, flip bool) int {

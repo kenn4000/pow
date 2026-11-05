@@ -8,6 +8,36 @@ import (
 	"time"
 )
 
+func TestTieredHeroCrownsPrices(t *testing.T) {
+	tests := map[string]int64{
+		"warden": 300, "hunter": 300, "anchor": 300, "ascetic": 300,
+		"ascendant": 400, "treasurer": 400, "diplomat": 400,
+		"hater": 500, "gambler": 500, "herald": 500,
+	}
+	for heroID, want := range tests {
+		t.Run(heroID, func(t *testing.T) {
+			got, ok := HeroCrownsCost(heroID)
+			if !ok || got != want {
+				t.Fatalf("HeroCrownsCost(%q) = %d, %t; want %d, true", heroID, got, ok, want)
+			}
+			p, err := New(time.Now())
+			if err != nil {
+				t.Fatal(err)
+			}
+			p.Crowns = want
+			if err := p.BuyHeroWithCrowns(heroID); err != nil {
+				t.Fatalf("purchase at listed price: %v", err)
+			}
+			if p.Crowns != 0 || !containsHero(p.UnlockedHeroes, heroID) {
+				t.Fatalf("purchase state has %d Crowns and heroes %v", p.Crowns, p.UnlockedHeroes)
+			}
+		})
+	}
+	if _, ok := HeroCrownsCost("recruit"); ok {
+		t.Fatal("Recruit must not have a direct-purchase price")
+	}
+}
+
 func TestLoadSaveProfileRoundTripAndSchemaValidation(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "nested", "profile.json")
 	p, err := LoadProfileFrom(path)
@@ -246,8 +276,27 @@ func TestSchemaV5MigrationInitializesAcquisitionAndCampaignFields(t *testing.T) 
 	if p.SchemaVersion != SchemaVersion || !containsHero(p.UnlockedHeroes, "recruit") ||
 		p.HeroBoxesAvailable != 0 || p.Campaigns["basic"] == nil ||
 		p.Campaigns["advanced"] == nil || p.LastOpponentHeroID != "hunter" ||
-		!p.SkillNodes["chroma-curator"] || p.SkillNodes["curator"] {
+		p.SkillNodes["chroma-curator"] || p.SkillNodes["curator"] || p.SkillPoints != 1 {
 		t.Fatalf("v5 acquisition migration = %+v", p)
+	}
+}
+
+func TestSchemaV12SkillTreeMigrationPreservesMatchesAndCompensatesRetiredNodes(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "profile.json")
+	legacy := `{"schema_version":12,"player_id":"v12-player","skill_nodes":{"quartermaster":true,"hero_broker":true,"conductor_1":true,"crowns-of-victory":true,"campaign_free":true}}`
+	if err := os.WriteFile(path, []byte(legacy), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	p, err := LoadProfileFrom(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if p.SchemaVersion != SchemaVersion || !p.SkillNodes["quartermaster"] ||
+		!p.SkillNodes["hero-broker"] || !p.SkillNodes["conductor-1"] ||
+		p.SkillNodes["hero_broker"] || p.SkillNodes["conductor_1"] ||
+		p.SkillNodes["crowns-of-victory"] || p.SkillNodes["campaign_free"] ||
+		p.SkillPoints != 2 {
+		t.Fatalf("v12 skill-tree migration = %+v", p)
 	}
 }
 

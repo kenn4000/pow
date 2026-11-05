@@ -1,6 +1,7 @@
 {
   "id": "dino-blue",
   "displayName": "Dinosaur (blue)",
+  "rarityRank": 0,
   "hexColor": "#213873",
   "price": 1000,
   "currency": "crowns"

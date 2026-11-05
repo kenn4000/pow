@@ -50,6 +50,20 @@ func dumpEconomyConfig(writer io.Writer) error {
 			"crowns_per_full_refill": energy.CrownsPerFullRefill,
 			"starting_energy":        profile.DefaultMaxEnergy,
 			"recharge_per_energy":    profile.DefaultEnergyRecharge.String(),
+			"shop_recharges": []map[string]int{
+				{"energy": energy.OneEnergyRecharge, "marks": energy.MarksPerEnergy, "crowns": energy.CrownsPerEnergy},
+				{"energy": energy.TenEnergyRecharge, "marks": energy.MarksPerTenEnergy, "crowns": energy.CrownsPerTenEnergy},
+			},
+		},
+		"shop_boxes": map[string]any{
+			"wooden": map[string]int64{"marks": shopWoodenBoxMarksCost, "crowns": shopWoodenBoxCrownsCost},
+			"silver": map[string]int64{"marks": shopSilverBoxMarksCost, "crowns": shopSilverBoxCrownsCost},
+			"gold":   map[string]int64{"marks": shopGoldBoxMarksCost, "crowns": shopGoldBoxCrownsCost},
+			"hero": map[string]int64{
+				"marks":                  heroes.HeroBoxMarksCost,
+				"marks_with_hero_broker": heroes.HeroBoxDiscountedCost,
+			},
+			"diamond": "Camp Draw wins only",
 		},
 		"camp_draw_and_catalog": lootbox.AuditConfig(),
 		"skills":                skills.AllNodes(),
@@ -482,7 +496,7 @@ func (a *app) startCampaignMission(p *profile.Profile, campaign campaigns.Campai
 		if _, err := refreshEnergy(p, time.Now()); err != nil {
 			return err
 		}
-		if energyCost := campaignMissionEnergyCost(p, mission); energyCost > 0 {
+		if energyCost := campaignMissionEnergyCost(mission); energyCost > 0 {
 			if err := energy.Spend(p, energyCost, time.Now()); err != nil {
 				return err
 			}
@@ -548,7 +562,17 @@ func (a *app) completeCampaignProgress(p *profile.Profile, campaign campaigns.Ca
 	if err != nil {
 		return err
 	}
+	bonusMarks, readinessGranted, err := applyCampaignWinSkillRewards(
+		p, campaign.ID, outcome.MissionMarks+outcome.CompletionMarks, time.Now(),
+	)
+	if err != nil {
+		return err
+	}
+	outcome.MissionMarks += bonusMarks
 	fmt.Printf("Mission complete! +%d Marks.\n", outcome.MissionMarks)
+	if readinessGranted {
+		fmt.Println("Rations & Readiness: +1 Restart token, +1 Undo token, and +1 Energy.")
+	}
 	if outcome.CampaignCompleted {
 		fmt.Printf("\n=== CAMPAIGN COMPLETE: %s ===\n", campaign.Name)
 		if outcome.CompletionMarks > 0 {
@@ -751,11 +775,8 @@ func (ui *campaignMissionUI) ChooseMissionTuning() (heroes.Tuning, error) {
 	return tuning, nil
 }
 
-func campaignMissionEnergyCost(p *profile.Profile, mission campaigns.Mission) int {
+func campaignMissionEnergyCost(mission campaigns.Mission) int {
 	if mission.Disabled {
-		return 0
-	}
-	if mission.Index == 1 && skills.AggregateBonuses(p).CampaignFree {
 		return 0
 	}
 	return 1
@@ -812,41 +833,36 @@ func (a *app) selectMatchHeroes(p *profile.Profile, selected mode) error {
 	return nil
 }
 
-func (a *app) chooseHeroTuning(playerLabel string, maxModifiers int) (heroes.Tuning, error) {
+func (a *app) chooseHeroTuning(playerLabel string, maxMagnitude int) (heroes.Tuning, error) {
 	tuning := make(heroes.Tuning)
-	used := make(map[string]bool)
-	for len(used) < maxModifiers {
-		choice, err := a.ask(fmt.Sprintf("%s: tune bounty, shift, favored, or blank to finish: ", playerLabel))
+	for {
+		choice, err := a.ask(fmt.Sprintf("%s: choose bounty, shift, favored, or blank to skip: ", playerLabel))
 		if err != nil {
 			return nil, err
 		}
 		modifier := strings.ToLower(strings.TrimSpace(choice))
 		if modifier == "" {
-			break
+			return tuning, nil
 		}
 		if modifier != "bounty" && modifier != "shift" && modifier != "favored" {
 			fmt.Println("Choose bounty, shift, favored, or blank.")
 			continue
 		}
-		if used[modifier] {
-			fmt.Println("Each modifier can only be tuned once.")
-			continue
-		}
-		direction, err := a.ask("Adjust by +1 or -1 (0 to skip): ")
+		direction, err := a.ask(fmt.Sprintf("Adjust by any whole number from -%d to +%d (0 to skip): ", maxMagnitude, maxMagnitude))
 		if err != nil {
 			return nil, err
 		}
 		value, err := strconv.Atoi(strings.TrimSpace(direction))
-		if err != nil || value < -1 || value > 1 {
-			fmt.Println("Enter +1, 0, or -1.")
+		if err != nil || value < -maxMagnitude || value > maxMagnitude {
+			fmt.Printf("Enter a whole number from -%d to +%d.\n", maxMagnitude, maxMagnitude)
 			continue
 		}
 		if value != 0 {
 			tuning[modifier] = value
-			used[modifier] = true
 		}
+		break
 	}
-	if err := heroes.ValidateTuning(tuning, maxModifiers); err != nil {
+	if err := heroes.ValidateTuning(tuning, maxMagnitude); err != nil {
 		return nil, err
 	}
 	return tuning, nil
@@ -992,9 +1008,15 @@ func heroUnlockStatus(p *profile.Profile, hero heroes.Hero) string {
 	}
 	switch {
 	case hero.Unlock == "campaign:basic":
-		return "locked: Campaign 1 or 1200 Crowns"
+		if cost, ok := profile.HeroCrownsCost(hero.ID); ok {
+			return fmt.Sprintf("locked: Campaign 1 or %d Crowns", cost)
+		}
+		return "locked: Campaign 1"
 	case hero.Unlock == "hero_lootbox":
-		return "locked: Random Hero Box or 1200 Crowns"
+		if cost, ok := profile.HeroCrownsCost(hero.ID); ok {
+			return fmt.Sprintf("locked: Random Hero Box or %d Crowns", cost)
+		}
+		return "locked: Random Hero Box"
 	default:
 		return "locked: " + hero.Unlock
 	}
@@ -1364,8 +1386,10 @@ func (a *app) showShopCatalog(p *profile.Profile) error {
 		fmt.Printf("[free-hero-box] Open a free Hero Box (%d available)\n", p.HeroBoxesAvailable)
 	}
 	fmt.Printf("[hero-box] Open a Hero Box for %d Marks\n", heroes.HeroBoxCost(p))
-	fmt.Printf("[buy-hero] Buy any unowned hero for %d Crowns\n", heroes.DirectHeroCrownsCost)
-	fmt.Println("Hero Box pool: Early (Treasurer, Gorilla), Mid (Gambler, Diplomat, Bureaucrat), Late (Bodybuilder, Hater)")
+	fmt.Println("[energy] Buy 1 or 10 energy with Marks or Crowns")
+	fmt.Println("[skill-points] Buy 1 Skill Point for 300 Crowns or 10 for 2,400 Crowns")
+	fmt.Println("[buy-hero] Buy an unowned hero for its listed Crown price")
+	fmt.Println("Hero Box: 10 non-Recruit heroes, 10% chance each; duplicates award 50% of that hero's Crown price.")
 	if p.ChromaPickTokens > 0 {
 		fmt.Printf("[Redeem Pick-Any-Chroma token (%d available)]\n", p.ChromaPickTokens)
 	}
@@ -1373,7 +1397,7 @@ func (a *app) showShopCatalog(p *profile.Profile) error {
 }
 
 func (a *app) chooseShopAction(p *profile.Profile) error {
-	answer, err := a.ask("Enter a chroma ID, hero-box, free-hero-box, buy-hero, pick, or blank to return: ")
+	answer, err := a.ask("Enter a chroma ID, hero-box, free-hero-box, buy-hero, energy, skill-points, pick, or blank to return: ")
 	if err != nil {
 		return err
 	}
@@ -1388,6 +1412,10 @@ func (a *app) chooseShopAction(p *profile.Profile) error {
 		return a.openHeroBoxMenu(p, true)
 	case "buy-hero":
 		return a.buyHeroMenu(p)
+	case "energy":
+		return a.shopEnergyMenu(p)
+	case "skill-points":
+		return a.shopSkillPointsMenu(p)
 	}
 	if strings.EqualFold(answer, "pick") {
 		return a.redeemChromaMenu(p)
@@ -1415,6 +1443,77 @@ func (a *app) chooseShopAction(p *profile.Profile) error {
 		showUnlockToast(event)
 	}
 	return nil
+}
+
+func (a *app) shopEnergyMenu(p *profile.Profile) error {
+	current := energy.Current(p, time.Now())
+	fmt.Printf("Energy: %d/%d\n", current, profile.EnergyStorageCap(p))
+	fmt.Printf("[1] +1 Energy · %d Marks\n", energy.MarksPerEnergy)
+	fmt.Printf("[2] +1 Energy · %d Crowns\n", energy.CrownsPerEnergy)
+	fmt.Println("[3] +10 Energy · 4,500 Marks")
+	fmt.Println("[4] +10 Energy · 225 Crowns")
+	answer, err := a.ask("Choose a recharge: ")
+	if err != nil {
+		return err
+	}
+	amount, currency := 0, ""
+	switch strings.TrimSpace(answer) {
+	case "1":
+		amount, currency = energy.OneEnergyRecharge, "marks"
+	case "2":
+		amount, currency = energy.OneEnergyRecharge, "crowns"
+	case "3":
+		amount, currency = energy.TenEnergyRecharge, "marks"
+	case "4":
+		amount, currency = energy.TenEnergyRecharge, "crowns"
+	default:
+		fmt.Println("No energy purchase selected.")
+		return nil
+	}
+	if err := energy.BuyEnergy(p, amount, currency, time.Now()); err != nil {
+		return err
+	}
+	fmt.Printf("Purchased %d Energy; now %d/%d.\n", amount, p.Energy, profile.EnergyStorageCap(p))
+	events, err := updatePurchaseAchievements(p, time.Now())
+	if err != nil {
+		return err
+	}
+	for _, event := range events {
+		showUnlockToast(event)
+	}
+	return p.Save()
+}
+
+func (a *app) shopSkillPointsMenu(p *profile.Profile) error {
+	fmt.Println("[1] Buy 1 Skill Point for 300 Crowns")
+	fmt.Println("[2] Buy 10 Skill Points for 2,400 Crowns")
+	answer, err := a.ask("Choose a Skill Point offer: ")
+	if err != nil {
+		return err
+	}
+	id := ""
+	switch strings.TrimSpace(answer) {
+	case "1":
+		id = "skill-point-one"
+	case "2":
+		id = "skill-point-ten"
+	default:
+		fmt.Println("No Skill Point purchase selected.")
+		return nil
+	}
+	message, err := buyShopSkillPoints(p, id)
+	if err != nil {
+		return err
+	}
+	fmt.Println(message)
+	events, err := updatePurchaseAchievements(p, time.Now())
+	if err != nil {
+		return err
+	}
+	for _, event := range events {
+		showUnlockToast(event)
+	}
+	return p.Save()
 }
 
 func (a *app) redeemChromaMenu(p *profile.Profile) error {
@@ -1467,7 +1566,11 @@ func (a *app) openHeroBoxMenu(p *profile.Profile, free bool) error {
 		return err
 	}
 	if result.Duplicate {
-		fmt.Printf("Duplicate %s-tier hero; +%d Crowns.\n", result.DuplicateTier, result.Crowns)
+		hero, ok := heroes.ByID(result.HeroID)
+		if !ok {
+			return fmt.Errorf("hero box returned unknown duplicate hero %q", result.HeroID)
+		}
+		fmt.Printf("Duplicate %s; +%d Crowns.\n", hero.Name, result.Crowns)
 	} else if hero, ok := heroes.ByID(result.HeroID); ok {
 		fmt.Printf("Hero Box unlocked %s!\n", hero.Name)
 		for _, event := range evaluateAchievementEvent(p, achievements.EventHeroAcquired, "box") {
@@ -1489,7 +1592,8 @@ func (a *app) buyHeroMenu(p *profile.Profile) error {
 		if containsHeroID(p.UnlockedHeroes, hero.ID) {
 			fmt.Printf("%-12s %-16s Owned\n", hero.ID, hero.Name)
 		} else {
-			fmt.Printf("%-12s %-16s %d Crowns\n", hero.ID, hero.Name, heroes.DirectHeroCrownsCost)
+			price, _ := profile.HeroCrownsCost(hero.ID)
+			fmt.Printf("%-12s %-16s %d Crowns\n", hero.ID, hero.Name, price)
 		}
 	}
 	heroID, err := a.ask("Enter an unowned hero ID, or blank to return: ")
@@ -1507,7 +1611,8 @@ func (a *app) buyHeroMenu(p *profile.Profile) error {
 	if containsHeroID(p.UnlockedHeroes, heroID) {
 		return fmt.Errorf("%s is already owned", hero.Name)
 	}
-	answer, err := a.ask(fmt.Sprintf("Spend %d Crowns for %s? (y/N): ", heroes.DirectHeroCrownsCost, hero.Name))
+	price, _ := profile.HeroCrownsCost(heroID)
+	answer, err := a.ask(fmt.Sprintf("Spend %d Crowns for %s? (y/N): ", price, hero.Name))
 	if err != nil {
 		return err
 	}
@@ -1526,21 +1631,17 @@ func (a *app) buyHeroMenu(p *profile.Profile) error {
 }
 
 func (a *app) skillMenu(p *profile.Profile) error {
-	fmt.Printf("\n=== SKILL TREE | Crowns %d | Skill Tree Points %d ===\n", p.Crowns, p.SkillPoints)
+	fmt.Printf("\n=== SKILL TREE | Skill Points %d ===\n", p.SkillPoints)
 	for _, node := range skills.AllNodes() {
 		state := "locked"
 		if p.SkillNodes[node.ID] {
 			state = "unlocked"
-		} else if can, _ := skills.CanUnlock(p, node.ID); can {
+		} else if can, _ := skills.CanUnlockWithSkillPoint(p, node.ID); can {
 			state = "available"
-		} else if p.SkillPoints > 0 {
-			if can, _ := skills.CanUnlockWithSkillPoint(p, node.ID); can {
-				state = "available (SP)"
-			}
 		}
-		fmt.Printf("%-18s %-10s %2d Crowns — %s", node.ID, state, node.CostCrowns, node.Description)
+		fmt.Printf("%-24s %-10s T%d · %d Skill Points — %s", node.ID, state, node.Tier, node.CostSkillPoints, node.Description)
 		if node.Prerequisite != "" {
-			fmt.Printf(" (requires %s)", node.Prerequisite)
+			fmt.Printf(" (→ %s)", node.Prerequisite)
 		}
 		fmt.Println()
 	}
@@ -1552,24 +1653,8 @@ func (a *app) skillMenu(p *profile.Profile) error {
 		return nil
 	}
 	id := strings.TrimSpace(answer)
-	payment := "crowns"
-	if p.SkillPoints > 0 {
-		payment, err = a.ask("Unlock with Crowns (C) or one Skill Tree Point (S)? ")
-		if err != nil {
-			return err
-		}
-	}
-	switch strings.ToLower(strings.TrimSpace(payment)) {
-	case "c", "crowns":
-		if err := skills.UnlockNode(p, id); err != nil {
-			return err
-		}
-	case "s", "skill point", "skill-point":
-		if err := skills.UnlockNodeWithSkillPoint(p, id); err != nil {
-			return err
-		}
-	default:
-		return errors.New("choose C for Crowns or S for a Skill Tree Point")
+	if err := skills.UnlockNodeWithSkillPoint(p, id); err != nil {
+		return err
 	}
 	return p.Save()
 }

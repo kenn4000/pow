@@ -10,6 +10,7 @@ import (
 	"prisonersofwar/internal/game"
 	"prisonersofwar/internal/heroes"
 	"prisonersofwar/internal/modifiers"
+	"prisonersofwar/internal/ranked"
 )
 
 const (
@@ -123,6 +124,8 @@ type Match struct {
 	CountdownEndsAt *time.Time         `json:"countdownEndsAt,omitempty"`
 	Deadline        *time.Time         `json:"deadline,omitempty"`
 	Result          *Result            `json:"result,omitempty"`
+	MatchMode       string             `json:"matchMode,omitempty"`
+	RankedSeries    *ranked.Series     `json:"rankedSeries,omitempty"`
 }
 
 type View struct {
@@ -154,6 +157,8 @@ type View struct {
 	ReadyStatus       [2]string          `json:"readyStatus"`
 	RoundOneScores    *[2]int            `json:"roundOneScores,omitempty"`
 	Result            *Result            `json:"result,omitempty"`
+	MatchMode         string             `json:"matchMode,omitempty"`
+	RankedSeries      *ranked.Series     `json:"rankedSeries,omitempty"`
 }
 
 // New creates a match and materializes all random choices so Match can be
@@ -397,6 +402,18 @@ func (m *Match) ViewFor(player int, now time.Time) (View, error) {
 	if err := m.Advance(now); err != nil {
 		return View{}, err
 	}
+	var series *ranked.Series
+	if m.RankedSeries != nil {
+		copy := *m.RankedSeries
+		if player == 1 {
+			copy.Wins[0], copy.Wins[1] = copy.Wins[1], copy.Wins[0]
+			copy.Scores[0], copy.Scores[1] = copy.Scores[1], copy.Scores[0]
+			if copy.Winner >= 0 {
+				copy.Winner = 1 - copy.Winner
+			}
+		}
+		series = &copy
+	}
 	view := View{
 		MatchID:         m.ID,
 		Status:          m.Status,
@@ -412,6 +429,8 @@ func (m *Match) ViewFor(player int, now time.Time) (View, error) {
 		AutoReadyAt:     m.AutoReadyAt,
 		CountdownEndsAt: copyTime(m.CountdownEndsAt),
 		Deadline:        copyTime(m.Deadline),
+		MatchMode:       m.MatchMode,
+		RankedSeries:    series,
 	}
 	for i := range m.Ready {
 		view.ReadyStatus[i] = "waiting"

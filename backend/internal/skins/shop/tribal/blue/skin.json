@@ -1,6 +1,7 @@
 {
   "id": "cobalt",
   "displayName": "Tribal (blue)",
+  "rarityRank": 0,
   "hexColor": "#2873be",
   "price": 250,
   "currency": "marks"

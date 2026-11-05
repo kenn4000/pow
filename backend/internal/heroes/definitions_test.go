@@ -96,14 +96,20 @@ func TestCombineWithTuningAppliesBeforeClamp(t *testing.T) {
 
 	warden, _ := ByID("warden")
 	ascendant, _ := ByID("ascendant")
-	got, err = CombineWithTuning(warden, ascendant, Tuning{
-		"bounty": 1, "shift": 1,
-	}, Tuning{"favored": 1})
+	got, err = CombineWithTuning(warden, ascendant, Tuning{"bounty": 1}, Tuning{"favored": 1})
 	if err != nil {
 		t.Fatal(err)
 	}
-	if got != (CombinedModifiers{Bounty: 2, Shift: 3, Favored: 2, Draft: 2}) {
+	if got != (CombinedModifiers{Bounty: 2, Shift: 2, Favored: 2, Draft: 2}) {
 		t.Fatalf("tuned modifiers = %+v", got)
+	}
+
+	got, err = CombineWithTuning(warden, ascendant, Tuning{"shift": 2}, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got.Shift != 3 {
+		t.Fatalf("Master Conductor shift = %d, want 3 after modifier clamp", got.Shift)
 	}
 }
 
@@ -161,8 +167,11 @@ func TestValidateTuningLimitsAxesAndValues(t *testing.T) {
 			t.Errorf("invalid tuning accepted: %v", tuning)
 		}
 	}
-	if err := ValidateTuning(Tuning{"bounty": 1, "shift": -1}, 2); err != nil {
-		t.Fatalf("Conductor II tuning rejected: %v", err)
+	if err := ValidateTuning(Tuning{"bounty": 2}, 2); err != nil {
+		t.Fatalf("Master Conductor tuning rejected: %v", err)
+	}
+	if err := ValidateTuning(Tuning{"bounty": 1, "shift": -1}, 2); err == nil {
+		t.Fatal("tuning multiple modifiers should be rejected")
 	}
 }
 

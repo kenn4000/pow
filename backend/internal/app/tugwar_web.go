@@ -106,6 +106,7 @@ func (s *webServer) updateTugWarSession() {
 		default:
 			session.message = "The CPU wins Tug War."
 		}
+		s.awardLocalMultiplayerPayout(session.tugWar.Result().Scores[0])
 		return
 	}
 	session.phase = "tug-war-play"

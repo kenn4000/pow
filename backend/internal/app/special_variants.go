@@ -52,6 +52,8 @@ var puzzleCatalog = []puzzleDefinition{
 type puzzleSession struct {
 	Definition puzzleDefinition
 	Modifiers  game.GameModifiers
+	DrawPile   []game.Card
+	Discard    []game.Card
 	Selected   int
 	Used       []bool
 	Pairings   []puzzlePairing
@@ -99,30 +101,34 @@ type webPuzzlePair struct {
 }
 
 type abandonSession struct {
-	Board         []game.Card
-	BoardID       string
-	Target        int
-	CategorySuits [3]game.Suit
-	Bounty        game.Card
-	Shift         int
-	Revealed      []bool
-	Used          []bool
-	DrawPile      []game.Card
-	DrawIndex     int
-	DrawTokens    int
-	Selected      int
-	Pairings      []abandonPairing
-	Score         int
-	Finished      bool
-	Evaluated     bool
-	Won           bool
-	Penalties     []int
+	RulesVersion   int
+	Board          []game.Card
+	PersonalPile   []game.Card
+	DrawPile       []game.Card
+	Discard        []game.Card
+	Target         int
+	PairCount      int
+	Bounty         game.Card
+	Revealed       []bool
+	PileRevealed   []bool
+	Used           []bool
+	PileUsed       []bool
+	SelectedSource string
+	SelectedIndex  int
+	Pairings       []abandonPairing
+	Captured       []game.Card
+	Score          int
+	Finished       bool
+	Evaluated      bool
+	Won            bool
+	Penalties      []int
 }
 
 type abandonPairing struct {
-	First  game.Card `json:"first"`
-	Second game.Card `json:"second"`
-	Score  int       `json:"score"`
+	First    game.Card  `json:"first"`
+	Second   game.Card  `json:"second"`
+	Captured *game.Card `json:"captured,omitempty"`
+	Tie      bool       `json:"tie"`
 }
 
 type webAbandonCard struct {
@@ -134,79 +140,28 @@ type webAbandonCard struct {
 }
 
 type webAbandonState struct {
-	BoardID        string                 `json:"boardId"`
 	Target         int                    `json:"target"`
+	PairCount      int                    `json:"pairCount"`
 	Evaluation     string                 `json:"evaluation"`
 	Won            bool                   `json:"won"`
 	Bounty         game.Card              `json:"bounty"`
-	CategorySuits  [3]game.Suit           `json:"categorySuits"`
-	CanChangeSuits bool                   `json:"canChangeSuits"`
 	Board          []webAbandonCard       `json:"board"`
+	PersonalPile   []webAbandonCard       `json:"personalPile"`
 	PairResults    []webAbandonPairResult `json:"pairResults"`
-	DrawTokens     int                    `json:"drawTokens"`
-	DrawPileCount  int                    `json:"drawPileCount"`
+	SelectedSource string                 `json:"selectedSource"`
 	SelectedIndex  int                    `json:"selectedIndex"`
 	Score          int                    `json:"score"`
 	Complete       bool                   `json:"complete"`
 }
 
 type webAbandonPairResult struct {
-	Cards       []game.Card `json:"cards"`
-	DisplayCard game.Card   `json:"displayCard"`
-	IsPair      bool        `json:"isPair"`
-	Score       int         `json:"score"`
+	Captured *game.Card `json:"captured,omitempty"`
+	Tie      bool       `json:"tie"`
 }
 
-type abandonBoardOption struct {
-	ID     string `json:"id"`
-	Name   string `json:"name"`
-	Target int    `json:"target"`
-}
-
-type abandonBoardCard struct {
-	Face     int
-	Category int
-}
-
-type abandonBoardDefinition struct {
-	abandonBoardOption
-	Cards []abandonBoardCard
-}
-
-var abandonBoardCatalog = []abandonBoardDefinition{
-	{abandonBoardOption: abandonBoardOption{ID: "board-01", Name: "Abandon Board 1", Target: 54}, Cards: []abandonBoardCard{{1, 1}, {1, 2}, {9, 0}, {9, 1}, {8, 0}, {4, 0}, {3, 0}, {6, 1}, {2, 1}}},
-	{abandonBoardOption: abandonBoardOption{ID: "board-02", Name: "Abandon Board 2", Target: 58}, Cards: []abandonBoardCard{{4, 1}, {4, 2}, {7, 0}, {7, 1}, {2, 0}, {3, 0}, {5, 0}, {8, 1}, {1, 1}}},
-	{abandonBoardOption: abandonBoardOption{ID: "board-03", Name: "Abandon Board 3", Target: 60}, Cards: []abandonBoardCard{{8, 1}, {8, 2}, {9, 0}, {9, 1}, {7, 0}, {5, 0}, {2, 0}, {3, 1}, {4, 1}}},
-	{abandonBoardOption: abandonBoardOption{ID: "board-04", Name: "Abandon Board 4", Target: 61}, Cards: []abandonBoardCard{{1, 1}, {1, 2}, {3, 0}, {3, 1}, {4, 0}, {7, 0}, {2, 0}, {6, 1}, {8, 1}}},
-	{abandonBoardOption: abandonBoardOption{ID: "board-05", Name: "Abandon Board 5", Target: 62}, Cards: []abandonBoardCard{{8, 1}, {8, 2}, {1, 0}, {1, 1}, {7, 0}, {5, 0}, {6, 0}, {2, 1}, {9, 1}}},
-	{abandonBoardOption: abandonBoardOption{ID: "board-06", Name: "Abandon Board 6", Target: 63}, Cards: []abandonBoardCard{{4, 1}, {4, 2}, {9, 0}, {9, 1}, {2, 0}, {6, 0}, {5, 0}, {8, 1}, {1, 1}}},
-	{abandonBoardOption: abandonBoardOption{ID: "board-07", Name: "Abandon Board 7", Target: 64}, Cards: []abandonBoardCard{{7, 1}, {7, 2}, {2, 0}, {2, 1}, {5, 0}, {6, 0}, {8, 0}, {4, 1}, {3, 1}}},
-	{abandonBoardOption: abandonBoardOption{ID: "board-08", Name: "Abandon Board 8", Target: 65}, Cards: []abandonBoardCard{{8, 1}, {8, 2}, {2, 0}, {2, 1}, {6, 0}, {7, 0}, {9, 0}, {5, 1}, {4, 1}}},
-	{abandonBoardOption: abandonBoardOption{ID: "board-09", Name: "Abandon Board 9", Target: 66}, Cards: []abandonBoardCard{{3, 1}, {3, 2}, {1, 0}, {1, 1}, {2, 0}, {8, 0}, {9, 0}, {5, 1}, {7, 1}}},
-	{abandonBoardOption: abandonBoardOption{ID: "board-10", Name: "Abandon Board 10", Target: 67}, Cards: []abandonBoardCard{{6, 1}, {6, 2}, {9, 0}, {9, 1}, {7, 0}, {3, 0}, {1, 0}, {2, 1}, {4, 1}}},
-	{abandonBoardOption: abandonBoardOption{ID: "board-11", Name: "Abandon Board 11", Target: 68}, Cards: []abandonBoardCard{{7, 1}, {7, 2}, {2, 0}, {2, 1}, {1, 0}, {5, 0}, {8, 0}, {9, 1}, {3, 1}}},
-	{abandonBoardOption: abandonBoardOption{ID: "board-12", Name: "Abandon Board 12", Target: 70}, Cards: []abandonBoardCard{{7, 1}, {7, 2}, {9, 0}, {9, 1}, {2, 0}, {1, 0}, {6, 0}, {8, 1}, {3, 1}}},
-	{abandonBoardOption: abandonBoardOption{ID: "board-13", Name: "Abandon Board 13", Target: 72}, Cards: []abandonBoardCard{{7, 1}, {7, 2}, {9, 0}, {9, 1}, {1, 0}, {2, 0}, {4, 0}, {3, 1}, {8, 1}}},
-	{abandonBoardOption: abandonBoardOption{ID: "board-14", Name: "Abandon Board 14", Target: 75}, Cards: []abandonBoardCard{{4, 1}, {4, 2}, {5, 0}, {5, 1}, {1, 0}, {8, 0}, {7, 0}, {2, 1}, {9, 1}}},
-	{abandonBoardOption: abandonBoardOption{ID: "board-15", Name: "Abandon Board 15", Target: 76}, Cards: []abandonBoardCard{{7, 1}, {7, 2}, {4, 0}, {4, 1}, {9, 0}, {1, 0}, {8, 0}, {2, 1}, {5, 1}}},
-}
-
-func abandonBoardByID(id string) (abandonBoardDefinition, bool) {
-	for _, board := range abandonBoardCatalog {
-		if board.ID == id {
-			return board, true
-		}
-	}
-	return abandonBoardDefinition{}, false
-}
-
-func abandonBoardOptions() []abandonBoardOption {
-	options := make([]abandonBoardOption, len(abandonBoardCatalog))
-	for index, board := range abandonBoardCatalog {
-		options[index] = board.abandonBoardOption
-	}
-	return options
-}
+const abandonRulesVersion = 2
+const abandonBoardSource = "board"
+const abandonPileSource = "personal-pile"
 
 func puzzleCards(rocks, papers, scissors []int) []game.Card {
 	cards := make([]game.Card, 0, len(rocks)+len(papers)+len(scissors))
@@ -302,206 +257,183 @@ func (p *puzzleSession) pick(index int) error {
 }
 
 func newAbandonSession(hero heroes.Hero, rng *rand.Rand) *abandonSession {
-	state, _ := newAbandonSessionForBoard(hero, rng, "board-01")
+	state, _ := newAbandonSessionForMission(hero, rng, 4, 11, 35)
 	return state
 }
 
-func newAbandonSessionForBoard(hero heroes.Hero, rng *rand.Rand, boardID string) (*abandonSession, error) {
-	definition, ok := abandonBoardByID(boardID)
-	if !ok {
-		return nil, fmt.Errorf("unknown abandon board %q", boardID)
+func newAbandonSessionForMission(hero heroes.Hero, rng *rand.Rand, pairCount, boardCardCount, target int) (*abandonSession, error) {
+	if pairCount < 1 || boardCardCount < 1 || target < 1 || pairCount*2 > boardCardCount+5 {
+		return nil, errors.New("invalid Abandon mission configuration")
 	}
-	bountySuit := game.Blade
-	if rng != nil {
-		bountySuit = game.Suit(rng.Intn(3))
+	if rng == nil {
+		rng = rand.New(rand.NewSource(1))
 	}
-	categorySuits := [3]game.Suit{
-		bountySuit,
-		game.Suit((int(bountySuit) + 1) % 3),
-		game.Suit((int(bountySuit) + 2) % 3),
+	deck := game.NewDeck()
+	game.Shuffle(deck, rng)
+	bounty := deck[0]
+	remaining := deck[1:]
+	personalPile := make([]game.Card, 0, 5)
+	selected := make(map[game.Card]bool, 5)
+	suitsFound := [3]bool{}
+	for _, card := range remaining {
+		suit := int(card.Suit)
+		if !suitsFound[suit] {
+			personalPile = append(personalPile, card)
+			selected[card] = true
+			suitsFound[suit] = true
+		}
 	}
-	board := make([]game.Card, len(definition.Cards))
-	for index, item := range definition.Cards {
-		board[index] = game.Card{Suit: categorySuits[item.Category], Face: item.Face}
+	for _, card := range remaining {
+		if len(personalPile) == 5 {
+			break
+		}
+		if !selected[card] {
+			personalPile = append(personalPile, card)
+			selected[card] = true
+		}
 	}
-	boardSet := make(map[game.Card]bool, len(board))
+	available := make([]game.Card, 0, len(remaining)-len(personalPile))
+	for _, card := range remaining {
+		if !selected[card] {
+			available = append(available, card)
+		}
+	}
+	if len(available) < boardCardCount {
+		return nil, errors.New("not enough cards for Abandon board")
+	}
+	board := append([]game.Card(nil), available[:boardCardCount]...)
+	hasBountyCard := false
 	for _, card := range board {
-		boardSet[card] = true
+		hasBountyCard = hasBountyCard || card.Suit == bounty.Suit
+	}
+	if !hasBountyCard {
+		for _, card := range available[boardCardCount:] {
+			if card.Suit == bounty.Suit {
+				board[len(board)-1] = card
+				break
+			}
+		}
 	}
 	revealed := make([]bool, len(board))
-	state := &abandonSession{
-		Board: board, BoardID: definition.ID, Target: definition.Target,
-		CategorySuits: categorySuits, Shift: hero.Shift,
-		Revealed: revealed, Used: make([]bool, len(board)),
-		Penalties: make([]int, len(board)), Selected: -1, Pairings: []abandonPairing{},
-		DrawTokens: clampInt(2+hero.Draft, 0, 4),
-	}
-	state.rebuildBeforePlay(rng)
-	return state, nil
-}
-
-func (a *abandonSession) rebuildBeforePlay(rng *rand.Rand) {
-	boardSet := make(map[game.Card]bool, len(a.Board))
-	for _, card := range a.Board {
-		boardSet[card] = true
-	}
-	bountyFace := 1
-	for boardSet[game.Card{Suit: a.CategorySuits[0], Face: bountyFace}] {
-		bountyFace++
-	}
-	a.Bounty = game.Card{Suit: a.CategorySuits[0], Face: bountyFace}
-	a.DrawPile = make([]game.Card, 0, 17)
-	for _, card := range game.NewDeck() {
-		if card != a.Bounty && !boardSet[card] {
-			a.DrawPile = append(a.DrawPile, card)
+	highestBountyIndex := -1
+	for index, card := range board {
+		if card.Suit == bounty.Suit && (highestBountyIndex < 0 || card.Face > board[highestBountyIndex].Face) {
+			highestBountyIndex = index
 		}
 	}
-	a.DrawIndex = 0
-	if rng != nil {
-		game.Shuffle(a.DrawPile, rng)
+	for index, card := range board {
+		revealed[index] = card.Suit == bounty.Suit && index != highestBountyIndex
 	}
-	clear(a.Revealed)
-	clear(a.Penalties)
-	for count := 0; count < 3; count++ {
-		lowest := -1
-		for index, card := range a.Board {
-			if card.Suit != a.Bounty.Suit || a.Revealed[index] {
-				continue
-			}
-			if lowest < 0 || card.Face < a.Board[lowest].Face {
-				lowest = index
-			}
-		}
-		if lowest < 0 {
-			break
-		}
-		a.Revealed[lowest] = true
+	pileRevealed := make([]bool, len(personalPile))
+	for index := 0; index < clampInt(3+hero.Draft, 0, len(pileRevealed)); index++ {
+		pileRevealed[index] = true
 	}
+	return &abandonSession{
+		RulesVersion: abandonRulesVersion,
+		Board:        board, PersonalPile: personalPile, Target: target, PairCount: pairCount, Bounty: bounty,
+		DrawPile: replacementDeck(append(append([]game.Card{bounty}, board...), personalPile...), rng),
+		Revealed: revealed, PileRevealed: pileRevealed,
+		Used: make([]bool, len(board)), PileUsed: make([]bool, len(personalPile)),
+		SelectedIndex: -1, Pairings: make([]abandonPairing, 0, pairCount),
+		Captured: []game.Card{}, Penalties: make([]int, len(personalPile)),
+	}, nil
 }
 
-func (a *abandonSession) assignCategorySuit(category int, suit game.Suit, rng *rand.Rand) error {
-	if a == nil || a.Finished || a.Selected >= 0 || len(a.Pairings) > 0 {
-		return errors.New("suits can only be changed before the first pairing")
+func (a *abandonSession) flipBoardCard(index int) error {
+	if a == nil || a.Finished || len(a.Pairings) >= a.PairCount {
+		return errors.New("Abandon game is complete")
 	}
-	if category < 0 || category >= len(a.CategorySuits) || !suit.Valid() {
-		return errors.New("choose a valid category and suit")
-	}
-	next := a.CategorySuits
-	if next[category] == suit {
-		return nil
-	}
-	other := -1
-	for index, assigned := range next {
-		if assigned == suit {
-			other = index
-			break
-		}
-	}
-	if other < 0 {
-		return errors.New("suit mapping is invalid")
-	}
-	next[category], next[other] = next[other], next[category]
-	return a.setCategorySuits(next, rng)
-}
-
-func (a *abandonSession) rotateCategorySuits(rng *rand.Rand) error {
-	if a == nil || a.Finished || a.Selected >= 0 || len(a.Pairings) > 0 {
-		return errors.New("suits can only be changed before the first pairing")
-	}
-	return a.setCategorySuits([3]game.Suit{
-		a.CategorySuits[1], a.CategorySuits[2], a.CategorySuits[0],
-	}, rng)
-}
-
-func (a *abandonSession) setCategorySuits(next [3]game.Suit, rng *rand.Rand) error {
-	seen := [3]bool{}
-	for _, suit := range next {
-		if !suit.Valid() || seen[suit] {
-			return errors.New("suit mapping must use each suit once")
-		}
-		seen[suit] = true
-	}
-	remap := [3]game.Suit{}
-	for category, oldSuit := range a.CategorySuits {
-		remap[oldSuit] = next[category]
-	}
-	for index := range a.Board {
-		a.Board[index].Suit = remap[a.Board[index].Suit]
-	}
-	a.CategorySuits = next
-	a.rebuildBeforePlay(rng)
-	return nil
-}
-
-func (a *abandonSession) selectCard(index int) error {
-	if a == nil || a.Finished || len(a.Pairings) >= 4 {
-		return errors.New("abandon game is complete")
-	}
-	if index < 0 || index >= len(a.Board) || a.Used[index] {
-		return errors.New("selected board card is unavailable")
-	}
-	if a.Selected >= 0 {
+	if a.SelectedSource != "" {
 		return errors.New("finish the current pairing first")
 	}
-	a.Selected = index
+	if index < 0 || index >= len(a.Board) || a.Used[index] || a.Revealed[index] {
+		return errors.New("selected board card is unavailable or already revealed")
+	}
 	a.Revealed[index] = true
 	return nil
 }
 
-func (a *abandonSession) pairBoard(index int, hero heroes.Hero) error {
-	if a == nil || a.Selected < 0 {
-		return errors.New("select a first board card")
+func (a *abandonSession) selectPairCard(source string, index int, hero heroes.Hero) error {
+	if a == nil || a.Finished || len(a.Pairings) >= a.PairCount {
+		return errors.New("Abandon game is complete")
 	}
-	if index < 0 || index >= len(a.Board) || index == a.Selected || a.Used[index] {
-		return errors.New("selected board card is unavailable")
+	card, err := a.availableCard(source, index)
+	if err != nil {
+		return err
 	}
-	a.Revealed[index] = true
-	a.completePair(a.Board[index], hero)
-	a.Used[a.Selected], a.Used[index] = true, true
-	a.Selected = -1
+	if a.SelectedSource == "" {
+		a.SelectedSource, a.SelectedIndex = source, index
+		a.revealCard(source, index)
+		return nil
+	}
+	if a.SelectedSource == source && a.SelectedIndex == index {
+		return errors.New("choose a different second card")
+	}
+	first, err := a.availableCard(a.SelectedSource, a.SelectedIndex)
+	if err != nil {
+		return err
+	}
+	a.revealCard(source, index)
+	outcome := game.ResolveWithModifiers(first, card, heroModifiers(hero))
+	pairing := abandonPairing{First: first, Second: card, Tie: outcome.Winner < 0}
+	if outcome.Winner >= 0 {
+		captured := outcome.Captured
+		pairing.Captured = &captured
+		a.Captured = append(a.Captured, captured)
+	}
+	a.Pairings = append(a.Pairings, pairing)
+	a.markUsed(a.SelectedSource, a.SelectedIndex)
+	a.markUsed(source, index)
+	a.SelectedSource, a.SelectedIndex = "", -1
+	a.Score = abandonCapturedScore(a.Captured, a.Bounty.Suit, hero)
 	a.finishIfReady(hero)
 	return nil
 }
 
-func (a *abandonSession) pairDraw(hero heroes.Hero) error {
-	if a == nil || a.Selected < 0 {
-		return errors.New("select a first board card")
+func (a *abandonSession) availableCard(source string, index int) (game.Card, error) {
+	switch source {
+	case abandonBoardSource:
+		if index >= 0 && index < len(a.Board) && !a.Used[index] {
+			return a.Board[index], nil
+		}
+	case abandonPileSource:
+		if index >= 0 && index < len(a.PersonalPile) && !a.PileUsed[index] {
+			return a.PersonalPile[index], nil
+		}
+	default:
+		return game.Card{}, errors.New("choose a card from the board or personal pile")
 	}
-	if a.DrawTokens <= 0 {
-		return errors.New("no draw tokens remain")
-	}
-	if a.DrawIndex >= len(a.DrawPile) {
-		return errors.New("draw pile is empty")
-	}
-	card := a.DrawPile[a.DrawIndex]
-	a.DrawIndex++
-	a.DrawTokens--
-	a.completePair(card, hero)
-	a.Used[a.Selected] = true
-	a.Selected = -1
-	a.finishIfReady(hero)
-	return nil
+	return game.Card{}, errors.New("selected card is unavailable")
 }
 
-func (a *abandonSession) completePair(card game.Card, hero heroes.Hero) {
-	first := a.Board[a.Selected]
-	score := scoreAbandonPair(first, card, hero)
-	a.Score += score
-	a.Pairings = append(a.Pairings, abandonPairing{First: first, Second: card, Score: score})
+func (a *abandonSession) revealCard(source string, index int) {
+	switch source {
+	case abandonBoardSource:
+		a.Revealed[index] = true
+	case abandonPileSource:
+		a.PileRevealed[index] = true
+	}
+}
+
+func (a *abandonSession) markUsed(source string, index int) {
+	if source == abandonBoardSource {
+		a.Used[index] = true
+	} else {
+		a.PileUsed[index] = true
+	}
 }
 
 func (a *abandonSession) finishIfReady(hero heroes.Hero) {
-	if len(a.Pairings) != 4 {
+	if len(a.Pairings) != a.PairCount {
 		return
 	}
-	for index, card := range a.Board {
-		if !a.Used[index] {
-			if len(a.Penalties) != len(a.Board) {
-				a.Penalties = make([]int, len(a.Board))
-			}
-			a.Penalties[index] = -abandonValue(card, hero)
+	a.Score = abandonCapturedScore(a.Captured, a.Bounty.Suit, hero)
+	mods := heroModifiers(hero)
+	for index, card := range a.PersonalPile {
+		a.PileRevealed[index] = true
+		if !a.PileUsed[index] {
+			a.Penalties[index] = -modifiers.ScoringFace(card.Face, card.Suit == a.Bounty.Suit, mods)
 			a.Score += a.Penalties[index]
-			a.Revealed[index] = true
 		}
 	}
 	a.Finished = true
@@ -509,39 +441,14 @@ func (a *abandonSession) finishIfReady(hero heroes.Hero) {
 	a.Won = a.Score >= a.Target
 }
 
-func scoreAbandonPair(first, second game.Card, hero heroes.Hero) int {
-	firstFace, secondFace := abandonEffectiveFace(first, hero), abandonEffectiveFace(second, hero)
-	if firstFace == secondFace && first.Suit != second.Suit {
-		score := 30 + 3*firstFace
-		if first.Suit == game.Blade || second.Suit == game.Blade {
-			score += 2 * heroModifiers(hero).Bounty
+func abandonCapturedScore(captured []game.Card, bounty game.Suit, hero heroes.Hero) int {
+	var capturedByRound [3][3]int
+	for _, card := range captured {
+		if card.Valid() {
+			capturedByRound[0][int(card.Suit)]++
 		}
-		return score
 	}
-	higher := first
-	if secondFace > firstFace {
-		higher = second
-	}
-	score := firstFace
-	if secondFace > firstFace {
-		score = secondFace
-	}
-	if higher.Suit == game.Blade {
-		score += heroModifiers(hero).Bounty
-	}
-	return score
-}
-
-func abandonValue(card game.Card, hero heroes.Hero) int {
-	value := abandonEffectiveFace(card, hero)
-	if card.Suit == game.Blade {
-		value += heroModifiers(hero).Bounty
-	}
-	return value
-}
-
-func abandonEffectiveFace(card game.Card, hero heroes.Hero) int {
-	return maxInt(1, card.Face+hero.Shift)
+	return game.ScoreWithModifiers(captured, capturedByRound, bounty, heroModifiers(hero)).Total
 }
 
 func (a *abandonSession) webView() *webAbandonState {
@@ -557,46 +464,29 @@ func (a *abandonSession) webView() *webAbandonState {
 		}
 		board[index] = item
 	}
+	personalPile := make([]webAbandonCard, len(a.PersonalPile))
+	for index, card := range a.PersonalPile {
+		item := webAbandonCard{Index: index, Revealed: a.PileRevealed[index], Used: a.PileUsed[index]}
+		if item.Revealed {
+			revealedCard := card
+			item.Card = &revealedCard
+		}
+		if a.Finished && !item.Used {
+			penalty := a.Penalties[index]
+			item.Penalty = &penalty
+		}
+		personalPile[index] = item
+	}
 	pairResults := make([]webAbandonPairResult, len(a.Pairings))
 	for index, pairing := range a.Pairings {
-		displayCard, isPair := abandonPairDisplayCard(pairing.First, pairing.Second, a.Bounty.Suit, a.Shift)
-		pairResults[index] = webAbandonPairResult{
-			Cards: []game.Card{pairing.First, pairing.Second}, DisplayCard: displayCard,
-			IsPair: isPair, Score: pairing.Score,
-		}
-	}
-	canChangeSuits := !a.Finished && a.Selected < 0 && len(a.Pairings) == 0
-	for index := range board {
-		if a.Finished && !a.Used[index] && index < len(a.Penalties) {
-			penalty := a.Penalties[index]
-			board[index].Penalty = &penalty
-		}
+		pairResults[index] = webAbandonPairResult{Captured: pairing.Captured, Tie: pairing.Tie}
 	}
 	return &webAbandonState{
-		BoardID: a.BoardID, Target: a.Target, Bounty: a.Bounty, Board: board, PairResults: pairResults,
-		CategorySuits: a.CategorySuits, CanChangeSuits: canChangeSuits,
-		DrawTokens: a.DrawTokens, DrawPileCount: len(a.DrawPile) - a.DrawIndex,
-		SelectedIndex: a.Selected, Score: a.Score, Complete: a.Finished,
-		Evaluation: abandonEvaluation(a), Won: a.Won,
+		Target: a.Target, PairCount: a.PairCount, Bounty: a.Bounty,
+		Board: board, PersonalPile: personalPile, PairResults: pairResults,
+		SelectedSource: a.SelectedSource, SelectedIndex: a.SelectedIndex,
+		Score: a.Score, Complete: a.Finished, Evaluation: abandonEvaluation(a), Won: a.Won,
 	}
-}
-
-func abandonPairDisplayCard(first, second game.Card, bountySuit game.Suit, shift int) (game.Card, bool) {
-	firstFace, secondFace := maxInt(1, first.Face+shift), maxInt(1, second.Face+shift)
-	isPair := firstFace == secondFace && first.Suit != second.Suit
-	if isPair {
-		if first.Suit == bountySuit {
-			return first, true
-		}
-		if second.Suit == bountySuit {
-			return second, true
-		}
-		return first, true
-	}
-	if secondFace > firstFace {
-		return second, false
-	}
-	return first, false
 }
 
 func abandonEvaluation(a *abandonSession) string {
@@ -682,7 +572,7 @@ func specialVariant(variant string) (string, error) {
 		return "main", nil
 	}
 	switch variant {
-	case "main", "fog", "puzzler", "abandon", "rummy", "ladder", "poker", "poker-duel", "tug-war":
+	case "main", "fog", "puzzler", "abandon", "abandon-duel", "rummy", "ladder", "poker", "poker-duel", "tug-war":
 		return variant, nil
 	default:
 		return "", fmt.Errorf("unknown variant %q", variant)

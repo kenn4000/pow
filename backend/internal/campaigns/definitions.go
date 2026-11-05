@@ -46,6 +46,9 @@ type Mission struct {
 	AIHero                string
 	PlayerHeroRestriction []string
 	RewardMarks           int64
+	Target                int
+	AbandonPairs          int
+	AbandonBoardCards     int
 	PokerRules            *game.PokerMissionRules
 }
 

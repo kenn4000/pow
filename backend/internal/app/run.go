@@ -54,7 +54,7 @@ func Run() {
 	modeFlag := flag.String("mode", "", "game mode: easy, normal, or hard")
 	listen := flag.String("listen", "127.0.0.1:8080", "HTTP listen address")
 	noColor := flag.Bool("no-color", false, "disable ANSI suit colors")
-	dumpEconomy := flag.Bool("dump-economy", false, "print economy, skill, chroma, and Camp Draw configuration as JSON")
+	dumpEconomy := flag.Bool("dump-economy", false, "print economy, shop, skill, chroma, and Camp Draw configuration as JSON")
 	flag.Parse()
 
 	if err := validateSimulationCounts(*simGames, *simHeroGames, *simDraftGames, *simCampDraws); err != nil {

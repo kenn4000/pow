@@ -1,7 +1,8 @@
 {
   "id": "reptile-pink",
   "displayName": "Reptile (pink)",
+  "rarityRank": 0,
   "hexColor": "#d94f9d",
-  "price": 250,
+  "price": 1250,
   "currency": "marks"
 }

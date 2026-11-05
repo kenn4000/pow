@@ -20,15 +20,16 @@ import (
 )
 
 type webCampaignContext struct {
-	ID          string `json:"id"`
-	Index       int    `json:"index"`
-	Name        string `json:"name"`
-	Hint        string `json:"hint"`
-	Variant     string `json:"variant"`
-	VariantID   string `json:"variantId,omitempty"`
-	Replay      bool   `json:"replay"`
-	RewardMarks int64  `json:"rewardMarks"`
-	Result      string `json:"result,omitempty"`
+	ID             string `json:"id"`
+	Index          int    `json:"index"`
+	Name           string `json:"name"`
+	Hint           string `json:"hint"`
+	Variant        string `json:"variant"`
+	VariantID      string `json:"variantId,omitempty"`
+	Replay         bool   `json:"replay"`
+	HasNextMission bool   `json:"hasNextMission"`
+	RewardMarks    int64  `json:"rewardMarks"`
+	Result         string `json:"result,omitempty"`
 }
 
 func campaignVariant(campaign campaigns.Campaign) string {
@@ -45,12 +46,21 @@ func missionVariant(mission campaigns.Mission) string {
 	return "main"
 }
 
+func campaignHasPlayableMission(campaign campaigns.Campaign, index int) bool {
+	for _, mission := range campaign.Missions {
+		if mission.Index == index {
+			return !mission.Disabled
+		}
+	}
+	return false
+}
+
 func campaignMissionMetadata(mission campaigns.Mission) (string, string, int, int) {
 	name, description := mission.Name, mission.Hint
 	switch mission.Variant {
 	case "abandon":
-		if board, ok := abandonBoardByID(mission.VariantID); ok {
-			return board.Name, fmt.Sprintf("Target score: %d.", board.Target), board.Target, 0
+		if !mission.Disabled && mission.AbandonPairs > 0 && mission.AbandonBoardCards > 0 && mission.Target > 0 {
+			return name, fmt.Sprintf("%d pairs · %d board cards · Target score: %d.", mission.AbandonPairs, mission.AbandonBoardCards, mission.Target), mission.Target, mission.AbandonBoardCards
 		}
 	case "puzzler":
 		if puzzle, ok := puzzleByID(mission.VariantID); ok {
@@ -174,7 +184,11 @@ func (s *webServer) prepareWebMission(input actionRequest) error {
 	if heroID == "" && len(mission.PlayerHeroRestriction) > 0 {
 		heroID = mission.PlayerHeroRestriction[0]
 	}
-	state, cpuID, err := campaigns.PrepareMission(p, mission, heroID, s.rng)
+	tuning, err := webConductorTuning(p, input.ConductorModifier, input.ConductorAmount)
+	if err != nil {
+		return err
+	}
+	state, cpuID, err := campaigns.PrepareMissionWithTuning(p, mission, heroID, tuning, s.rng)
 	if err != nil {
 		return err
 	}
@@ -186,7 +200,7 @@ func (s *webServer) prepareWebMission(input actionRequest) error {
 		if _, err := refreshEnergy(p, time.Now()); err != nil {
 			return err
 		}
-		if err := energy.Spend(p, campaignMissionEnergyCost(p, mission), time.Now()); err != nil {
+		if err := energy.Spend(p, campaignMissionEnergyCost(mission), time.Now()); err != nil {
 			return err
 		}
 	}
@@ -215,11 +229,15 @@ func (s *webServer) prepareWebMission(input actionRequest) error {
 		message: message,
 		campaign: &webCampaignContext{
 			ID: campaign.ID, Index: mission.Index, Name: mission.Name, Hint: mission.Hint,
-			Variant: missionVariant(mission), Replay: replay, RewardMarks: mission.RewardMarks,
+			Variant: missionVariant(mission), Replay: replay, HasNextMission: campaignHasPlayableMission(campaign, mission.Index+1),
+			RewardMarks: mission.RewardMarks,
 		},
 	}
 	if state.Draft != nil {
 		s.session.message = s.draftTurnMessage(actor)
+	}
+	if err := s.captureRestartSnapshot(); err != nil {
+		return err
 	}
 	return p.Save()
 }
@@ -230,6 +248,11 @@ func (s *webServer) prepareSpecialWebMission(p *profile.Profile, campaign campai
 	if !ok || !s.heroUnlocked(heroID) {
 		return fmt.Errorf("player hero %q is not unlocked", heroID)
 	}
+	tuning, err := webConductorTuning(p, input.ConductorModifier, input.ConductorAmount)
+	if err != nil {
+		return err
+	}
+	playerHero = applyWebHeroTuning(playerHero, tuning)
 	if s.rng == nil {
 		s.rng = rand.New(rand.NewSource(time.Now().UnixNano()))
 	}
@@ -244,9 +267,10 @@ func (s *webServer) prepareSpecialWebMission(p *profile.Profile, campaign campai
 			return fmt.Errorf("unknown puzzle %q", mission.VariantID)
 		}
 		puzzle = newPuzzleSession(definition, playerHero)
+		puzzle.DrawPile = replacementDeck(definition.Cards, s.rng)
 	case "abandon":
 		var err error
-		abandon, err = newAbandonSessionForBoard(playerHero, s.rng, mission.VariantID)
+		abandon, err = newAbandonSessionForMission(playerHero, s.rng, mission.AbandonPairs, mission.AbandonBoardCards, mission.Target)
 		if err != nil {
 			return err
 		}
@@ -268,7 +292,7 @@ func (s *webServer) prepareSpecialWebMission(p *profile.Profile, campaign campai
 		if _, err := refreshEnergy(p, time.Now()); err != nil {
 			return err
 		}
-		if err := energy.Spend(p, campaignMissionEnergyCost(p, mission), time.Now()); err != nil {
+		if err := energy.Spend(p, campaignMissionEnergyCost(mission), time.Now()); err != nil {
 			return err
 		}
 	}
@@ -277,7 +301,7 @@ func (s *webServer) prepareSpecialWebMission(p *profile.Profile, campaign campai
 	}
 	message, phase := "Choose an attacker.", "puzzle-pick"
 	if abandon != nil {
-		message, phase = "Choose the first board card.", "abandon-select"
+		message, phase = "Flip a face-down board card.", "abandon-reveal"
 	} else if poker != nil {
 		message, phase = "Place cards into three poker hands or redraw one card.", "poker-play"
 	}
@@ -288,8 +312,12 @@ func (s *webServer) prepareSpecialWebMission(p *profile.Profile, campaign campai
 		campaign: &webCampaignContext{
 			ID: campaign.ID, Index: mission.Index, Name: mission.Name, Hint: mission.Hint,
 			Variant: mission.Variant, VariantID: mission.VariantID,
-			Replay: replay, RewardMarks: mission.RewardMarks,
+			Replay: replay, HasNextMission: campaignHasPlayableMission(campaign, mission.Index+1),
+			RewardMarks: mission.RewardMarks,
 		},
+	}
+	if err := s.captureRestartSnapshot(); err != nil {
+		return err
 	}
 	return p.Save()
 }
@@ -316,6 +344,7 @@ func (s *webServer) finishSpecialCampaignMission(won bool) {
 		return
 	}
 	session.campaign.Result = fmt.Sprintf("Mission complete! +%d Marks.", outcome.MissionMarks)
+	session.campaign.HasNextMission = campaigns.CanPlayMission(p, session.campaign.ID, session.campaign.Index+1)
 	if outcome.CampaignCompleted {
 		session.campaign.Result += " Campaign complete."
 	}
@@ -349,8 +378,19 @@ func (s *webServer) finishWebMission() {
 		if err != nil {
 			session.profileError = err.Error()
 		} else {
+			bonusMarks, readinessGranted, rewardErr := applyCampaignWinSkillRewards(
+				p, session.campaign.ID, outcome.MissionMarks+outcome.CompletionMarks, time.Now(),
+			)
+			if rewardErr != nil {
+				session.profileError = rewardErr.Error()
+			} else {
+				outcome.MissionMarks += bonusMarks
+			}
 			reward = outcome.MissionMarks + outcome.CompletionMarks
 			message = fmt.Sprintf("Mission complete! +%d Marks.", reward)
+			if readinessGranted && rewardErr == nil {
+				message += " Rations & Readiness: +1 Restart token, +1 Undo token, and +1 Energy."
+			}
 			if outcome.CampaignCompleted {
 				message += " Campaign complete: heroes and completion rewards have been added to your commander."
 			}

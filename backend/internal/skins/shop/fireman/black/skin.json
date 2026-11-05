@@ -1,6 +1,7 @@
 {
   "id": "fireman-black",
   "displayName": "Fireman (black)",
+  "rarityRank": 0,
   "hexColor": "#000000",
   "price": 1500,
   "currency": "marks"

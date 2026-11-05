@@ -187,6 +187,43 @@ func CompleteMission(p *profile.Profile, campaignID string, missionIndex int, ca
 	return outcome, nil
 }
 
+func SkipMission(p *profile.Profile, campaignID string, missionIndex int) (MissionOutcome, error) {
+	if p == nil {
+		return MissionOutcome{}, errors.New("profile is required")
+	}
+	campaign, ok := Find(campaignID)
+	if !ok {
+		return MissionOutcome{}, fmt.Errorf("unknown campaign %q", campaignID)
+	}
+	if !IsUnlocked(p, campaignID) {
+		return MissionOutcome{}, fmt.Errorf("%s is locked", campaign.Name)
+	}
+	mission, ok := findMission(campaign, missionIndex)
+	if !ok {
+		return MissionOutcome{}, fmt.Errorf("mission %d does not exist in %s", missionIndex, campaign.Name)
+	}
+	if mission.Disabled {
+		return MissionOutcome{}, fmt.Errorf("mission %d in %s is %s", missionIndex, campaign.Name, mission.Status)
+	}
+	progress := ensureProgress(p, campaign)
+	for _, completed := range progress.CompletedMissionIDs {
+		if completed == missionIndex {
+			return MissionOutcome{AlreadyCompleted: true}, nil
+		}
+	}
+	if missionIndex > progress.MissionsCompleted+1 {
+		return MissionOutcome{}, fmt.Errorf("mission %d is locked; complete the previous mission first", missionIndex)
+	}
+	progress.Started = true
+	progress.CompletedMissionIDs = append(progress.CompletedMissionIDs, missionIndex)
+	progress.MissionsCompleted = len(progress.CompletedMissionIDs)
+	if progress.MissionsCompleted == len(campaign.Missions) {
+		progress.Completed = true
+		return MissionOutcome{CampaignCompleted: true}, nil
+	}
+	return MissionOutcome{}, nil
+}
+
 func findMission(campaign Campaign, index int) (Mission, bool) {
 	for _, mission := range campaign.Missions {
 		if mission.Index == index {

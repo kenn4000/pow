@@ -51,11 +51,21 @@ func TestSpecialCampaignMissionMappingsAndHeroStubs(t *testing.T) {
 	if !ok || abandon.Variant != "abandon" || len(abandon.Missions) != 15 {
 		t.Fatalf("abandon definition = %+v", abandon)
 	}
+	pairs := []int{4, 4, 4, 5, 5, 5, 6, 6, 6}
+	boardCards := []int{11, 12, 13, 11, 12, 13, 11, 12, 13}
+	targets := []int{35, 36, 37, 44, 45, 46, 53, 54, 55}
 	for index, mission := range abandon.Missions {
-		wantID := fmt.Sprintf("board-%02d", index+1)
-		if mission.Index != index+1 || mission.Variant != "abandon" || mission.VariantID != wantID ||
-			mission.RewardMarks != 400 {
+		if mission.Index != index+1 || mission.Variant != "abandon" {
 			t.Errorf("abandon mission %d = %+v", index+1, mission)
+		}
+		if index < len(targets) {
+			if mission.Disabled || mission.AbandonPairs != pairs[index] ||
+				mission.AbandonBoardCards != boardCards[index] || mission.Target != targets[index] ||
+				mission.RewardMarks != 400 {
+				t.Errorf("playable Abandon mission %d = %+v", index+1, mission)
+			}
+		} else if !mission.Disabled || mission.Status != "Coming Soon" {
+			t.Errorf("Abandon stub mission %d = %+v", index+1, mission)
 		}
 	}
 
@@ -97,6 +107,22 @@ func TestSpecialCampaignMissionMappingsAndHeroStubs(t *testing.T) {
 	}
 	if _, ok := ByID("recruit"); ok {
 		t.Fatal("Recruit must not have a hero campaign")
+	}
+}
+
+func TestPrepareMissionWithTuningAppliesConductorModifier(t *testing.T) {
+	p, err := profile.New(time.Now())
+	if err != nil {
+		t.Fatal(err)
+	}
+	mission := Mission{AIHero: "recruit", Type: ThreeRound}
+	state, _, err := PrepareMissionWithTuning(p, mission, "recruit", heroes.Tuning{"shift": 1},
+		rand.New(rand.NewSource(1)))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if state.Modifiers.Shift != 1 {
+		t.Fatalf("mission Shift modifier = %d, want 1", state.Modifiers.Shift)
 	}
 }
 

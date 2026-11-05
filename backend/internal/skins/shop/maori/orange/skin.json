@@ -1,6 +1,7 @@
 {
   "id": "maori-orange",
   "displayName": "Maori (orange)",
+  "rarityRank": 0,
   "hexColor": "#E0650B",
   "price": 1200,
   "currency": "marks"

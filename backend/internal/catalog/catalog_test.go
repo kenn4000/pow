@@ -64,6 +64,20 @@ func TestTribalAndConquistadorChromaNames(t *testing.T) {
 	}
 }
 
+func TestSkinRarityRanksUseFiveLevelScale(t *testing.T) {
+	want := map[string]int{
+		"crimson": 0, "emerald": 1, "conq-gold": 0, "dragon-ruby": 0,
+	}
+	for _, chroma := range AllChromas() {
+		if chroma.RarityRank < 0 || chroma.RarityRank > 4 {
+			t.Errorf("chroma %q has unsupported rarity rank %d", chroma.ID, chroma.RarityRank)
+		}
+		if expected, ok := want[chroma.ID]; ok && chroma.RarityRank != expected {
+			t.Errorf("chroma %q rarity rank = %d, want %d", chroma.ID, chroma.RarityRank, expected)
+		}
+	}
+}
+
 func TestConquistadorChromasCost600Marks(t *testing.T) {
 	for _, id := range []string{"conq-lime", "conq-gold", "conq-pink", "conq-blue", "conq-skyblue"} {
 		chroma, ok := FindChroma(id)

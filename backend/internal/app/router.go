@@ -103,6 +103,7 @@ func (s *webServer) registerGameRoutes(r chi.Router) {
 	r.Get("/profile", s.gameEndpoint((*webServer).handleProfile))
 	r.Post("/profile", s.gameEndpoint((*webServer).handleProfile))
 	r.Get("/campaigns", s.gameEndpoint((*webServer).handleCampaigns))
+	r.Post("/campaigns", s.gameEndpoint((*webServer).handleCampaigns))
 	r.Get("/history", s.gameEndpoint((*webServer).handleHistory))
 	r.Post("/preview/reset", s.gameEndpoint((*webServer).handlePreviewReset))
 	for path, handler := range map[string]func(*webServer, http.ResponseWriter, *http.Request){

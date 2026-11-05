@@ -1,6 +1,7 @@
 {
   "id": "elf-pink",
   "displayName": "Elf (pink)",
+  "rarityRank": 0,
   "hexColor": "#E65ECA",
   "price": 1000,
   "currency": "marks"

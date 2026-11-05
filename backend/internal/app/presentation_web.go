@@ -32,16 +32,36 @@ type webBoxReward struct {
 
 func boxRewardTables(p *profile.Profile) map[string][]webBoxReward {
 	tables := map[string][]webBoxReward{}
-	for _, box := range []string{"wooden", "silver", "gold"} {
+	for _, box := range []string{"wooden", "silver", "gold", "diamond"} {
 		prizes, _ := lootbox.LootTableForProfile(box, p)
 		total := 0
 		for _, prize := range prizes {
 			total += prize.Weight
 		}
 		for _, prize := range prizes {
-			label := fmt.Sprintf("%d %s", prize.Amount, prize.Type)
-			if prize.Type == lootbox.PrizeChroma {
-				label = prize.Rarity + " chroma"
+			if prize.Weight <= 0 {
+				continue
+			}
+			var label string
+			switch prize.Type {
+			case lootbox.PrizeMarks:
+				label = fmt.Sprintf("%d Marks", prize.Amount)
+			case lootbox.PrizeCrowns:
+				label = fmt.Sprintf("%d Crowns", prize.Amount)
+			case lootbox.PrizeEnergy:
+				label = fmt.Sprintf("%d Energy", prize.Amount)
+			case lootbox.PrizeChroma:
+				if prize.Rarity == "seasonal_or_premium" {
+					label = "random seasonal or premium skin"
+				} else {
+					label = "random " + prize.Rarity + " skin"
+				}
+			}
+			if prize.BonusCrowns > 0 {
+				label += fmt.Sprintf(" + %d Crown", prize.BonusCrowns)
+				if prize.BonusCrowns != 1 {
+					label += "s"
+				}
 			}
 			tables[box] = append(tables[box], webBoxReward{Label: label, Chance: float64(prize.Weight) * 100 / float64(total)})
 		}

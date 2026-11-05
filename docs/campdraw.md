@@ -33,44 +33,44 @@ hundredths so the half-percent Gold prizes are exact.
 
 | Box | Prize | Chance |
 |---|---|---:|
-| Wooden | 200 / 500 / 1,000 / 2,000 / 5,000 Marks | 30% / 25% / 15% / 10% / 5% |
-| Wooden | 50 Crowns | 10% |
-| Wooden | Common chroma | 5% |
-| Silver | 800 / 2,000 / 4,000 / 8,000 Marks | 25% / 20% / 15% / 8% |
-| Silver | 80 / 150 Crowns | 15% / 5% |
-| Silver | Common / Uncommon / Rare chroma | 8% / 3% / 1% |
-| Gold | 4,000 / 8,000 / 12,000 / 20,000 Marks | 20% / 18% / 12% / 8% |
-| Gold | 150 / 400 Crowns | 12% / 5% |
-| Gold | Common / Uncommon / Rare / Epic / Seasonal chroma | 10% / 8% / 5% / 1.5% / 0.5% |
-| Diamond | 100 / 200 / 300 / 500 / 800 Crowns | 25% / 20% / 15% / 10% / 5% |
-| Diamond | Common / Uncommon / Rare / Epic / Seasonal chroma | 8% / 8% / 6% / 2% / 1% |
+| Wooden | 55 / 115 / 240 / 500 / 1,000 Marks + 1 Crown | 38% / 34% / 17% / 3% / 1% |
+| Wooden | 1 Energy + 1 Crown | 5% |
+| Wooden | Random common skin | 2% |
+| Silver | 105 / 210 / 420 / 850 / 1,500 Marks + 2 Crowns | 32% / 32% / 18% / 4% / 2% |
+| Silver | 1 Energy + 2 Crowns | 8% |
+| Silver | Random common / uncommon skin | 3% / 1% |
+| Gold | 115 / 240 / 490 / 1,000 / 2,200 Marks + 4 Crowns | 32% / 27% / 18% / 4% / 1% |
+| Gold | 2 Energy + 4 Crowns | 8% |
+| Gold | Random common / uncommon / rare skin | 5% / 3% / 2% |
+| Diamond | 500 / 1,000 / 2,000 / 4,000 Marks + 8 Crowns | 50% / 25% / 9% / 5% |
+| Diamond | 10 Energy + 8 Crowns | 2% |
+| Diamond | Random rare / epic / seasonal or premium skin | 5% / 3% / 1% |
 
-`Lucky Find` (the `fortune` skill node) shifts five percentage points from
-the highest-value currency prize to the Rare chroma prize when the table
-contains a Rare chroma prize. `Curator` rerolls once if a chroma roll selects
-an already-owned chroma; a second owned result converts to Marks. Without
-Curator, duplicate chromas are granted as owned duplicates for now; this is a
-future hook for disenchanting duplicates into Marks. A rolled chroma rarity
-with no catalog entries converts to its configured Marks fallback. Seasonal
-Ember Dog is event-only and cannot be purchased directly:
-5,000 Common, 12,000 Uncommon, 25,000 Rare, 50,000 Epic, or 30,000 Seasonal.
+Wooden Boxes cost 300 Marks or 13 Crowns, Silver Boxes cost 600 Marks or 25
+Crowns, and Gold Boxes cost 1,200 Marks or 50 Crowns. Diamond Boxes are
+available only from Camp Draw wins.
 
-The specified approximate design values are Wooden ~900 Marks, Silver ~3,200,
-Gold ~5,300, Diamond ~8,300, and ~3,685 Marks per draw (~$0.74). These are
-design estimates, not guaranteed rates; Crown and chroma value depends on the
-economy’s valuation assumptions.
+`Lucky Find` (the `fortune` skill node) shifts up to five percentage points from
+the highest-value currency prize to the Rare skin prize when the table
+contains a Rare skin prize. If a box selects a skin the player already owns,
+the player receives Marks equal to that skin's listed price. A rolled skin
+rarity with no catalog entries converts to its configured Marks fallback:
+5,000 Common, 12,000 Uncommon, 25,000 Rare, 50,000 Epic, or 30,000 Seasonal
+and Premium.
 
 ## Pending boxes and grants
 
-Profile schema v4 stores pending box counts by type: `wooden`, `silver`,
+Profile schema v11 stores pending box counts by type: `wooden`, `silver`,
 `gold`, and `diamond`. The landing page shows the total and a Camp Draw action
 when either a minigame or pending box is available. Pending boxes skip the
 minigame; choose a type, confirm, and one box is opened immediately.
-
 `Profile.GrantBox` adds boxes and validates the type. `lootbox.OpenPendingBox`
 validates availability, rolls the table, applies rewards, and decrements the
-count. Daily login, challenge, battle-pass, and event grant functions are
-currently stubs in `seasons`; they return zero until those systems are built.
+count. The Shop sells one Camp Draw for 1,500 Marks or 75 Crowns, or three for
+4,000 Marks or 200 Crowns. Purchased draws use the same three-draw storage cap
+as draws earned through wins. Daily login, challenge, battle-pass, and event
+grant functions are currently stubs in `seasons`; they return zero until those
+systems are built.
 
 ## Tuning and simulation
 

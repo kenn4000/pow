@@ -8,16 +8,20 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"math/rand"
 	"net/http"
 	"strconv"
 	"strings"
 	"time"
 
 	"github.com/go-chi/chi/v5"
+	"prisonersofwar/internal/campaigns"
 	"prisonersofwar/internal/game"
+	"prisonersofwar/internal/heroes"
 	"prisonersofwar/internal/ladder"
 	"prisonersofwar/internal/lootbox"
 	"prisonersofwar/internal/profile"
+	"prisonersofwar/internal/ranked"
 	"prisonersofwar/internal/tugwar"
 )
 
@@ -27,6 +31,7 @@ type sessionSnapshot struct {
 	Variant             string
 	Puzzle              *puzzleSession
 	Abandon             *abandonSession
+	AbandonDuel         *abandonDuelGame
 	Rummy               *rummySession
 	Ladder              *ladder.LadderState
 	Poker               *pokerSession
@@ -52,12 +57,14 @@ type sessionSnapshot struct {
 	Tiebreak            string
 	PlayerHeroID        string
 	OpponentHeroID      string
+	ConductorTunings    [2]heroes.Tuning
 	ProfileError        string
 	Payout              *webMatchPayout
 	Campaign            *webCampaignContext
 	Battles             []webBattleRecord
 	InitialAchievements map[string]int
 	AchievementUpdates  []string
+	RankedSeries        *ranked.Series
 }
 
 func snapshotSession(s *webSession) *sessionSnapshot {
@@ -70,7 +77,9 @@ func snapshotSession(s *webSession) *sessionSnapshot {
 		ladderState = &state
 	}
 	return &sessionSnapshot{
-		State: s.state, Mode: s.mode, Variant: s.variant, Puzzle: s.puzzle, Abandon: s.abandon, Rummy: s.rummy, Ladder: ladderState, Poker: s.poker, PokerDuel: s.pokerDuel, TugWar: s.tugWar,
+		State: s.state, Mode: s.mode, Variant: s.variant, Puzzle: s.puzzle, Abandon: s.abandon,
+		AbandonDuel: s.abandonDuel, Rummy: s.rummy, Ladder: ladderState,
+		Poker: s.poker, PokerDuel: s.pokerDuel, TugWar: s.tugWar,
 		PokerDuelCPUReadyAt: s.pokerDuelCPUReadyAt,
 		WhitePlayer:         s.whitePlayer, Phase: s.phase, Actor: s.actor, HandoffTarget: s.handoffTarget,
 		HandoffPhase: s.handoffPhase, Exchange: s.exchange, Attacker: s.attacker,
@@ -78,8 +87,10 @@ func snapshotSession(s *webSession) *sessionSnapshot {
 		LastDefense: s.lastDefense, LastOutcome: s.lastOutcome, HasLastBattle: s.hasLastBattle,
 		Slots: s.slots, Message: s.message, Winner: s.winner, Tiebreak: s.tiebreak,
 		PlayerHeroID: s.playerHeroID, OpponentHeroID: s.opponentHeroID,
-		ProfileError: s.profileError, Payout: s.payout, Campaign: s.campaign, Battles: s.battles,
+		ConductorTunings: s.conductorTunings,
+		ProfileError:     s.profileError, Payout: s.payout, Campaign: s.campaign, Battles: s.battles,
 		InitialAchievements: s.initialAchievements, AchievementUpdates: s.achievementUpdates,
+		RankedSeries: s.rankedSeries,
 	}
 }
 
@@ -103,31 +114,59 @@ func (s *sessionSnapshot) restore() *webSession {
 	if variant == "" {
 		variant = "main"
 	}
+	abandon := s.Abandon
+	phase, message := s.Phase, s.Message
+	campaignContext := s.Campaign
+	if campaignContext != nil {
+		copy := *campaignContext
+		campaignContext = &copy
+	}
+	if abandon != nil && abandon.RulesVersion != abandonRulesVersion {
+		pairCount, boardCardCount, target := 4, 11, 35
+		if campaignContext != nil && campaignContext.ID == "abandon" {
+			campaign, ok := campaigns.ByID("abandon")
+			missionFound := false
+			if ok {
+				for _, mission := range campaign.Missions {
+					if mission.Index == campaignContext.Index && !mission.Disabled {
+						pairCount, boardCardCount, target = mission.AbandonPairs, mission.AbandonBoardCards, mission.Target
+						missionFound = true
+						break
+					}
+				}
+			}
+			if !missionFound {
+				campaignContext.Index, campaignContext.Name, campaignContext.VariantID = 1, "Mission 1", ""
+			}
+		}
+		hero, ok := heroes.ByID(s.PlayerHeroID)
+		if !ok {
+			hero, _ = heroes.ByID("recruit")
+		}
+		restarted, err := newAbandonSessionForMission(hero, rand.New(rand.NewSource(time.Now().UnixNano())), pairCount, boardCardCount, target)
+		if err != nil {
+			abandon, phase, message = nil, "gameover", "This saved Abandon mission could not be restarted."
+		} else {
+			abandon, phase, message = restarted, "abandon-reveal", "Abandon rules changed; this mission has been restarted."
+		}
+	}
 	var ladderGame *ladder.LadderGame
 	if s.Ladder != nil {
 		ladderGame = ladder.Restore(*s.Ladder)
 	}
-	if s.Abandon != nil && s.Abandon.BoardID == "" {
-		s.Abandon.BoardID = "board-01"
-		if s.Abandon.Target == 0 {
-			s.Abandon.Target = 54
-		}
-		if s.Abandon.Bounty == (game.Card{}) {
-			s.Abandon.Bounty = game.Card{Suit: game.Blade, Face: 9}
-		}
-		s.Abandon.CategorySuits = [3]game.Suit{game.Blade, game.Fang, game.Shield}
-	}
 	return &webSession{
-		state: s.State, mode: s.Mode, variant: variant, puzzle: s.Puzzle, abandon: s.Abandon, rummy: rummy, ladder: ladderGame, poker: s.Poker, pokerDuel: s.PokerDuel, tugWar: s.TugWar,
+		state: s.State, mode: s.Mode, variant: variant, puzzle: s.Puzzle, abandon: abandon, abandonDuel: s.AbandonDuel, rummy: rummy, ladder: ladderGame, poker: s.Poker, pokerDuel: s.PokerDuel, tugWar: s.TugWar,
 		pokerDuelCPUReadyAt: s.PokerDuelCPUReadyAt,
-		whitePlayer:         s.WhitePlayer, phase: s.Phase, actor: s.Actor, handoffTarget: s.HandoffTarget,
+		whitePlayer:         s.WhitePlayer, phase: phase, actor: s.Actor, handoffTarget: s.HandoffTarget,
 		handoffPhase: s.HandoffPhase, exchange: s.Exchange, attacker: s.Attacker,
 		attackIndex: s.AttackIndex, attackCard: s.AttackCard, lastAttack: s.LastAttack,
 		lastDefense: s.LastDefense, lastOutcome: s.LastOutcome, hasLastBattle: s.HasLastBattle,
-		slots: s.Slots, message: s.Message, winner: s.Winner, tiebreak: s.Tiebreak,
+		slots: s.Slots, message: message, winner: s.Winner, tiebreak: s.Tiebreak,
 		playerHeroID: s.PlayerHeroID, opponentHeroID: s.OpponentHeroID,
-		profileError: s.ProfileError, payout: s.Payout, campaign: s.Campaign, battles: s.Battles,
+		conductorTunings: s.ConductorTunings,
+		profileError:     s.ProfileError, payout: s.Payout, campaign: campaignContext, battles: s.Battles,
 		initialAchievements: s.InitialAchievements, achievementUpdates: s.AchievementUpdates,
+		rankedSeries: s.RankedSeries,
 	}
 }
 
@@ -327,7 +366,8 @@ func saveGame(ctx context.Context, tx *sql.Tx, userID string, snapshot playerSna
 func completedGameRecord(current *webServer) ([]byte, error) {
 	session := current.session
 	if session.variant == "puzzler" || session.variant == "abandon" ||
-		session.variant == "rummy" || session.variant == "ladder" || session.variant == "poker" || session.variant == "poker-duel" {
+		session.variant == "abandon-duel" || session.variant == "rummy" || session.variant == "ladder" ||
+		session.variant == "poker" || session.variant == "poker-duel" {
 		return nil, nil
 	}
 	if session.campaign != nil && session.campaign.Replay {
@@ -343,7 +383,9 @@ func completedGameRecord(current *webServer) ([]byte, error) {
 func attachMatchRecordID(current *webServer, id string) {
 	if current.session == nil || current.session.phase != "gameover" ||
 		current.session.variant == "puzzler" || current.session.variant == "abandon" ||
-		current.session.variant == "rummy" || current.session.variant == "ladder" || current.session.variant == "poker" || current.session.variant == "poker-duel" ||
+		current.session.variant == "abandon-duel" || current.session.variant == "rummy" ||
+		current.session.variant == "ladder" || current.session.variant == "poker" ||
+		current.session.variant == "poker-duel" ||
 		len(current.playerProfile.MatchHistory) == 0 {
 		return
 	}

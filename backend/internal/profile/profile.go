@@ -11,7 +11,7 @@ import (
 	"time"
 )
 
-const SchemaVersion = 10
+const SchemaVersion = 13
 
 const DefaultHeroID = "recruit"
 
@@ -34,6 +34,10 @@ type Profile struct {
 	EnergyUpdatedAt           time.Time                    `json:"energy_updated_at"`
 	EnergyRechargeMs          int64                        `json:"energy_recharge_ms"`
 	DrawsAvailable            int                          `json:"camp_draws_available"`
+	RestartMissionTokens      int                          `json:"restart_mission_tokens"`
+	UndoMoveTokens            int                          `json:"undo_move_tokens"`
+	CampaignSkipTokens        int                          `json:"campaign_skip_tokens"`
+	ReplaceCardTokens         int                          `json:"replace_card_tokens"`
 	WinsSinceCampDraw         int                          `json:"camp_draw_wins"`
 	PendingBoxes              map[string]int               `json:"pending_boxes"`
 	TotalWins                 int                          `json:"total_wins"`
@@ -42,7 +46,11 @@ type Profile struct {
 	TotalGames                int                          `json:"total_games"`
 	CurrentStreak             int                          `json:"current_streak"`
 	BestStreak                int                          `json:"best_streak"`
+	RankedWinStreak           int                          `json:"ranked_win_streak"`
 	DailyWins                 int                          `json:"daily_wins"`
+	DailyMultiplayerWins      int                          `json:"daily_multiplayer_wins"`
+	DailyCampaignWins         int                          `json:"daily_campaign_wins"`
+	DailyModeWins             map[string]bool              `json:"daily_mode_wins"`
 	DailyWinResetAt           time.Time                    `json:"daily_win_reset_at"`
 	AdsWatchedToday           int                          `json:"ads_watched_today"`
 	AdsResetAt                time.Time                    `json:"ads_reset_at"`
@@ -127,6 +135,7 @@ func New(now time.Time) (*Profile, error) {
 		AdsResetAt:          nextLocalMidnight(now),
 		FreeRefillResetAt:   nextLocalMidnight(now),
 		SkillNodes:          make(map[string]bool),
+		DailyModeWins:       make(map[string]bool),
 		OwnedChromas:        map[string]bool{"crimson": true, "cobalt": true, "sunflower": true},
 		AssignedChromas:     map[string]string{"B": "cobalt", "F": "sunflower", "S": "crimson"},
 		SeenChromas:         make(map[string]bool),
@@ -241,11 +250,45 @@ func migrateProfile(p *Profile, previousSchema int) {
 	if previousSchema < SchemaVersion {
 		migrateCampaignProgress(p)
 	}
+	if previousSchema < 13 {
+		migrateSkillTree(p)
+	}
 	if !containsHero(p.UnlockedHeroes, "recruit") {
 		p.UnlockedHeroes = append(p.UnlockedHeroes, "recruit")
 	}
 	if p.DefaultHeroID == "" || !containsHero(p.UnlockedHeroes, p.DefaultHeroID) {
 		p.DefaultHeroID = DefaultHeroID
+	}
+}
+
+func migrateSkillTree(p *Profile) {
+	aliases := map[string]string{
+		"conductor_1":  "conductor-1",
+		"conductor_2":  "conductor-2",
+		"hero_broker":  "hero-broker",
+		"lucky_dupe":   "lucky-duplicate",
+		"premium_dupe": "premium-duplicate",
+	}
+	for oldID, newID := range aliases {
+		if p.SkillNodes[oldID] {
+			p.SkillNodes[newID] = true
+			delete(p.SkillNodes, oldID)
+		}
+	}
+
+	currentNodes := map[string]bool{
+		"first-blood": true, "daily-double": true, "rations-readiness": true, "daily-triumph": true,
+		"streak": true, "field-warden": true, "mark-of-victory": true, "bounty-hunter": true,
+		"quartermaster": true, "salvager": true, "curator": true, "bounty-board": true,
+		"expanded-rations": true, "quick-recovery": true, "stockpile": true, "second-wind": true, "overflow": true,
+		"thrifty-quartermaster": true, "hero-broker": true, "veterans-discount": true, "lucky-duplicate": true, "premium-duplicate": true,
+		"camp-lore": true, "reroll": true, "loaded-deck": true, "conductor-1": true, "conductor-2": true,
+	}
+	for id, unlocked := range p.SkillNodes {
+		if unlocked && !currentNodes[id] {
+			delete(p.SkillNodes, id)
+			p.SkillPoints++
+		}
 	}
 }
 
@@ -323,8 +366,9 @@ func (p *Profile) ApplyEnergyTick(now time.Time) {
 	if p.Energy < 0 {
 		p.Energy = 0
 	}
-	if p.Energy > p.MaxEnergy {
-		p.Energy = p.MaxEnergy
+	energyCap := EnergyStorageCap(p)
+	if p.Energy > energyCap {
+		p.Energy = energyCap
 	}
 	if p.EnergyUpdatedAt.IsZero() {
 		p.EnergyUpdatedAt = now.UTC()
@@ -342,10 +386,38 @@ func (p *Profile) ApplyEnergyTick(now time.Time) {
 	if gained > 0 {
 		p.Energy += gained
 		p.EnergyUpdatedAt = p.EnergyUpdatedAt.Add(time.Duration(gained) * recharge)
-		if p.Energy >= p.MaxEnergy {
-			p.Energy = p.MaxEnergy
+		if p.Energy >= energyCap {
+			p.Energy = energyCap
 			p.EnergyUpdatedAt = now.UTC()
 		}
+	}
+}
+
+func EnergyStorageCap(p *Profile) int {
+	if p == nil {
+		return DefaultMaxEnergy
+	}
+	cap := p.MaxEnergy
+	if cap <= 0 {
+		cap = DefaultMaxEnergy
+	}
+	if p.SkillNodes["overflow"] {
+		cap *= 2
+	}
+	return cap
+}
+
+func (p *Profile) ResetDailyProgress(now time.Time) {
+	if p == nil {
+		return
+	}
+	localNow := now.In(time.Local)
+	if p.DailyWinResetAt.IsZero() || !localNow.Before(p.DailyWinResetAt.In(time.Local)) {
+		p.DailyWins = 0
+		p.DailyMultiplayerWins = 0
+		p.DailyCampaignWins = 0
+		p.DailyModeWins = make(map[string]bool)
+		p.DailyWinResetAt = nextLocalMidnight(localNow)
 	}
 }
 
@@ -408,6 +480,9 @@ func normalizeProgression(p *Profile) {
 	}
 	if p.BestWinStreakByMode == nil {
 		p.BestWinStreakByMode = make(map[int]int)
+	}
+	if p.DailyModeWins == nil {
+		p.DailyModeWins = make(map[string]bool)
 	}
 	if p.UnlockedHeroes == nil {
 		if p.SchemaVersion >= 6 {

@@ -7,11 +7,23 @@ import (
 )
 
 const MatchHistoryLimit = 50
-const DirectHeroCrownsCost int64 = 1200
 
-var purchasableHeroIDs = map[string]struct{}{
-	"warden": {}, "hunter": {}, "treasurer": {}, "ascendant": {}, "anchor": {},
-	"gambler": {}, "diplomat": {}, "ascetic": {}, "herald": {}, "hater": {},
+var heroCrownsCosts = map[string]int64{
+	"warden":    300,
+	"hunter":    300,
+	"anchor":    300,
+	"ascetic":   300,
+	"ascendant": 400,
+	"treasurer": 400,
+	"diplomat":  400,
+	"hater":     500,
+	"gambler":   500,
+	"herald":    500,
+}
+
+func HeroCrownsCost(heroID string) (int64, bool) {
+	cost, ok := heroCrownsCosts[heroID]
+	return cost, ok
 }
 
 type MatchRecord struct {
@@ -110,16 +122,17 @@ func (p *Profile) BuyHeroWithCrowns(heroID string) error {
 	if p == nil {
 		return errors.New("profile is required")
 	}
-	if _, ok := purchasableHeroIDs[heroID]; !ok {
+	cost, ok := HeroCrownsCost(heroID)
+	if !ok {
 		return fmt.Errorf("hero %q cannot be purchased", heroID)
 	}
 	if containsHero(p.UnlockedHeroes, heroID) {
 		return fmt.Errorf("hero %q is already unlocked", heroID)
 	}
-	if p.Crowns < DirectHeroCrownsCost {
-		return fmt.Errorf("need %d Crowns; you have %d", DirectHeroCrownsCost, p.Crowns)
+	if p.Crowns < cost {
+		return fmt.Errorf("need %d Crowns; you have %d", cost, p.Crowns)
 	}
-	p.Crowns -= DirectHeroCrownsCost
+	p.Crowns -= cost
 	p.UnlockedHeroes = append(p.UnlockedHeroes, heroID)
 	return nil
 }

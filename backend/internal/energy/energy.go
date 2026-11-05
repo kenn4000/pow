@@ -13,6 +13,12 @@ const (
 	DailyAdLimit        = 5
 	EnergyPerAd         = 3
 	CrownsPerFullRefill = 100
+	OneEnergyRecharge   = 1
+	TenEnergyRecharge   = 10
+	MarksPerEnergy      = 500
+	CrownsPerEnergy     = 25
+	MarksPerTenEnergy   = 4500
+	CrownsPerTenEnergy  = 225
 )
 
 func Current(p *profile.Profile, now time.Time) int {
@@ -43,7 +49,7 @@ func Spend(p *profile.Profile, amount int, now time.Time) error {
 		return fmt.Errorf("not enough energy: have %d, need %d", p.Energy, amount)
 	}
 	p.Energy -= amount
-	if p.Energy < p.MaxEnergy && p.EnergyUpdatedAt.After(now) {
+	if p.Energy < profile.EnergyStorageCap(p) && p.EnergyUpdatedAt.After(now) {
 		p.EnergyUpdatedAt = now.UTC()
 	}
 	return nil
@@ -59,8 +65,8 @@ func WatchAd(p *profile.Profile, now time.Time) error {
 	}
 	p.AdsWatchedToday++
 	p.Energy += EnergyPerAd
-	if p.Energy > p.MaxEnergy {
-		p.Energy = p.MaxEnergy
+	if p.Energy > profile.EnergyStorageCap(p) {
+		p.Energy = profile.EnergyStorageCap(p)
 	}
 	p.EnergyUpdatedAt = now.UTC()
 	return nil
@@ -71,15 +77,66 @@ func BuyFullRefill(p *profile.Profile, now time.Time) error {
 		return errors.New("profile is required")
 	}
 	Current(p, now)
-	if p.Energy >= p.MaxEnergy {
+	if p.Energy >= profile.EnergyStorageCap(p) {
 		return errors.New("energy is already full")
 	}
 	if p.Crowns < CrownsPerFullRefill {
 		return fmt.Errorf("not enough Crowns: need %d", CrownsPerFullRefill)
 	}
 	p.Crowns -= CrownsPerFullRefill
-	p.Energy = p.MaxEnergy
+	p.Energy = profile.EnergyStorageCap(p)
 	p.EnergyUpdatedAt = now.UTC()
+	return nil
+}
+
+func BuyEnergy(p *profile.Profile, amount int, currency string, now time.Time) error {
+	if p == nil {
+		return errors.New("profile is required")
+	}
+	if amount != OneEnergyRecharge && amount != TenEnergyRecharge {
+		return fmt.Errorf("unsupported energy purchase amount %d", amount)
+	}
+	Current(p, now)
+	energyCap := profile.EnergyStorageCap(p)
+	if p.Energy >= energyCap {
+		return errors.New("energy is already full")
+	}
+	if amount > energyCap-p.Energy {
+		return fmt.Errorf("not enough energy capacity for a %d-energy recharge", amount)
+	}
+
+	var marksCost, crownsCost int64
+	switch amount {
+	case OneEnergyRecharge:
+		marksCost, crownsCost = MarksPerEnergy, CrownsPerEnergy
+	case TenEnergyRecharge:
+		marksCost, crownsCost = MarksPerTenEnergy, CrownsPerTenEnergy
+	}
+	var cost int64
+	switch currency {
+	case "marks":
+		cost = marksCost
+	case "crowns":
+		cost = crownsCost
+	default:
+		return fmt.Errorf("unsupported energy purchase currency %q", currency)
+	}
+	if currency == "marks" {
+		if p.Marks < cost {
+			return fmt.Errorf("not enough Marks: need %d", cost)
+		}
+		p.Marks -= cost
+	} else {
+		if p.Crowns < cost {
+			return fmt.Errorf("not enough Crowns: need %d", cost)
+		}
+		p.Crowns -= cost
+	}
+	p.Energy += amount
+	if p.Energy >= energyCap {
+		p.Energy = energyCap
+		p.EnergyUpdatedAt = now.UTC()
+	}
 	return nil
 }
 
@@ -95,13 +152,29 @@ func UseDailyFreeRefill(p *profile.Profile, now time.Time) error {
 		return errors.New("daily free refill already used")
 	}
 	p.DailyFreeRefillUsed = true
-	p.Energy = p.MaxEnergy
+	p.Energy = profile.EnergyStorageCap(p)
 	p.EnergyUpdatedAt = now.UTC()
 	return nil
 }
 
+func Grant(p *profile.Profile, amount int, now time.Time) error {
+	if p == nil {
+		return errors.New("profile is required")
+	}
+	if amount <= 0 {
+		return errors.New("energy reward must be positive")
+	}
+	Current(p, now)
+	p.Energy += amount
+	if p.Energy >= profile.EnergyStorageCap(p) {
+		p.Energy = profile.EnergyStorageCap(p)
+		p.EnergyUpdatedAt = now.UTC()
+	}
+	return nil
+}
+
 func TimeUntilNext(p *profile.Profile, now time.Time) time.Duration {
-	if p == nil || p.Energy >= p.MaxEnergy {
+	if p == nil || p.Energy >= profile.EnergyStorageCap(p) {
 		return 0
 	}
 	if p.EnergyUpdatedAt.IsZero() {
@@ -124,10 +197,7 @@ func resetDailyLimits(p *profile.Profile, now time.Time) {
 		p.AdsWatchedToday = 0
 		p.AdsResetAt = midnightTomorrow(localNow)
 	}
-	if p.DailyWinResetAt.IsZero() || !localNow.Before(p.DailyWinResetAt.In(time.Local)) {
-		p.DailyWins = 0
-		p.DailyWinResetAt = midnightTomorrow(localNow)
-	}
+	p.ResetDailyProgress(now)
 	if p.FreeRefillResetAt.IsZero() || !localNow.Before(p.FreeRefillResetAt.In(time.Local)) {
 		p.DailyFreeRefillUsed = false
 		p.FreeRefillResetAt = midnightTomorrow(localNow)

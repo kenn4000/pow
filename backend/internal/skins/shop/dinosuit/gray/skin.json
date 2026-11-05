@@ -1,6 +1,7 @@
 {
   "id": "dino-gray",
   "displayName": "Dinosaur (gray)",
+  "rarityRank": 0,
   "hexColor": "#A19F97",
   "price": 1000,
   "currency": "crowns"

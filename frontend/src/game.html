@@ -62,11 +62,11 @@
       padding: 12px; background: transparent; scrollbar-color: #344159 transparent; scrollbar-width: thin;
     }
     .track { display: grid; grid-template-columns: repeat(10, minmax(0, 1fr)); align-items: start; gap: 5px; }
-    .track.abandon-track { grid-template-columns: repeat(5, minmax(0, 1fr)); }
+    .track.abandon-track { grid-template-columns: repeat(var(--abandon-columns, 5), minmax(0, 1fr)); }
     .track.puzzler-track { grid-template-columns: repeat(var(--puzzler-columns, 5), minmax(0, 1fr)); }
     .puzzler-pair-column { display: grid; grid-template-columns: minmax(0, 1fr); gap: 5px; min-width: 0; }
     .bounty-column { display: grid; grid-column: span 1; grid-template-columns: minmax(0, 1fr); gap: 5px; min-width: 0; }
-    .track-cell { min-width: 0; height: clamp(96px, 11vw, 130px); display: flex; align-items: center; justify-content: center; position: relative; border: 2px solid #3d4b63; border-radius: 9px; background: #182133; }
+    .track-cell { min-width: 0; height: clamp(78px, 11vw, 130px); display: flex; align-items: center; justify-content: center; position: relative; border: 2px solid #3d4b63; border-radius: 9px; background: #182133; }
     .track-cell.bounty { border: 3px solid var(--bounty-border-color, var(--gold)); background: #2b2614; }
     .bounty-value { font-size: clamp(8px, 1vw, 12px); font-weight: 800; line-height: 1.2; text-align: center; white-space: nowrap; }
     .shop-hero-icon { display: block; width: min(100%, 180px); height: 150px; margin: 8px auto; object-fit: contain; }
@@ -208,11 +208,14 @@
     .variant-pair { display: grid; justify-items: center; gap: 4px; min-width: 62px; color: #d3d9e4; font-size: 10px; text-align: center; }
     .variant-pair .card { width: 48px; height: 64px; }
     .abandon-board { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); justify-items: center; gap: 12px 8px; margin-top: 14px; }
-    .abandon-board .card { width: clamp(62px, 17vw, 82px); height: clamp(84px, 23vw, 108px); }
+    .abandon-board .card { width: clamp(50px, 17vw, 82px); height: clamp(68px, 23vw, 108px); }
     .abandon-board .card.used { opacity: .42; filter: grayscale(.85); }
     .abandon-board-item { display: flex; flex-direction: column; align-items: center; gap: 4px; min-width: 0; }
     .abandon-card-penalty { color: #fff; font-size: 13px; font-weight: 900; }
-    .suit-cycle.abandon-suit-cycle { width: min(190px, 100%); margin: 8px auto 0; }
+    .abandon-personal-pile { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); justify-items: center; gap: 8px 4px; margin-top: 10px; }
+    .abandon-personal-pile .card { width: clamp(40px, 15vw, 64px); height: clamp(56px, 20vw, 84px); }
+    .abandon-personal-pile .card.used { opacity: .42; filter: grayscale(.85); }
+    .abandon-instructions { color: #c9d2e0; font-size: 11px; line-height: 1.45; }
     .suit-cycle.puzzle-suit-cycle { width: min(190px, 100%); margin: 8px auto 0; }
     .variant-status { color: #f3d982 !important; font-weight: 800; }
     .battle-vs.clash { color: #c4b5fd; }
@@ -266,6 +269,16 @@
     .empty-row { align-self: center; color: #d0d6d1; font-size: 12px; font-style: italic; }
     .chosen { outline: 3px solid var(--gold); outline-offset: 2px; transform: translateY(-4px); }
     .actions { display: flex; justify-content: center; flex-wrap: wrap; gap: 10px; margin-top: 17px; }
+    .actions.has-consumables { position: sticky; bottom: 0; z-index: 4; padding: 8px; border: 1px solid #29354d; border-radius: 12px; background: #0b0f19f5; box-shadow: 0 4px 16px #0008; }
+    .consumable-bar { display: flex; flex: 1 0 100%; flex-wrap: wrap; justify-content: center; gap: 6px; padding-bottom: 7px; border-bottom: 1px solid #29354d; }
+    .consumable-button { display: inline-flex; align-items: center; justify-content: center; gap: 6px; min-height: 36px !important; padding: 0 10px !important; font-size: 12px; white-space: nowrap; }
+    .consumable-icon { width: 26px; height: 26px; flex: 0 0 auto; object-fit: contain; }
+    .consumable-offer-title { display: flex; align-items: center; gap: 10px; }
+    .consumable-offer-title .consumable-icon { width: 44px; height: 44px; }
+    .token-dialog-title { display: flex; align-items: center; justify-content: center; gap: 9px; }
+    .token-dialog-title .consumable-icon { width: 36px; height: 36px; }
+    .token-options { display: grid; gap: 8px; margin-top: 14px; }
+    .token-option { width: 100%; }
     .puzzle-actions { display: flex; justify-content: center; flex-wrap: wrap; gap: 10px; margin-top: 12px; }
     .action {
       min-height: 43px; padding: 0 20px; border: 1px solid #f4d881; border-radius: 8px;
@@ -790,6 +803,7 @@
     let achievementFilter = 'all';
     let achievementCategory = 'all';
     let pendingConfirmation = null;
+    let pendingTokenDialog = null;
     let setupMode = 'easy';
     let setupVariant = 'main';
     let pokerDuelTimer = null;
@@ -809,7 +823,6 @@
     let onlineBattleVariant = "main";
     let onlineBattleStateKey = "";
     let openSuitMenu = null;
-    let openAbandonSuitMenu = -1;
     let openPuzzleSuitMenu = -1;
     let state = null;
     let activeMode = "";
@@ -822,7 +835,7 @@
     let shopPreviewChromaID = "";
     let shopPreviewPoseIndex = 0;
     let shopPreviewTimer = null;
-    let currentSkillBranch = "battle-rewards";
+    let currentSkillBranch = "daily-wins";
     let featureFocusTarget = "";
     let featureData = null;
     let featureError = "";
@@ -833,12 +846,12 @@
     let aiDraftTimer = null;
     let aiDraftPendingKey = "";
     const skillTreeBranches = [
-      { id: "battle-rewards", label: "Battle Rewards", icon: "BattleRewards.png", nodeIDs: ["quartermaster", "field-warden", "first-blood"] },
-      { id: "camp-draw", label: "Camp Draw", icon: "CampDraw.png", nodeIDs: ["camp-lore", "fortune", "chroma-curator"] },
-      { id: "energy", label: "Energy", icon: "Energy.png", nodeIDs: ["expanded-rations", "quick-recovery", "second-wind", "daily_energy"] },
-      { id: "hero-acquisition", label: "Hero Acquisition", icon: "HeroAq.png", nodeIDs: ["hero_broker", "lucky_dupe", "premium_dupe"] },
-      { id: "campaigns", label: "Campaigns", icon: "Campaign.png", nodeIDs: ["curator", "campaign_free"] },
-      { id: "commander-tactics", label: "Commander Tactics", icon: "HeroTactics.png", nodeIDs: ["conductor_1", "conductor_2", "hero_history", "hero_preview"] }
+      { id: "daily-wins", label: "Daily Wins", icon: "branch_daily.png", nodeIDs: ["first-blood", "daily-double", "rations-readiness", "daily-triumph"] },
+      { id: "multiplayer", label: "Multiplayer", icon: "branch_multi.png", nodeIDs: ["streak", "field-warden", "mark-of-victory", "bounty-hunter"] },
+      { id: "general-rewards", label: "General Rewards", icon: "branch_general.png", nodeIDs: ["quartermaster", "salvager", "curator", "bounty-board"] },
+      { id: "energy", label: "Energy", icon: "branch_energy.png", nodeIDs: ["expanded-rations", "quick-recovery", "stockpile", "second-wind", "overflow"] },
+      { id: "collection", label: "Collection", icon: "branch_chest.png", nodeIDs: ["thrifty-quartermaster", "hero-broker", "veterans-discount", "lucky-duplicate", "premium-duplicate"] },
+      { id: "camp", label: "Camp", icon: "branch_deck.png", nodeIDs: ["camp-lore", "reroll", "loaded-deck", "conductor-1", "conductor-2"] }
     ];
 
     function loadSuitColors() {
@@ -891,10 +904,12 @@
       const tier = card.face <= 3 ? "small" : card.face <= 6 ? "med" : "large";
       const pose = ["idle", "attack", "win", "lose"].includes(options.pose) ? options.pose : "idle";
       const selectable = Boolean(item.selectable || options.selectable);
-      const chosen = Boolean(options.selectedIndex !== undefined && options.selectedIndex === item.index ||
+      const chosen = Boolean(options.selectedIndex !== undefined && options.selectedIndex === item.index &&
+        (!options.selectedSource || options.selectedSource === options.source) ||
         options.commit && selected.has(item.index));
       const tag = selectable ? "button" : "div";
-      const attrs = selectable ? `type="button" data-index="${item.index}" aria-pressed="${chosen}"${item.disabled || options.disabled ? " disabled" : ""}` : "";
+      const source = options.source ? ` data-source="${esc(options.source)}"` : "";
+      const attrs = selectable ? `type="button" data-index="${item.index}"${source} aria-pressed="${chosen}"${item.disabled || options.disabled ? " disabled" : ""}` : "";
       const face = options.face === undefined ? card.face : options.face;
       const hideFace = Boolean(options.hideFace || fogMasked || options.back);
       const faceMarkup = hideFace ? "" : `<span class="face">${esc(face)}</span>`;
@@ -1004,16 +1019,6 @@
       });
     }
 
-    function renderAbandonSuitCycle() {
-      const container = document.getElementById("abandonSuitCycle");
-      if (!container) return;
-      renderSuitSelector(container, openAbandonSuitMenu, index => {
-        openAbandonSuitMenu = index;
-        renderAbandonSuitCycle();
-        if (openAbandonSuitMenu >= 0) container.querySelector(".color-option")?.focus();
-      });
-    }
-
     function renderPuzzleSuitCycle() {
       const container = document.getElementById("puzzleSuitCycle");
       if (!container) return;
@@ -1028,10 +1033,6 @@
       if (openSuitMenu !== null && !event.target.closest("#suitCycle")) {
         openSuitMenu = null;
         renderSuitCycle();
-      }
-      if (openAbandonSuitMenu >= 0 && !event.target.closest("#abandonSuitCycle")) {
-        openAbandonSuitMenu = -1;
-        if (state?.variant === "abandon") renderAbandonSuitCycle();
       }
       if (openPuzzleSuitMenu >= 0 && !event.target.closest("#puzzleSuitCycle")) {
         openPuzzleSuitMenu = -1;
@@ -1151,6 +1152,7 @@
       }
 
       const view = match.view;
+      const rankedSeries = view.rankedSeries;
       const players = match.players || [];
       const ownPlayer = players[view.player] || {};
       const otherPlayer = players[1 - view.player] || {};
@@ -1192,6 +1194,9 @@
           : result.winner === view.player ? "You won the Puzzle Battle!"
             : `${esc(players[result.winner]?.handle || "Your opponent")} won the Puzzle Battle.`
         : "";
+      const rankedSeriesMarkup = rankedSeries
+        ? `<p class="variant-score">${esc(rankedSeriesDescription(rankedSeries))}</p>`
+        : "";
       const resultRounds = result?.rounds || [];
       const resultsMarkup = result ? `<section class="variant-panel puzzle-battle-results">
         <h2>Final result · ${result.scores?.[view.player] ?? 0}–${result.scores?.[1 - view.player] ?? 0}</h2>
@@ -1228,6 +1233,7 @@
           </div>
           <p>Shared scoring hero: ${esc((state.heroes || []).find(hero => hero.id === view.sharedHeroId)?.name || view.sharedHeroId)} · Bounty ${esc(suits[view.bountySuit] || "—")} ${formatModifier(Number(view.modifiers?.bounty || 0))}</p>
           <p class="variant-status">${readyMessage}</p>
+          ${rankedSeriesMarkup}
           <div class="puzzle-battle-meta"><span>${view.status === "round1" || view.status === "round2" ? `Round ${view.roundNumber} · ${view.requiredPairs} pairs · ${view.controller === view.player ? "You control the opening card" : "Opponent controls the opening card"}` : "Two rounds · 3 pairs, then 4 pairs"}</span>${clock}</div>
           ${view.roundOneScores ? `<p class="variant-score">Round 1 score · ${esc(players[0]?.handle || "Player 1")} ${view.roundOneScores[0]}–${view.roundOneScores[1]} ${esc(players[1]?.handle || "Player 2")}</p>` : ""}
         </div></div>
@@ -1267,7 +1273,7 @@
       ).join("");
       const variantNames = {
         main: "Main Game", fog: "Fog of War", rummy: "Rummy",
-        ladder: "Ladder", "poker-duel": "Poker Duel", "tug-war": "Tug War"
+        ladder: "Ladder", "poker-duel": "Poker Duel", "tug-war": "Tug War", "abandon-duel": "Abandon Duel"
       };
       const queueText = response.status === "queued"
         ? `Searching for a ${variantNames[response.variant] || "battle"} opponent…`
@@ -1287,6 +1293,7 @@
           ${incoming.map(invite => `<div class="puzzle-battle-lobby-item">
             <span>${esc(invite.handle)} · ${esc(variantNames[invite.variant] || invite.variant)}</span>
             <label class="hero-select">Your hero<select data-online-hero-for="${esc(invite.id)}">${heroOptions}</select></label>
+            ${conductorTuningMarkup(state?.dashboard?.conductorLevel, `onlineInviteConductor-${invite.id}`)}
             <div><button class="action primary" data-online-action="accept" data-invite-id="${esc(invite.id)}">Accept</button>
               <button class="action secondary" data-online-action="decline" data-invite-id="${esc(invite.id)}">Decline</button></div>
           </div>`).join("")}</section>` : ""}
@@ -1306,6 +1313,9 @@
           const payload = { inviteId: button.dataset.inviteId };
           if (action === "accept") {
             payload.heroId = container.querySelector(`[data-online-hero-for="${CSS.escape(button.dataset.inviteId)}"]`)?.value || state.defaultHeroId;
+            Object.assign(payload, conductorTuningPayload(
+              document.getElementById(`onlineInviteConductor-${button.dataset.inviteId}`)
+            ));
           }
           onlineBattleAction(action, payload);
         });
@@ -1635,21 +1645,21 @@
 
     function renderAbandonBattle() {
       const abandon = state.abandon || {};
-      const suitSelector = `<div id="abandonSuitCycle" class="suit-cycle abandon-suit-cycle"
-        role="group" aria-label="Suit colors and appearance selectors"></div>`;
+      const pairCount = Number(abandon.pairCount || 0);
+      const pairsMade = (abandon.pairResults || []).length;
       const status = abandon.complete
-        ? abandon.won ? "Board complete — you win!" : "Board complete — you lose."
-        : "In progress";
+        ? abandon.won ? "Mission complete — you win!" : "Mission complete — target not reached."
+        : state.phase === "abandon-reveal" ? "Flip one face-down board card."
+          : state.phase === "abandon-pair-first" ? "Choose the first card for this battle."
+            : "Choose a second, different card.";
       document.getElementById("variantContent").innerHTML = `<div class="variant-overview abandon-overview">
         <div><h2>Abandon</h2>
-          <p>Target: ${esc(abandon.target ?? "—")}</p>
+          <p>Target score: ${esc(abandon.target ?? "—")} · Pairs: ${pairsMade}/${pairCount}</p>
           <p class="variant-score">Running score: ${esc(abandon.score ?? 0)}</p>
-          <p class="variant-status">${esc(status)}</p>
+          <p class="variant-status abandon-instructions">${esc(status)}</p>
           ${abandon.complete && state.campaign?.result ? `<p class="variant-panel variant-status" role="status">${esc(state.campaign.result)}</p>` : ""}
-          ${suitSelector}
         </div>
       </div>`;
-      renderAbandonSuitCycle();
       if (abandon.complete && state.campaign) {
         const missionActions = document.createElement("div");
         missionActions.className = "puzzle-actions";
@@ -1658,15 +1668,128 @@
       }
     }
 
+    function renderAbandonDuelBattle() {
+      const duel = state.abandonDuel || {};
+      const players = duel.players || [];
+      const pairPhase = ["abandon-duel-pair-first", "abandon-duel-pair-second"].includes(state.phase);
+      const board = duel.board || [];
+      const cpuName = "CPU";
+      const currentName = state.mode === "online"
+        ? Number(duel.activePlayer) === 0 ? "You" : "Opponent"
+        : Number(duel.activePlayer) === 0 ? "You" : cpuName;
+      const bountySuit = Number(duel.bounty?.suit ?? 0);
+      const roundScores = duel.roundScores || [[0, 0], [0, 0]];
+      const roundPairCounts = duel.roundPairCounts || [[0, 0], [0, 0]];
+      const totalScores = duel.totalScores || [0, 0];
+      const boardMarkup = board.map(item => `<div class="abandon-board-item">
+        ${cardMarkup({
+          ...item,
+          selectable: Boolean(item.selectable) ||
+            state.canAct && state.phase === "abandon-duel-reveal" && !item.revealed && !item.used,
+          disabled: item.used || !item.selectable &&
+            !(state.canAct && state.phase === "abandon-duel-reveal" && !item.revealed && !item.used)
+        }, {
+          back: !item.revealed,
+          ariaLabel: !item.revealed ? `Face-down board card ${Number(item.index) + 1}` : "",
+          selectedIndex: duel.selectedIndex,
+          selectedSource: duel.selectedSource,
+          source: "board",
+          used: item.used
+        })}</div>`).join("");
+      const playerMarkup = players.map((player, index) => {
+        const label = state.mode === "online"
+          ? index === 0 ? `You · ${player.heroName || "Hero"}` :
+            `${state.onlineBattle?.match?.players?.[index]?.handle || "Opponent"} · ${player.heroName || "Hero"}`
+          : index === 0 ? `You · ${player.heroName || "Hero"}` :
+            `${cpuName} · ${player.heroName || "Hero"}`;
+        const pile = player.personalPile || [];
+        const prisoners = (player.prisoners || []).map(card => cardMarkup(card)).join("");
+        return `<section class="abandon-duel-player player-panel">
+          <div class="player-heading">
+            <h2>${esc(label)}</h2>
+            <span>${Number(player.pairCount || 0)} / 6 pairs · ${Number(player.previewScore || 0)} points</span>
+          </div>
+          <div class="abandon-personal-pile" role="group" aria-label="${esc(label)} personal pile">
+            ${pile.map(item => `<div class="abandon-board-item">
+              ${cardMarkup({
+                ...item,
+                selectable: Boolean(item.selectable) && pairPhase,
+                disabled: item.used || !item.selectable || !pairPhase
+              }, {
+                back: !item.revealed,
+                ariaLabel: !item.revealed ? `Face-down personal card ${Number(item.index) + 1}` : "",
+                selectedIndex: duel.selectedIndex,
+                selectedSource: duel.selectedSource,
+                source: "personal-pile",
+                used: item.used
+              })}</div>`).join("")}
+          </div>
+          <div class="abandon-duel-prisoners"><strong>Prisoners (${(player.prisoners || []).length})</strong>
+            <div class="abandon-duel-prisoner-cards">${prisoners || '<span class="empty-row">No captures</span>'}</div>
+          </div>
+        </section>`;
+      }).join("");
+      const scoreTable = players.map((player, index) => {
+        const label = index === 0 ? "You" :
+          state.mode === "online" ? "Opponent" :
+            cpuName;
+        return `<span>${esc(label)} · Round 1 ${Number(roundPairCounts[0]?.[index] || 0)} pairs / ${Number(roundScores[0]?.[index] || 0)} · Round 2 ${Number(roundPairCounts[1]?.[index] || 0)} pairs / ${Number(roundScores[1]?.[index] || 0)} · Total ${Number(totalScores[index] || 0)}</span>`;
+      }).join("");
+      const status = state.phase === "abandon-duel-reveal"
+        ? "Flip one face-down board card."
+        : state.phase === "abandon-duel-pair-first"
+          ? "Choose two cards from the shared board or your personal pile."
+          : state.phase === "abandon-duel-pair-second"
+            ? "Choose a second, different card."
+            : state.message;
+      const container = document.getElementById("variantContent");
+      container.innerHTML = `<div class="abandon-duel-overview">
+        <section class="variant-panel">
+          <div class="poker-duel-heading"><div><h2>Abandon Duel · Round ${Number(duel.round || 1)}</h2>
+            <p>${esc(currentName)} · Turn ${Math.min(Number(duel.turnNumber || 1), Number(duel.turnLimit || 12))} / ${Number(duel.turnLimit || 12)}</p></div>
+            <p class="poker-bounty" style="color:${suitColorValue(bountySuit)}">Bounty ${esc(suits[bountySuit] || "Unknown")} ${formatModifier(1 + Number(duel.modifiers?.bounty || 0))}</p>
+          </div>
+          <p>Shared modifiers · Bounty ${formatModifier(duel.modifiers?.bounty)} · Shift ${formatModifier(duel.modifiers?.shift)} · Favor ${formatModifier(duel.modifiers?.favor)} · Draft ${formatModifier(duel.modifiers?.draft)}</p>
+          <p class="variant-status">${esc(status)}</p>
+          <div class="abandon-duel-scores">${scoreTable}</div>
+          ${duel.gameOver ? `<p class="variant-status" role="status">${esc(state.message || "")}</p>` : ""}
+        </section>
+        <article class="player-panel">
+          <div class="player-heading"><h2>Shared board</h2><span>${board.filter(item => !item.used).length} / ${board.length} available</span></div>
+          <div class="abandon-board abandon-duel-board" role="group" aria-label="Abandon Duel shared board">${boardMarkup}</div>
+        </article>
+        <div class="abandon-duel-players">${playerMarkup}</div>
+      </div>`;
+      container.querySelectorAll(".abandon-duel-board .card[data-index]").forEach(button => {
+        button.addEventListener("click", () => {
+          if (button.disabled) return;
+          const action = state.phase === "abandon-duel-reveal"
+            ? "abandon-duel-flip" : "abandon-duel-pair-card";
+          act(action, { index: Number(button.dataset.index), source: "board" });
+        });
+      });
+      container.querySelectorAll(".abandon-duel-player .card[data-index][data-source]").forEach(button => {
+        button.addEventListener("click", () => {
+          if (button.disabled) return;
+          act("abandon-duel-pair-card", {
+            index: Number(button.dataset.index),
+            source: "personal-pile"
+          });
+        });
+      });
+    }
+
     function campaignMissionSucceeded() {
-      return Boolean(state?.campaign?.result?.startsWith("Mission complete!"));
+      return Boolean(state?.campaign?.result?.startsWith("Mission complete!") ||
+        state?.campaign?.result?.startsWith("Skipped "));
     }
 
     function appendMissionActions(container, restart) {
       container.append(makeButton("Restart", restart, "secondary"));
       container.append(makeButton("Home", openDashboard, "secondary"));
       const campaign = state?.campaign;
-      if (campaign && campaignMissionSucceeded() && !campaign.result.includes("Campaign complete")) {
+      if (campaign && campaignMissionSucceeded() && !campaign.result.includes("Campaign complete") &&
+          campaign.hasNextMission !== false) {
         container.append(makeButton("Next Mission",
           () => startMission(campaign.id, campaign.index + 1), "primary"));
       }
@@ -1737,11 +1860,14 @@
       track.style.removeProperty("--puzzler-columns");
       if (!state || !state.started) {
         track.classList.remove("abandon-track");
+        track.style.removeProperty("--abandon-columns");
         track.innerHTML = "";
         return;
       }
       if (state.variant === "abandon") {
         track.classList.add("abandon-track");
+        const pairCount = Math.max(1, Number(state.abandon?.pairCount || 4));
+        track.style.setProperty("--abandon-columns", String(pairCount + 1));
         const bounty = `<div class="bounty-column">
           <div class="track-cell bounty" style="--bounty-border-color:${suitColorValue(state.bounty.suit)}">
             ${cardMarkup(state.bounty, { pose: "win", hideFace: true })}
@@ -1749,22 +1875,23 @@
           <span class="bounty-value" style="color:${suitColorValue(state.bounty.suit)}">Bounty ${formatModifier(Number(state.modifiers?.bounty || 0))}</span>
         </div>`;
         const results = Array.isArray(state.abandon?.pairResults) ? state.abandon.pairResults : [];
-        const prisoners = Array.from({ length: 4 }, (_, index) => {
+        const prisoners = Array.from({ length: pairCount }, (_, index) => {
           const result = results[index];
-          const score = Number(result?.score || 0);
-          const card = result?.displayCard;
+          const card = result?.captured;
           const content = card
-            ? `<div class="jailed-card${result.isPair ? " abandon-pair" : ""}">
-                ${cardMarkup({ ...card }, { pose: "win", hideFace: true })}
-                <span class="capture-face" aria-label="Pair score ${formatModifier(score)}">${formatModifier(score)}</span>
+            ? `<div class="jailed-card">
+                ${cardMarkup({ ...card }, { pose: "lose", hideFace: true })}
+                <span class="capture-face" style="color:${suitColorValue(card.suit)}">${esc(card.face)}</span>
               </div>`
-            : `<span class="cell-empty">${String(index + 1).padStart(2, "0")}</span>`;
-          return `<div class="track-cell" aria-label="${card ? `Prisoner pair ${index + 1}, ${formatModifier(score)} points` : `Prisoner pair ${index + 1}, empty`}">${content}</div>`;
+            : result?.tie ? `<span class="cell-empty">CLASH</span>`
+              : `<span class="cell-empty">${String(index + 1).padStart(2, "0")}</span>`;
+          return `<div class="track-cell" aria-label="${card ? `Pair ${index + 1}, captured ${suits[card.suit]} ${card.face}` : result?.tie ? `Pair ${index + 1}, tie` : `Pair ${index + 1}, pending`}">${content}</div>`;
         }).join("");
         track.innerHTML = bounty + prisoners;
         return;
       }
       track.classList.remove("abandon-track");
+      track.style.removeProperty("--abandon-columns");
       const bounty = `<div class="bounty-column">
         <div class="track-cell bounty" style="--bounty-border-color:${suitColorValue(state.bounty.suit)}">
           ${cardMarkup(state.bounty, { pose: "win", hideFace: true })}
@@ -1834,7 +1961,7 @@
 
     function renderMatchInfo() {
       const info = document.getElementById("matchInfo");
-      if (["puzzler", "abandon", "rummy", "ladder", "tug-war", "poker", "poker-duel", "puzzle-battle"].includes(state?.variant)) {
+      if (["puzzler", "abandon", "abandon-duel", "rummy", "ladder", "tug-war", "poker", "poker-duel", "puzzle-battle"].includes(state?.variant)) {
         info.hidden = true;
         return;
       }
@@ -1891,31 +2018,54 @@
       if (state.variant === "abandon") {
         const abandon = state.abandon || {};
         const board = abandon.board || [];
+        const personalPile = abandon.personalPile || [];
+        const pairPhase = ["abandon-pair-first", "abandon-pair-second"].includes(state.phase);
         container.innerHTML = `<article class="player-panel">
-          <div class="player-heading"><h2>Abandon board</h2><span>${board.length} cards</span></div>
+          <div class="player-heading"><h2>Main board</h2><span>${board.filter(item => !item.used).length} / ${board.length} available</span></div>
           <div class="abandon-board" role="group" aria-label="Abandon cards">
             ${board.map(item => `<div class="abandon-board-item">
-              ${item.penalty !== undefined && item.penalty !== null ? `<span class="abandon-card-penalty">${formatModifier(Number(item.penalty))}</span>` : ""}
               ${cardMarkup({
               ...item,
-              selectable: !abandon.complete && !item.used,
+              selectable: !abandon.complete && !item.used &&
+                !(abandon.selectedSource === "board" && abandon.selectedIndex === item.index) &&
+                (pairPhase || state.phase === "abandon-reveal" && !item.revealed),
               disabled: abandon.complete || item.used
             }, {
               back: !item.revealed,
               ariaLabel: !item.revealed ? `Face-down card ${Number(item.index) + 1}` : "",
               selectedIndex: abandon.selectedIndex,
+              selectedSource: abandon.selectedSource,
+              source: "board",
+              used: item.used
+            })}</div>`).join("")}
+          </div>
+        </article>
+        <article class="player-panel">
+          <div class="player-heading"><h2>Personal pile</h2><span>${personalPile.filter(item => !item.used).length} / ${personalPile.length} available</span></div>
+          <div class="abandon-personal-pile" role="group" aria-label="Personal pile">
+            ${personalPile.map(item => `<div class="abandon-board-item">
+              ${item.penalty !== undefined && item.penalty !== null ? `<span class="abandon-card-penalty">${formatModifier(Number(item.penalty))}</span>` : ""}
+              ${cardMarkup({
+              ...item,
+              selectable: !abandon.complete && !item.used &&
+                !(abandon.selectedSource === "personal-pile" && abandon.selectedIndex === item.index) &&
+                pairPhase,
+              disabled: abandon.complete || item.used
+            }, {
+              back: !item.revealed,
+              ariaLabel: !item.revealed ? `Face-down personal card ${Number(item.index) + 1}` : "",
+              selectedIndex: abandon.selectedIndex,
+              selectedSource: abandon.selectedSource,
+              source: "personal-pile",
               used: item.used
             })}</div>`).join("")}
           </div>
         </article>`;
-        container.querySelectorAll(".card[data-index]").forEach(button => {
+        container.querySelectorAll(".card[data-index][data-source]").forEach(button => {
           button.addEventListener("click", () => {
             const index = Number(button.dataset.index);
-            if (!hasSelectedIndex(abandon.selectedIndex)) {
-              act("abandon-select", { index });
-            } else {
-              act("abandon-pair-board", { index });
-            }
+            const action = state.phase === "abandon-reveal" ? "abandon-flip" : "abandon-pair-card";
+            act(action, { index, source: button.dataset.source });
           });
         });
         return;
@@ -2115,7 +2265,7 @@
         renderPokerDuelBattle();
         return;
       }
-      if (state?.variant === "puzzler" || state?.variant === "abandon") {
+      if (state?.variant === "puzzler" || state?.variant === "abandon" || state?.variant === "abandon-duel") {
         battle.classList.add("variant-screen");
         battle.classList.remove("drafting");
         left.hidden = true;
@@ -2123,6 +2273,7 @@
         versus.hidden = true;
         variantContent.hidden = false;
         if (state.variant === "puzzler") renderPuzzleBattle();
+        else if (state.variant === "abandon-duel") renderAbandonDuelBattle();
         else renderAbandonBattle();
         return;
       }
@@ -2215,7 +2366,9 @@
       if (lifecycle.signal.aborted) return;
       const actions = document.getElementById("actions");
       actions.innerHTML = "";
+      actions.classList.remove("has-consumables");
       if (!state || !state.started) return;
+      renderConsumableBar(actions);
       if (state.variant === "puzzler") return;
       if (state.variant === "online-battle-lobby") {
         return;
@@ -2315,13 +2468,6 @@
       if (state.variant === "abandon") {
         if (state.campaign && state.abandon?.complete) return;
         actions.append(makeButton("Home", openDashboard, "secondary"));
-        if (state.variant === "abandon" && !state.abandon?.complete &&
-            hasSelectedIndex(state.abandon?.selectedIndex)) {
-          const drawTokens = Number(state.abandon.drawTokens || 0);
-          const draw = makeButton(`Draw from Deck (${drawTokens})`, () => act("abandon-pair-draw"), "primary");
-          draw.disabled = actionInProgress || !(state.abandon.drawTokens > 0) || !(state.abandon.drawPileCount > 0);
-          actions.append(draw);
-        }
         return;
       }
       if (state.phase === "gameover") return;
@@ -2345,6 +2491,57 @@
       }
     }
 
+    function renderConsumableBar(actions) {
+      const dashboard = state.dashboard;
+      if (!dashboard?.matchTokensAllowed) return;
+      const bar = document.createElement("div");
+      bar.className = "consumable-bar";
+      const addToken = (label, count, canUse, action, dialogKind, iconKind, canBuyWhenUnavailable = true) => {
+        const button = makeButton(`${label} · ${Number(count || 0)}`, async () => {
+          if (Number(count || 0) < 1) {
+            openTokenBuyDialog(dialogKind);
+            return;
+          }
+          if (action === "replace") {
+            pendingTokenDialog = { kind: "replace" };
+            renderModal();
+            syncModalAccessibility();
+            return;
+          }
+          if (action === "skip") {
+            if (await confirmAction("Skip this campaign mission?", "The mission will advance with no Marks or completion rewards.")) {
+              await act("use-campaign-skip-token");
+            }
+            return;
+          }
+          const title = action === "restart" ? "Use Restart Mission token?"
+            : "Use Undo Last Move token?";
+          const description = action === "restart"
+            ? "The current campaign mission or CPU match will restart."
+            : "The last move and any CPU response to it will be undone.";
+          if (await confirmAction(title, description)) {
+            await act(action === "restart" ? "use-restart-token" : "use-undo-token");
+          }
+        }, "secondary consumable-button");
+        button.innerHTML = `${consumableIconMarkup(iconKind)}<span>${esc(`${label} · ${Number(count || 0)}`)}</span>`;
+        button.disabled = Number(count || 0) > 0 && !canUse;
+        if (Number(count || 0) < 1) button.disabled = !canBuyWhenUnavailable;
+        bar.append(button);
+      };
+      addToken("Restart", dashboard.restartMissionTokens, dashboard.canRestart,
+        "restart", "restart", "restart");
+      addToken("Undo", dashboard.undoMoveTokens, dashboard.canUndo,
+        "undo", "undo", "undo");
+      addToken("Replace card", dashboard.replaceCardTokens,
+        (dashboard.replaceOptions || []).length > 0, "replace", "replace", "replace");
+      if (state.campaign) {
+        addToken("Skip mission", dashboard.campaignSkipTokens, dashboard.canSkipMission,
+          "skip", "skip", "skip", dashboard.canSkipMission);
+      }
+      actions.classList.add("has-consumables");
+      actions.append(bar);
+    }
+
     function requestNewGameConfirmation() {
       showNewGameConfirmation = true;
       renderModal();
@@ -2352,41 +2549,79 @@
 
     function updateSetupModal(modal) {
       const duel = setupVariant === "poker-duel";
+      const abandonDuel = setupVariant === "abandon-duel";
       const tugWarMatch = setupVariant === "tug-war";
-      const cpuMatch = duel || setupVariant === "ladder";
+      const cpuMatch = duel || setupVariant === "ladder" || abandonDuel;
       const puzzleBattle = setupVariant === "puzzle-battle";
-      const onlineBattle = setupMode === "online" && !puzzleBattle;
+      if (puzzleBattle && !["friend", "online", "ranked"].includes(setupMode)) setupMode = "online";
+      const onlineMode = ["friend", "online", "ranked"].includes(setupMode);
+      const onlineBattle = onlineMode && !puzzleBattle;
       const matchMode = modal.querySelector("#matchMode");
       if (matchMode.dataset.variant !== setupVariant) {
-        const options = tugWarMatch
-          ? [["normal", "Human vs CPU"], ["online", "Online · Friend or matchmaking"]]
-          : cpuMatch
-            ? [["easy", "Human vs CPU · Easy"], ["normal", "Human vs CPU · Medium"], ["hard", "Human vs CPU · Hard"], ["online", "Online · Friend or matchmaking"]]
-            : [["easy", "Human vs AI · Easy"], ["normal", "Human vs AI · Normal"], ["hard", "Human vs AI · Hard"], ["online", "Online · Friend or matchmaking"]];
+        const networkOptions = [
+          ["friend", "Challenge a Friend"],
+          ["online", "Online Matchmaking"],
+          ["ranked", "Ranked Matchmaking (best of 3)"]
+        ];
+        const options = puzzleBattle
+          ? networkOptions
+          : tugWarMatch || abandonDuel
+            ? [["normal", "Human vs CPU"], ...networkOptions]
+            : cpuMatch
+              ? [["easy", "Human vs CPU · Easy"], ["normal", "Human vs CPU · Medium"], ["hard", "Human vs CPU · Hard"], ...networkOptions]
+              : [["easy", "Human vs AI · Easy"], ["normal", "Human vs AI · Normal"], ["hard", "Human vs AI · Hard"], ...networkOptions];
         matchMode.innerHTML = options.map(([id, label]) => `<option value="${id}">${label}</option>`).join("");
         matchMode.dataset.variant = setupVariant;
       }
-      if (tugWarMatch && !["normal", "online"].includes(setupMode)) setupMode = "normal";
+      if (tugWarMatch && !["normal", "friend", "online", "ranked"].includes(setupMode)) setupMode = "normal";
       matchMode.value = setupMode;
-      modal.querySelector("#matchModeLabel").hidden = puzzleBattle;
-      const puzzleBattleType = modal.querySelector("#puzzleBattleType");
-      modal.querySelector("#puzzleBattleEntry").hidden = !puzzleBattle && !onlineBattle;
-      modal.querySelector("#puzzleBattleFriendHandleLabel").hidden =
-        (!puzzleBattle && !onlineBattle) || puzzleBattleType.value !== "friend";
+      modal.querySelector("#matchModeLabel").hidden = false;
+      modal.querySelector("#puzzleBattleEntry").hidden = !onlineMode;
+      modal.querySelector("#puzzleBattleFriendHandleLabel").hidden = !onlineMode || setupMode !== "friend";
       modal.querySelector("#modeDescription").textContent = modeDescription(setupMode, setupVariant);
       const start = modal.querySelector("#startMatchButton");
       start.dataset.mode = setupMode;
       start.dataset.variant = setupVariant;
       start.textContent = puzzleBattle || onlineBattle
-        ? puzzleBattleType.value === "friend" ? "Invite friend" : "Find an opponent"
+        ? setupMode === "friend" ? "Invite friend"
+          : setupMode === "ranked" ? "Find a ranked opponent" : "Find an opponent"
         : startLabel(setupMode, setupVariant);
       start.disabled = actionInProgress ||
-        (puzzleBattle || onlineBattle) && puzzleBattleType.value === "friend" &&
+        onlineMode && setupMode === "friend" &&
         !modal.querySelector("#puzzleBattleFriendHandle").value.trim();
     }
 
     function renderModal() {
       const modal = document.getElementById("modal");
+      if (pendingTokenDialog) {
+        modal.classList.remove("hidden");
+        if (pendingTokenDialog.kind === "replace") {
+          const options = state.dashboard?.replaceOptions || [];
+          modal.innerHTML = `<section class="modal" role="dialog" aria-modal="true" aria-labelledby="tokenDialogTitle"><h2 id="tokenDialogTitle" class="token-dialog-title">${consumableIconMarkup("replace")}<span>Replace any card</span></h2><p>Choose an available card to discard and replace with a random draw.</p><div class="token-options">${options.map((option, optionIndex) => `<button class="action secondary token-option" data-replace-option="${optionIndex}">${esc(option.label)}</button>`).join("")}</div><div class="confirmation-actions"><button class="action secondary" id="closeTokenDialog">Cancel</button></div></section>`;
+          modal.querySelector("#closeTokenDialog").onclick = closeTokenDialog;
+          modal.querySelectorAll("[data-replace-option]").forEach(button => {
+            button.onclick = async () => {
+              const option = options[Number(button.dataset.replaceOption)];
+              if (!option) return;
+              closeTokenDialog();
+              await act("use-replace-token", { source: option.source, index: option.index });
+            };
+          });
+        } else {
+          const offers = tokenQuickBuyOffers(pendingTokenDialog.kind);
+          const crowns = Number(state.dashboard?.crowns || 0);
+          modal.innerHTML = `<section class="modal" role="dialog" aria-modal="true" aria-labelledby="tokenDialogTitle"><h2 id="tokenDialogTitle" class="token-dialog-title">${consumableIconMarkup(pendingTokenDialog.kind)}<span>Buy ${esc(tokenName(pendingTokenDialog.kind))}</span></h2><p>Quick purchases use Crowns only. You have ${formatNumber(crowns)} Crowns.</p><div class="token-options">${offers.map(offer => `<button class="action secondary token-option" data-token-offer="${esc(offer.id)}" ${crowns < offer.cost || actionInProgress ? "disabled" : ""}>${esc(offer.name)} · ${offer.cost} Crowns</button>`).join("")}</div><div class="confirmation-actions"><button class="action secondary" id="closeTokenDialog">Cancel</button></div></section>`;
+          modal.querySelector("#closeTokenDialog").onclick = closeTokenDialog;
+          modal.querySelectorAll("[data-token-offer]").forEach(button => {
+            button.onclick = async () => {
+              const id = button.dataset.tokenOffer;
+              closeTokenDialog();
+              await act("quick-buy-token", { id });
+            };
+          });
+        }
+        return;
+      }
       if (pendingConfirmation) {
         modal.classList.remove('hidden');
         modal.innerHTML = `<section class="modal" role="dialog" aria-modal="true" aria-labelledby="confirmationTitle"><h2 id="confirmationTitle">${esc(pendingConfirmation.title)}</h2><p>${esc(pendingConfirmation.description)}</p><div class="confirmation-actions"><button class="action secondary" id="declineConfirmation">Cancel</button><button class="action primary" id="acceptConfirmation">${esc(pendingConfirmation.acceptLabel)}</button></div></section>`;
@@ -2422,7 +2657,9 @@
             ? "Push three shared piles toward your side. Play cards to win the top-card clash, flip from the deck, and manage limited pushes."
             : setupVariant === "rummy"
             ? "Build three-card sets and same-suit runs. Improve your hand over six turns, then score melds and deadwood."
-            : setupVariant === "poker-duel"
+              : setupVariant === "abandon-duel"
+                ? "Flip a shared board card, then choose a pair from the board or your personal pile. Play two six-pair rounds with the seats swapped."
+              : setupVariant === "poker-duel"
               ? "Play a standalone Poker mirror match against a CPU, an invited friend, or a randomly matched opponent."
               : setupVariant === "ladder"
                 ? "Play Ladder against an AI, an invited friend, or a randomly matched opponent. Play legal cards that meet or exceed the current chain; wild cards start a suit chain."
@@ -2430,18 +2667,19 @@
           ${state?.started && state.phase !== 'gameover' ? '<p>Your current match stays saved until you start a replacement. Starting a mode archives the unfinished match.</p>' : ''}
           ${state?.opponentHint ? `<p>Your opponent last played: ${esc(state.opponentHint)}</p>` : ""}
           <label class="hero-select">Game mode<select id="matchVariant">${[
-            ["main", "Main Game"], ["fog", "Fog of War"], ["rummy", "Rummy"],
-            ["poker-duel", "Poker Duel"], ["ladder", "Ladder"], ["tug-war", "Tug War"], ["puzzle-battle", "Puzzle Battle"]
+            ["main", "Prisoners of War"], ["fog", "Fog of War"], ["rummy", "Rummy"],
+            ["abandon-duel", "Abandon"],
+            ["poker-duel", "Poker"], ["ladder", "Ladder"], ["tug-war", "Tug War"], ["puzzle-battle", "Puzzler"]
           ].map(([id, label]) => `<option value="${id}"${setupVariant === id ? " selected" : ""}>${label}</option>`).join("")}</select></label>
-          <label id="matchModeLabel" class="hero-select">Match mode<select id="matchMode">${[['easy','Human vs AI · Easy'],['normal','Human vs AI · Normal'],['hard','Human vs AI · Hard'],['online','Online · Friend or matchmaking']].map(([id,label]) => `<option value="${id}"${setupMode === id ? ' selected' : ''}>${label}</option>`).join('')}</select></label>
+          <label id="matchModeLabel" class="hero-select">Match mode<select id="matchMode">${[['easy','Human vs AI · Easy'],['normal','Human vs AI · Normal'],['hard','Human vs AI · Hard'],['friend','Challenge a Friend'],['online','Online Matchmaking'],['ranked','Ranked Matchmaking (best of 3)']].map(([id,label]) => `<option value="${id}"${setupMode === id ? ' selected' : ''}>${label}</option>`).join('')}</select></label>
           <div id="puzzleBattleEntry" hidden>
-            <label class="hero-select">Opponent<select id="puzzleBattleType"><option value="matchmaking">Random matchmaking</option><option value="friend">Invite a friend</option></select></label>
             <label id="puzzleBattleFriendHandleLabel" class="hero-select" hidden>Friend handle<input id="puzzleBattleFriendHandle" type="text" maxlength="20" autocomplete="off" placeholder="e.g. player_123" required></label>
           </div>
           <p id="modeDescription">${esc(modeDescription(setupMode, setupVariant))}</p>
           <label id="playerHeroLabel" class="hero-select">Your hero
             <select id="playerHero">${options}</select>
           </label>
+          ${conductorTuningMarkup(state?.dashboard?.conductorLevel, "matchConductorTuning")}
           <div id="heroSetupDetails">${heroDetails((state?.heroes || []).find(hero => hero.id === state?.defaultHeroId))}</div>
           <div class="mode-list">
             <button class="action primary" id="startMatchButton" data-mode="${setupMode}" data-variant="${setupVariant}">${esc(startLabel(setupMode, setupVariant))}</button>
@@ -2453,18 +2691,19 @@
           button.addEventListener("click", () => {
             if (button.dataset.variant === "puzzle-battle") {
               startPuzzleBattle(
-                document.getElementById("puzzleBattleType").value,
+                button.dataset.mode,
                 document.getElementById("playerHero").value,
                 document.getElementById("puzzleBattleFriendHandle").value
               );
               return;
             }
-            if (button.dataset.mode === "online") {
+            if (["friend", "online", "ranked"].includes(button.dataset.mode)) {
               startOnlineBattle(
                 button.dataset.variant,
-                document.getElementById("puzzleBattleType").value,
+                button.dataset.mode,
                 document.getElementById("playerHero").value,
-                document.getElementById("puzzleBattleFriendHandle").value
+                document.getElementById("puzzleBattleFriendHandle").value,
+                conductorTuningPayload(document.getElementById("matchConductorTuning"))
               );
               return;
             }
@@ -2472,6 +2711,12 @@
           });
         });
         modal.querySelector("#backToDashboard").addEventListener("click", () => navigateGame(state?.started ? 'battle' : 'home'));
+        const syncConductorTuning = () => {
+          const label = modal.querySelector("#matchConductorTuning")?.closest("label");
+          if (label) label.hidden = modal.querySelector("#matchVariant").value === "puzzle-battle";
+        };
+        modal.querySelector("#matchVariant").addEventListener("change", syncConductorTuning);
+        syncConductorTuning();
         modal.querySelector('#playerHero').addEventListener('change', event => {
           modal.querySelector('#heroSetupDetails').innerHTML = heroDetails((state?.heroes || []).find(hero => hero.id === event.target.value));
         });
@@ -2483,7 +2728,6 @@
           setupVariant = event.target.value;
           updateSetupModal(modal);
         });
-        modal.querySelector("#puzzleBattleType").addEventListener("change", () => updateSetupModal(modal));
         modal.querySelector("#puzzleBattleFriendHandle").addEventListener("input", () => updateSetupModal(modal));
         updateSetupModal(modal);
         return;
@@ -2638,13 +2882,13 @@
         const payout = state.payout;
         const payoutDetails = payout
           ? (() => {
-              const winBonus = payout.playerWon ? " ×3 (win bonus)" : "";
-              const skillMultiplier = payout.skillBonusPercent > 0
-                ? ` ×${(1 + payout.skillBonusPercent / 100).toFixed(2).replace(/0+$/, "").replace(/\.$/, "")} (Quartermaster +${payout.skillBonusPercent}%)`
+              const crowns = payout.totalCrowns > 0
+                ? `<p>${currencyAmountMarkup(payout.totalCrowns, "Crowns", "+")}${payout.dailyWinBonusCrowns > 0 ? ` including ${formatNumber(payout.dailyWinBonusCrowns)} first-win-of-day bonus` : ""}</p>`
                 : "";
               return `<section class="payout-breakdown" aria-label="Match Marks earnings">
                 <p class="payout-total">${currencyAmountMarkup(payout.totalMarks, "Marks", "+")}</p>
-                <p class="payout-formula">50 base + ${formatNumber(payout.playerScore)} score${winBonus}${skillMultiplier}</p>
+                ${crowns}
+                <p class="payout-formula">${formatNumber(payout.baseMarks)} base Marks${payout.aiMultiplier < 1 ? ` · ${Math.round(payout.aiMultiplier * 100)}% AI reward` : ""}${payout.skillBonusPercent > 0 ? ` · +${payout.skillBonusPercent}% Marks skill` : ""}</p>
               </section>`;
             })()
           : '<p class="payout-error">Match earnings are unavailable.</p>';
@@ -2697,6 +2941,24 @@
       const file = { marks: "marks.png", crowns: "crowns.png", energy: "energy.png" }[String(currency).toLowerCase()];
       if (!file) return "";
       return `<img class="${className}" src="${import.meta.env.BASE_URL}skins/icons/${file}" alt="${esc(alt)}"${alt ? "" : ' aria-hidden="true"'}>`;
+    }
+
+    function consumableIconMarkup(id, className = "consumable-icon") {
+      const file = {
+        restart: "restart.png",
+        "restart-one": "restart.png",
+        "restart-six": "restart.png",
+        undo: "undo.png",
+        "undo-one": "undo.png",
+        "undo-ten": "undo.png",
+        replace: "cardswap.png",
+        "replace-card-one": "cardswap.png",
+        "replace-card-ten": "cardswap.png",
+        skip: "skip.png",
+        "campaign-skip-one": "skip.png"
+      }[String(id).toLowerCase()];
+      if (!file) return "";
+      return `<img class="${className}" src="${import.meta.env.BASE_URL}skins/icons/${file}" alt="" aria-hidden="true">`;
     }
 
     function currencyAmountMarkup(value, currency, prefix = "") {
@@ -2852,7 +3114,7 @@
     function renderFeatureTabs(tabs, selected, dataAttribute) {
       return tabs.map(tab =>
         `<button id="feature-tab-${esc(tab.id)}" class="feature-tab${tab.icon ? " skill-branch-tab" : ""}" type="button" role="tab" aria-selected="${tab.id === selected}" tabindex="${tab.id === selected ? 0 : -1}" aria-controls="featureContent"
-          data-${dataAttribute}="${esc(tab.id)}">${tab.icon ? `<span class="skill-tab-badge"><img src="${import.meta.env.BASE_URL}skills/icons/${esc(tab.icon)}" alt="" aria-hidden="true"></span>` : ""}<span>${esc(tab.label)}</span></button>`
+          data-${dataAttribute}="${esc(tab.id)}">${tab.icon ? `<span class="skill-tab-badge"><img src="${import.meta.env.BASE_URL}skins/icons/${esc(tab.icon)}" alt="" aria-hidden="true"></span>` : ""}<span>${esc(tab.label)}</span></button>`
       ).join("");
     }
 
@@ -2885,7 +3147,8 @@
         const shopTabs = [
           { id: "skins", label: "Skins" },
           { id: "heroes", label: "Heroes" },
-          { id: "boxes", label: "Boxes" }
+          { id: "boxes", label: "Boxes" },
+          { id: "energy", label: "Energy & Items" }
         ];
         tabs.setAttribute("aria-label", "Shop categories");
         tabs.innerHTML = renderFeatureTabs(shopTabs, currentShopTab, "shop-tab");
@@ -2953,10 +3216,14 @@
       const boxName = type => ({ wooden: "Wooden", silver: "Silver", gold: "Gold", diamond: "Diamond", prismatic: "Prismatic" })[type] || String(type || "");
       const outcomeName = outcome => outcome === 2 ? "Win" : outcome === 1 ? "Clash" : "Loss";
       const winsToNext = Math.max(0, (page.dashboard?.winsPerCampDraw || 10) - (page.dashboard?.winsSinceCampDraw || 0));
-      const prizeText = (reward, chroma) => reward.chroma_id
-        ? esc(`${chroma?.name || reward.chroma_id} chroma${reward.chroma_rarity ? ` · ${reward.chroma_rarity}` : ""}`)
-        : reward.marks ? currencyAmountMarkup(reward.marks, "Marks")
-          : reward.crowns ? currencyAmountMarkup(reward.crowns, "Crowns") : "No listed reward";
+      const prizeText = (reward, chroma) => {
+        const parts = [];
+        if (reward.chroma_id) parts.push(esc(`${chroma?.name || reward.chroma_id} skin${reward.chroma_rarity ? ` · ${reward.chroma_rarity}` : ""}`));
+        if (reward.marks) parts.push(currencyAmountMarkup(reward.marks, "Marks"));
+        if (reward.energy) parts.push(`${formatNumber(reward.energy)} Energy`);
+        if (reward.crowns) parts.push(currencyAmountMarkup(reward.crowns, "Crowns"));
+        return parts.length ? parts.join(" + ") : "No listed reward";
+      };
       const rewardPanel = (title, reward, chroma, boxType) => `<div class="camp-reward">
           <div class="camp-reward-icon">${chestIconMarkup(boxType, `${boxName(boxType)} chest`)}</div>
           <div><p class="camp-reward-eyebrow">${esc(title)}</p>
@@ -3014,6 +3281,7 @@
         const wins = page.result.player_wins;
         html += `<section class="feature-section camp-result">
           <h2>Draw Result · ${wins} ${wins === 1 ? "win" : "wins"} · ${esc(boxName(page.result.box_type))} Box</h2>
+          ${page.result.rerolled ? '<p class="camp-note">Reroll kept the higher-ranked prize.</p>' : ''}
           ${rewardPanel(`${boxName(page.result.box_type)} Box reward`, page.result.reward || {}, page.rewardChroma, page.result.box_type)}
           <div class="feature-list">${(page.result.exchanges || []).map((exchange, index) => `<article class="feature-item camp-battle ${outcomeName(exchange.outcome).toLowerCase()}"><h3>Battle ${index + 1}: ${outcomeName(exchange.outcome)}</h3>
               <p>You: ${esc(campCardLabel(exchange.player_card))} · Camp: ${esc(campCardLabel(exchange.cpu_card))}</p></article>`).join("")}</div>
@@ -3064,9 +3332,60 @@
       </section>`;
     }
 
+    function renderShopEnergy(page) {
+      const energyOffers = (page.energyOffers || []).map(offer => {
+        const room = page.dashboard.maxEnergy - page.dashboard.energy;
+        const canFit = room >= offer.amount;
+        return `<article class="feature-item">
+          <h3>${offer.amount} Energy Recharge</h3>
+          <p>Energy: ${page.dashboard.energy}/${page.dashboard.maxEnergy}</p>
+          <p>${formatNumber(offer.marksCost)} Marks or ${formatNumber(offer.crownsCost)} Crowns</p>
+          ${featureActionButton(`Buy for ${formatNumber(offer.marksCost)} Marks`, "buy-energy",
+            `data-amount="${offer.amount}" data-payment="marks"`,
+            !canFit || page.dashboard.marks < offer.marksCost)}
+          ${featureActionButton(`Buy for ${formatNumber(offer.crownsCost)} Crowns`, "buy-energy",
+            `data-amount="${offer.amount}" data-payment="crowns"`,
+            !canFit || page.dashboard.crowns < offer.crownsCost)}
+        </article>`;
+      }).join("");
+      const consumables = (page.consumableOffers || []).map(offer => {
+        const prices = [
+          ["marks", offer.marksCost, "Marks", page.dashboard.marks],
+          ["crowns", offer.crownsCost, "Crowns", page.dashboard.crowns]
+        ];
+        return `<article class="feature-item">
+          <h3 class="consumable-offer-title">${consumableIconMarkup(offer.id)}<span>${offer.quantity} × ${esc(offer.name)}</span></h3>
+          <p>${formatNumber(offer.available)} available</p>
+          ${prices.map(([payment, cost, currency, balance]) => `<p>${formatNumber(cost)} ${currency}</p>
+            ${featureActionButton(`Buy for ${formatNumber(cost)} ${currency}`, "buy-consumable",
+              `data-id="${esc(offer.id)}" data-payment="${payment}"`,
+              !offer.canBuy || balance < cost)}`).join("")}
+        </article>`;
+      }).join("");
+      const skillPoints = (page.skillPointOffers || []).map(offer => `<article class="feature-item">
+        <h3>${offer.quantity} ${esc(offer.name)}</h3>
+        <p>Spend Skill Points to unlock skills in any branch.</p>
+        ${featureActionButton(`Buy for ${formatNumber(offer.crownsCost)} Crowns`, "buy-skill-points",
+          `data-id="${esc(offer.id)}"`, page.dashboard.crowns < offer.crownsCost)}
+      </article>`).join("");
+      return `<section class="feature-section"><h2>Energy Shop</h2>
+        <p>Purchase a 1-energy or 10-energy recharge with Marks or Crowns. The full recharge must fit below your Energy cap.</p>
+        <div class="feature-list">${energyOffers}</div>
+      </section>
+      <section class="feature-section"><h2>Consumables</h2>
+        <p>Restart, Undo, Replace Any Card, and Campaign Skip tokens can only be used in campaigns and vs-CPU games, never in Human-vs-Human play. In-game quick purchases use Crowns; Marks purchases are available here. Camp Draw purchases count toward the three-draw storage limit.</p>
+        <div class="feature-list">${consumables}</div>
+      </section>
+      <section class="feature-section"><h2>Skill Points</h2>
+        <p>Skill unlocks require Skill Points. Crowns cannot be used to unlock skills.</p>
+        <div class="feature-list">${skillPoints}</div>
+      </section>`;
+    }
+
     function renderShopFeature(page) {
       const content = currentShopTab === "heroes" ? renderShopHeroes(page)
-        : currentShopTab === "boxes" ? renderShopBoxes(page) : renderShopSkins(page);
+        : currentShopTab === "boxes" ? renderShopBoxes(page)
+          : currentShopTab === "energy" ? renderShopEnergy(page) : renderShopSkins(page);
       return content;
     }
 
@@ -3174,18 +3493,20 @@
          <img class="shop-hero-icon" src="${import.meta.env.BASE_URL}skins/hero_icons/${esc(heroIconNames[item.hero.id] || item.hero.id)}${item.owned ? "" : "_black"}.png?v=1" alt="${esc(item.hero.name)}${item.owned ? "" : " locked"}">
          ${heroDetails(item.hero)}
          <p>${item.plays} plays · ${item.wins} wins</p>
-         ${!item.owned ? affordability(page.directHeroCost, page.dashboard.crowns, 'Crowns') : '<a href="#/heroes">Choose your default hero</a>'}
-        ${!item.owned ? featureActionButton(`Buy for ${page.directHeroCost} Crowns`, "buy-hero",
+         ${!item.owned ? affordability(item.price, page.dashboard.crowns, 'Crowns') : '<a href="#/heroes">Choose your default hero</a>'}
+        ${!item.owned ? featureActionButton(`Buy for ${item.price} Crowns`, "buy-hero",
           `data-id="${esc(item.hero.id)}"`, !item.canBuy) : ""}
       </article>`).join("");
-      return `<section class="feature-section"><h2>Heroes</h2><p>Direct purchase: ${page.directHeroCost} Crowns</p>
+      return `<section class="feature-section"><h2>Heroes</h2><p>Direct purchase prices vary by hero, from 300 to 500 Crowns.</p>
           <div class="feature-list">${heroesForSale}</div></section>`;
     }
 
     function renderShopBoxes(page) {
       const offers = (page.boxOffers || []).map(offer => {
-        const currency = offer.currency === "crowns" ? "Crowns" : "Marks";
-        const balance = offer.currency === "crowns" ? page.dashboard.crowns : page.dashboard.marks;
+        const prices = [
+          ["marks", offer.marksCost, "Marks", page.dashboard.marks],
+          ["crowns", offer.crownsCost, "Crowns", page.dashboard.crowns],
+        ].filter(([, cost]) => cost > 0);
         const openButton = offer.available > 0
           ? offer.type === "hero"
             ? featureActionButton("Open Hero Box", "open-hero-box", 'data-box-type="free"')
@@ -3195,11 +3516,11 @@
           <h3>${chestIconMarkup(offer.type, "", "chest-icon shop-box-icon")} ${esc(offer.name)}</h3>
           <p>${formatNumber(offer.available)} available</p>
           <p>${esc(boxDescription(offer.type))}</p>
-          <details><summary>Reward amounts and first-roll chances</summary><p>These chances include your current loot-table skill adjustments. Duplicate conversion and any owned-chroma reroll are applied after this roll.</p><ul>${(page.rewardTables?.[offer.type] || []).map(prize => `<li>${currencyTextMarkup(prize.label)} · ${prize.chance.toFixed(2)}%</li>`).join('')}</ul></details>
-          <p>${formatNumber(offer.cost)} ${currency}</p>
-          ${affordability(offer.cost, balance, currency)}
-          ${featureActionButton(`Buy for ${formatNumber(offer.cost)} ${currency}`, "buy-box",
-            `data-box-type="${esc(offer.type)}"`, balance < offer.cost)}
+          <details><summary>Reward amounts and chances</summary><p>Odds include current table adjustments. Owned skins convert to Marks at the skin's listed cost.</p><ul>${(page.rewardTables?.[offer.type] || []).map(prize => `<li>${currencyTextMarkup(prize.label)} · ${prize.chance.toFixed(2)}%</li>`).join('')}</ul></details>
+          ${prices.map(([payment, cost, currency, balance]) => `<p>${formatNumber(cost)} ${currency}</p>
+            ${affordability(cost, balance, currency)}
+            ${featureActionButton(`Buy for ${formatNumber(cost)} ${currency}`, "buy-box",
+              `data-box-type="${esc(offer.type)}" data-payment="${payment}"`, balance < cost)}`).join("")}
           ${openButton}
         </article>`;
       }).join("");
@@ -3253,23 +3574,20 @@
       const byID = Object.fromEntries((page.nodes || []).map(item => [item.node.id, item.node.name]));
       const unlocked = nodes.filter(item => item.unlocked).length;
       return `<section class="feature-section skill-section"><h2>${esc(branch.label)} upgrades</h2>
-        <p class="skill-summary">${unlocked} of ${nodes.length} unlocked · ${nodes.filter(item => !item.unlocked && (item.canUnlockSkillPoint || item.canUnlockCrowns)).length} ready to unlock</p>
-        <details class="skill-help"><summary>How to earn and spend Skill Points</summary><p>Earn Skill Points through progression rewards. Each upgrade costs either one Skill Point or the listed Crowns, never both. Unlock its prerequisites first.</p></details>
+        <p class="skill-summary">${unlocked} of ${nodes.length} unlocked · ${nodes.filter(item => !item.unlocked && item.canUnlock).length} ready to unlock</p>
+        <details class="skill-help"><summary>How to earn and spend Skill Points</summary><p>Earn Skill Points through progression rewards or purchase them in the Shop. Unlocks cost 1 point at T1, 2 at T2, and 3 at T3. Follow each arrow to unlock its prerequisite first.</p></details>
         <div class="feature-list">${nodes.map(item => {
           const prerequisite = (page.nodes || []).find(other => other.node.id === item.node.prerequisite);
           const blocked = prerequisite && !prerequisite.unlocked;
-          const status = item.unlocked ? 'Unlocked' : blocked ? 'Prerequisite needed' : item.canUnlockSkillPoint || item.canUnlockCrowns ? 'Ready to unlock' : 'Save up to unlock';
+          const status = item.unlocked ? 'Unlocked' : blocked ? 'Prerequisite needed' : item.canUnlock ? 'Ready to unlock' : 'Save up to unlock';
           return `<article id="skill-node-${esc(item.node.id)}" tabindex="-1" class="feature-item skill-card${item.unlocked ? ' skill-unlocked' : ''}">
-          <div class="skill-card-heading"><h3>${esc(item.node.name)}</h3><span class="skill-status">${status}</span></div>
+          <div class="skill-card-heading"><h3>${esc(item.node.name)}</h3><span class="skill-status">T${item.node.tier} · ${status}</span></div>
           <p>${esc(item.node.description)}</p>
-          ${item.node.effect === 'mode_multiplier' ? '<p class="skill-scope">Applies only to Ranked matches, which are played in the terminal app. It has no effect on browser matches.</p>' : ''}
-          ${item.node.prerequisite ? `<p class="skill-dependency">Requires: <button type="button" class="skill-link" data-prerequisite="${esc(item.node.prerequisite)}">${esc(byID[item.node.prerequisite] || item.node.prerequisite)}</button>${prerequisite?.unlocked ? ' · Unlocked' : ''}</p>` : '<p class="skill-dependency">Starting skill · no prerequisite</p>'}
-          ${!item.unlocked ? `<p class="skill-cost">1 Skill Point <span>or</span> ${formatNumber(item.node.cost_crowns)} Crowns</p>
+          ${item.node.prerequisite ? `<p class="skill-dependency">&rarr; Requires <button type="button" class="skill-link" data-prerequisite="${esc(item.node.prerequisite)}">${esc(byID[item.node.prerequisite] || item.node.prerequisite)}</button>${prerequisite?.unlocked ? ' · Unlocked' : ''}</p>` : '<p class="skill-dependency">Starting skill · no prerequisite</p>'}
+          ${!item.unlocked ? `<p class="skill-cost">${item.node.cost_skill_points} Skill ${item.node.cost_skill_points === 1 ? "Point" : "Points"}</p>
             ${blocked ? '<p>Unlock the linked prerequisite to continue.</p>' : `<div class="skill-payments">
-              ${featureActionButton("Unlock with 1 Skill Point", "unlock-skill", `data-id="${esc(item.node.id)}" data-payment="skill-point"`, !item.canUnlockSkillPoint)}
-              ${featureActionButton(`Unlock for ${item.node.cost_crowns} Crowns`, "unlock-skill", `data-id="${esc(item.node.id)}" data-payment="crowns"`, !item.canUnlockCrowns)}
-              <small>${!item.canUnlockSkillPoint ? esc(friendlyRequirement(item.skillPointReason, byID)) : 'Ready to use'}</small>
-              <small>${!item.canUnlockCrowns ? esc(friendlyRequirement(item.crownsReason, byID)) : 'Ready to use'}</small>
+              ${featureActionButton(`Unlock with ${item.node.cost_skill_points} Skill ${item.node.cost_skill_points === 1 ? "Point" : "Points"}`, "unlock-skill", `data-id="${esc(item.node.id)}" data-payment="skill-point"`, !item.canUnlock)}
+              <small>${!item.canUnlock ? esc(friendlyRequirement(item.reason, byID)) : 'Ready to use'}</small>
             </div>`}` : '<p class="skill-owned">Active on your commander</p>'}
         </article>`; }).join("")}</div>
       </section>`;
@@ -3318,14 +3636,18 @@
           : !campaign.unlocked ? "Locked"
             : campaign.started ? "In progress" : "Available";
         const missions = (comingSoon ? [] : campaign.missions || []).map(mission => {
-          const state = mission.completed ? ["done", "Completed"] : mission.canPlay ? ["next", "Next"] : ["locked", "Locked"];
-          return `<details class="feature-item mission mission-${state[0]}"${mission.canPlay && !mission.completed ? ' open' : ''}>
-          <summary><span class="mission-title">${esc(mission.index)}. ${esc(mission.name)}</span><span class="mission-chip ${state[0]}">${state[1]}</span></summary>
-          <p>${esc(mission.description)}</p>
-          <p>${mission.completed ? "Completed · free practice replay, no repeat rewards" : `Reward on first completion: ${currencyAmountMarkup(mission.rewardMarks, "Marks")} · Energy cost: ${mission.energyCost}`}</p>
-          ${(mission.heroes || []).length ? `<label class="mission-hero">Mission hero<select data-mission-hero="${esc(campaign.id)}-${mission.index}">${mission.heroes.map(hero => `<option value="${esc(hero.id)}">${esc(hero.name)}</option>`).join('')}</select></label>` : ''}
-          ${featureActionButton(mission.completed ? 'Practice mission' : `Start ${mission.name}`, 'start-mission', `data-campaign="${esc(campaign.id)}" data-index="${mission.index}"`, !mission.canPlay || !mission.completed && page.dashboard.energy < mission.energyCost)}
-          ${!mission.canPlay ? '<p>Complete the previous mission and unlock this campaign to play.</p>' : ''}
+        const disabled = mission.enabled === false || mission.status === "Coming Soon";
+        const state = disabled ? ["locked", "Coming Soon"]
+          : mission.completed ? ["done", "Completed"] : mission.canPlay ? ["next", "Next"] : ["locked", "Locked"];
+        return `<details class="feature-item mission mission-${state[0]}"${!disabled && mission.canPlay && !mission.completed ? ' open' : ''}>
+        <summary><span class="mission-title">${esc(mission.index)}. ${esc(mission.name)}</span><span class="mission-chip ${state[0]}">${state[1]}</span></summary>
+        <p>${esc(mission.description)}</p>
+        ${disabled ? '<p>This mission will be added in a future update.</p>' : `<p>${mission.completed ? "Completed · free practice replay, no repeat rewards" : `Reward on first completion: ${currencyAmountMarkup(mission.rewardMarks, "Marks")} · Energy cost: ${mission.energyCost}`}</p>
+        ${(mission.heroes || []).length ? `<label class="mission-hero">Mission hero<select data-mission-hero="${esc(campaign.id)}-${mission.index}">${mission.heroes.map(hero => `<option value="${esc(hero.id)}">${esc(hero.name)}</option>`).join('')}</select></label>` : ''}
+        ${conductorTuningMarkup(page.dashboard?.conductorLevel, `missionConductor-${campaign.id}-${mission.index}`)}
+        ${featureActionButton(mission.completed ? 'Practice mission' : `Start ${mission.name}`, 'start-mission', `data-campaign="${esc(campaign.id)}" data-index="${mission.index}"`, !mission.canPlay || !mission.completed && page.dashboard.energy < mission.energyCost)}
+        ${page.skipTokens > 0 && mission.canPlay && !mission.completed ? featureActionButton('Skip mission · 1 token', 'skip-mission', `data-campaign="${esc(campaign.id)}" data-index="${mission.index}"`) : ''}
+        ${!mission.canPlay ? '<p>Complete the previous mission and unlock this campaign to play.</p>' : ''}`}
         </details>`;
         }).join("");
         return `<article class="feature-item campaign-card">
@@ -3338,6 +3660,7 @@
         </article>`;
       }).join("");
       return `<section class="feature-section"><h2>Campaign Progress</h2>
+        ${page.message ? `<p role="status">${esc(page.message)}</p>` : ""}
         <div class="campaign-coach"><img src="${import.meta.env.BASE_URL}skins/hero_icons/coach.png" alt="" aria-hidden="true"><span>Campaign Coach</span></div>
         ${campaigns ? `<div class="feature-list">${campaigns}</div>` : "<p>No campaigns are available.</p>"}
       </section>`;
@@ -3399,11 +3722,20 @@
         </article>`).join("");
       const leaderboard = (data.leaderboard || []).map(player => `
         <article class="feature-item"><h3>#${formatNumber(player.rank)} ${esc(player.handle)}</h3><p>${formatNumber(player.elo)} ELO</p></article>`).join("");
+      const variantRatings = [
+        ["main", "Prisoners of War"], ["fog", "Fog of War"], ["rummy", "Rummy"],
+        ["puzzle-battle", "Puzzler"], ["poker-duel", "Poker"], ["ladder", "Ladder"],
+        ["tug-war", "Tug War"], ["abandon-duel", "Abandon"]
+      ].map(([variant, label]) => `
+        <article class="feature-item"><h3>${label}</h3><p>${formatNumber(user.ratings?.[variant] ?? 1000)} ELO</p></article>`).join("");
       return `<section class="feature-section">
         <h2>Player profile</h2>
         <p><strong>${esc(user.handle || "")}</strong> · ${formatNumber(user.elo)} ELO · Rank #${formatNumber(user.rank)}</p>
         <label>Change handle <input id="socialHandleInput" maxlength="20" value="${esc(user.handle || "")}" autocomplete="username"></label>
         ${featureActionButton("Save handle", "save-social-handle")}
+      </section>
+      <section class="feature-section"><h2>Ranked ratings</h2>
+        <div class="feature-list">${variantRatings}</div>
       </section>
       <section class="feature-section"><h2>Rankings</h2>
         <div class="feature-list">${leaderboard || "<p>No rankings available.</p>"}</div>
@@ -3478,7 +3810,27 @@
         case "buy-box":
           if (!await confirmAction(`Purchase ${button.closest('article').querySelector('h3').textContent}?`, `${button.textContent.trim()}. Current balance: ${formatNumber(state.dashboard.marks)} Marks and ${formatNumber(state.dashboard.crowns)} Crowns.`)) return;
           path = "/api/shop";
-          body = { action, id: button.dataset.id, boxType: button.dataset.boxType };
+          body = { action, id: button.dataset.id, boxType: button.dataset.boxType, payment: button.dataset.payment };
+          break;
+        case "buy-energy":
+          if (!await confirmAction("Purchase Energy?", `${button.textContent.trim()}. Current balance: ${formatNumber(state.dashboard.marks)} Marks and ${formatNumber(state.dashboard.crowns)} Crowns.`)) return;
+          path = "/api/shop";
+          body = { action, amount: Number(button.dataset.amount), payment: button.dataset.payment };
+          break;
+        case "buy-consumable":
+          if (!await confirmAction("Purchase item?", `${button.textContent.trim()}. Current balance: ${formatNumber(state.dashboard.marks)} Marks and ${formatNumber(state.dashboard.crowns)} Crowns.`)) return;
+          path = "/api/shop";
+          body = { action, id: button.dataset.id, payment: button.dataset.payment };
+          break;
+        case "buy-skill-points":
+          if (!await confirmAction("Purchase Skill Points?", `${button.textContent.trim()}. Skill unlocks require Skill Points. Current balance: ${formatNumber(state.dashboard.crowns)} Crowns.`)) return;
+          path = "/api/shop";
+          body = { action, id: button.dataset.id };
+          break;
+        case "skip-mission":
+          if (!await confirmAction("Skip this campaign mission?", "The mission will advance with no Marks or completion rewards.")) return;
+          path = "/api/campaigns";
+          body = { action, campaignId: button.dataset.campaign, missionIndex: Number(button.dataset.index) };
           break;
         case "open-hero-box":
           if (!await confirmAction('Open Hero Box?', 'This uses one available Hero Box and adds its reward to your collection.')) return;
@@ -3503,7 +3855,7 @@
           break;
         case "unlock-skill": {
           const skill = button.closest('.skill-card')?.querySelector('h3')?.textContent?.trim() || 'this skill';
-          const balance = `You have ${state.dashboard.skillPoints} Skill ${state.dashboard.skillPoints === 1 ? 'Point' : 'Points'} and ${formatNumber(state.dashboard.crowns)} Crowns.`;
+          const balance = `You have ${state.dashboard.skillPoints} Skill ${state.dashboard.skillPoints === 1 ? 'Point' : 'Points'}.`;
           if (!await confirmAction(`Unlock ${skill}?`, `${button.textContent.trim()}. Skill unlocks are permanent. ${balance}`)) return;
           featureFocusTarget = `skill-node-${button.dataset.id}`;
           path = "/api/skills";
@@ -3566,10 +3918,12 @@
         featureData = data;
         if (action === "open-box") {
           const result = featureData.boxResult || {};
-          const reward = result.chroma_id
-            ? `${featureData.boxChroma?.name || result.chroma_id} chroma${result.chroma_rarity ? ` (${result.chroma_rarity})` : ""}`
-            : result.marks ? `${formatNumber(result.marks)} Marks`
-              : result.crowns ? `${formatNumber(result.crowns)} Crowns` : "No listed reward";
+          const rewards = [];
+          if (result.chroma_id) rewards.push(`${featureData.boxChroma?.name || result.chroma_id} skin${result.chroma_rarity ? ` (${result.chroma_rarity})` : ""}`);
+          if (result.marks) rewards.push(`${formatNumber(result.marks)} Marks`);
+          if (result.energy) rewards.push(`${formatNumber(result.energy)} Energy`);
+          if (result.crowns) rewards.push(`${formatNumber(result.crowns)} Crowns`);
+          const reward = rewards.join(" + ") || "No listed reward";
           const type = result.box_type || button.dataset.boxType || "";
           const message = `Opened ${type.charAt(0).toUpperCase()}${type.slice(1)} Box: ${reward}.`;
           if (currentFeature === 'shop') { featureData = await api("/api/shop"); featureData.message = message; }
@@ -3699,7 +4053,8 @@
         const view = response.match.view;
         const key = [
           response.match.id, response.match.variant, view.phase, view.actor, view.round,
-          view.exchange, view.pokerDuel?.turnNumber, view.rummy?.turnsCompleted
+          view.exchange, view.pokerDuel?.turnNumber, view.rummy?.turnsCompleted,
+          view.abandonDuel?.round, view.abandonDuel?.turnNumber
         ].join(":");
         if (onlineBattleStateKey && onlineBattleStateKey !== key) selected.clear();
         onlineBattleStateKey = key;
@@ -3722,7 +4077,7 @@
       activeMode = "online";
     }
 
-    async function startOnlineBattle(variant, opponentType, heroID, recipient) {
+    async function startOnlineBattle(variant, matchMode, heroID, recipient, conductorTuning = {}) {
       if (actionInProgress) return;
       actionInProgress = true;
       showDashboard = false;
@@ -3731,9 +4086,9 @@
       onlineBattleVariant = variant || "main";
       render();
       try {
-        const request = opponentType === "friend"
-          ? { action: "invite", variant: onlineBattleVariant, heroId: heroID, recipient: recipient.trim() }
-          : { action: "queue", variant: onlineBattleVariant, heroId: heroID };
+        const request = matchMode === "friend"
+          ? { action: "invite", variant: onlineBattleVariant, heroId: heroID, recipient: recipient.trim(), ...conductorTuning }
+          : { action: "queue", variant: onlineBattleVariant, matchMode, heroId: heroID, ...conductorTuning };
         let response = await api("/api/online-battle", request);
         if (!response.match) response = await api("/api/online-battle");
         setOnlineBattleResponse(response, onlineBattleVariant);
@@ -3799,7 +4154,7 @@
       }, 1000);
     }
 
-    async function startPuzzleBattle(opponentType, heroID, recipient) {
+    async function startPuzzleBattle(matchMode, heroID, recipient) {
       if (actionInProgress) return;
       actionInProgress = true;
       showDashboard = false;
@@ -3809,15 +4164,15 @@
       try {
         const current = await api("/api/puzzle-battle");
         if (current.match && current.status !== "complete" ||
-            current.status === "queued" && opponentType === "matchmaking") {
+            current.status === "queued" && current.matchMode === matchMode && matchMode !== "friend") {
           setPuzzleBattleResponse(current);
           navigateGame("battle");
           render();
           return;
         }
-        const request = opponentType === "friend"
+        const request = matchMode === "friend"
           ? { action: "invite", heroId: heroID, recipient: recipient.trim() }
-          : { action: "queue", heroId: heroID };
+          : { action: "queue", matchMode, heroId: heroID };
         let response = await api("/api/puzzle-battle", request);
         if (!response.match) response = await api("/api/puzzle-battle");
         puzzleBattleHistoryCache = [];
@@ -3963,7 +4318,7 @@
             ? `Rummy · ${state.phase === "gameover" ? "Complete" : `Move ${Math.min((state.rummy?.turnsCompleted || 0) + 1, state.rummy?.turnLimit || 12)} of ${state.rummy?.turnLimit || 12}`}`
             : `Round ${state.round} · ${state.phase === 'draft' ? `Opening draft · mode ${state.draftMode} · pick ${state.draftPickNumber} of ${state.draftPickTotal}` : state.phase === 'commit' ? 'Choose your pile' : state.phase === 'handoff' ? 'Pass the screen' : state.phase === 'gameover' ? 'Match complete' : `Battle ${Math.min(state.exchange, 3)} of 3`}`
         : "Card battle";
-      const currentStatus = state && state.started
+      let currentStatus = state && state.started
         ? playerMessage(state.message) || (state.variant === "puzzler"
           ? "Choose a card to begin or continue the puzzle."
           : state.variant === "abandon" ? "Select a board card to start a pairing."
@@ -3977,6 +4332,13 @@
             : state.variant === "rummy" ? "Build melds and manage your hand."
               : state.variant === "ladder" ? "Play a legal card or pass when none are available." : "")
         : "Choose a game mode to begin.";
+      const rankedSeries = state?.variant === "puzzle-battle"
+        ? state.puzzleBattle?.match?.view?.rankedSeries
+        : state?.rankedSeries;
+      if (rankedSeries) currentStatus += ` · ${rankedSeriesDescription(rankedSeries)}`;
+      if (state?.phase === "gameover" && state.payout) {
+        currentStatus += ` · Rewards: +${formatNumber(state.payout.totalMarks)} Marks, +${formatNumber(state.payout.totalCrowns)} Crowns.`;
+      }
       setStatus(currentStatus);
       const topScore = document.getElementById("topScore");
       if (state?.variant === "puzzle-battle" && state.puzzleBattle?.match?.view) {
@@ -4023,12 +4385,13 @@
     async function startNewGame(mode, variant) {
       if (actionInProgress) return;
       const selectedMode = mode || activeMode || (state && state.mode) || "easy";
-      if (selectedMode === "online") {
+      if (["friend", "online", "ranked"].includes(selectedMode)) {
         startOnlineBattle(
           variant || state?.variant || setupVariant || onlineBattleVariant || "main",
-          document.getElementById("puzzleBattleType")?.value || "matchmaking",
+          selectedMode,
           document.getElementById("playerHero")?.value || state?.playerHeroId || state?.defaultHeroId || "recruit",
-          document.getElementById("puzzleBattleFriendHandle")?.value || ""
+          document.getElementById("puzzleBattleFriendHandle")?.value || "",
+          conductorTuningPayload(document.getElementById("matchConductorTuning"))
         );
         return;
       }
@@ -4044,6 +4407,7 @@
           mode: selectedMode,
           variant: gameVariant,
           playerHeroId: playerHero ? playerHero.value : (state && (state.playerHeroId || state.defaultHeroId)) || "warden",
+          ...conductorTuningPayload(document.getElementById("matchConductorTuning")),
           ...(state?.campaign && !mode ? { campaignId: state.campaign.id, missionIndex: state.campaign.index } : {})
         };
         const next = await api("/api/new", body);
@@ -4129,7 +4493,21 @@
     }
 
     function modeName(mode) {
-      return { online: 'Online PvP', easy: 'AI · Easy', normal: 'AI · Normal', hard: 'AI · Hard' }[mode] || 'Battle';
+      return {
+        friend: "Friend PvP", online: "Online PvP", ranked: "Ranked PvP",
+        easy: "AI · Easy", normal: "AI · Medium", hard: "AI · Hard"
+      }[mode] || "Battle";
+    }
+
+    function rankedSeriesDescription(series) {
+      const played = Number(series.gamesPlayed || 0);
+      const gameNumber = series.complete ? played : Math.min(played + 1, 3);
+      const wins = series.wins || [0, 0];
+      const scores = series.scores || [0, 0];
+      const summary = `Ranked series · Game ${gameNumber} of 3 · Wins ${wins[0]}–${wins[1]} · Total ${scores[0]}–${scores[1]}`;
+      if (series.complete && series.draw) return `${summary} · Tied series`;
+      if (series.complete) return `${summary} · Player ${Number(series.winner) + 1} wins`;
+      return summary;
     }
 
     function startLabel(mode, variant) {
@@ -4137,10 +4515,11 @@
         main: `Start ${modeName(mode)} match`,
         fog: `Start Fog of War (${modeName(mode)})`,
         rummy: `Start Rummy (${modeName(mode)})`,
-        ladder: `Start Ladder (${mode === "online" ? "Online PvP" : ({ easy: "Easy CPU", normal: "Medium CPU", hard: "Hard CPU" }[mode] || "CPU")})`,
-        "tug-war": `Start Tug War (${mode === "online" ? "Online PvP" : "CPU"})`,
-        "poker-duel": `Start Poker Duel (${mode === "online" ? "Online PvP" : ({ easy: "Easy CPU", normal: "Medium CPU", hard: "Hard CPU" }[mode] || "CPU")})`,
-        "puzzle-battle": "Find an opponent",
+        "abandon-duel": `Start Abandon (${modeName(mode)})`,
+        ladder: `Start Ladder (${modeName(mode)})`,
+        "tug-war": `Start Tug War (${modeName(mode)})`,
+        "poker-duel": `Start Poker (${modeName(mode)})`,
+        "puzzle-battle": mode === "ranked" ? "Find a ranked opponent" : mode === "friend" ? "Invite friend" : "Find an opponent",
         puzzler: "Start Puzzler",
         abandon: "Start Abandon"
       }[variant] || `Start ${modeName(mode)} match`;
@@ -4191,17 +4570,22 @@
     }
 
     function modeDescription(mode, variant = "main") {
-      if (variant === "fog") return mode === "online"
-        ? "Fog of War online PvP: connect to a friend or a randomly matched opponent."
+      const opponent = mode === "friend" ? "a friend"
+        : mode === "ranked" ? "a ranked opponent in a best-of-three series"
+          : mode === "online" ? "a randomly matched opponent"
+            : ({ easy: "an Easy CPU", normal: "a Medium CPU", hard: "a Hard CPU" }[mode] || "a CPU");
+      if (variant === "fog") return ["friend", "online", "ranked"].includes(mode)
+        ? `Fog of War online PvP: play ${opponent}.`
         : "Fog of War: hidden opponents show only a face-value range. Choose an AI difficulty or connect online.";
       if (variant === "rummy") return "Rummy: deal 6 cards plus the heroes’ Draft modifier. Player 1 opens by drawing two and discarding one face-up and one to the bottom of the deck. Then each player takes six turns, drawing from the face-up pile or drawing two and discarding two. Score the best sets and same-suit runs; deadwood subtracts points.";
-      if (variant === "ladder") return `Ladder: race to empty your hand by playing a legal card on the current chain. Play against ${mode === "online" ? "a friend or randomly matched opponent" : ({ easy: "an Easy CPU", normal: "a Medium CPU", hard: "a Hard CPU" }[mode] || "a CPU")}.`;
-      if (variant === "tug-war") return `Tug War: move three piles toward your side, scoring the cards in piles you own. Play against ${mode === "online" ? "a friend or randomly matched opponent" : "the CPU"}.`;
-      if (variant === "poker-duel") return `Poker Duel is a standalone randomly seeded mirror match against ${mode === "online" ? "a friend or randomly matched opponent" : ({ easy: "an Easy CPU", normal: "a Medium CPU", hard: "a Hard CPU" }[mode] || "a CPU")}. Each player gets six cards, must keep hand sizes within one card of each other, and banks unused turn time. Campaign progress is unaffected.`;
-      if (variant === "puzzle-battle") return "Puzzle Battle is a remote head-to-head mode. Choose a hero, then invite a friend or join random matchmaking.";
+      if (variant === "ladder") return `Ladder: race to empty your hand by playing a legal card on the current chain. Play against ${opponent}.`;
+      if (variant === "tug-war") return `Tug War: move three piles toward your side, scoring the cards in piles you own. Play against ${opponent}.`;
+      if (variant === "abandon-duel") return `Abandon: play two six-pair rounds with shared hero modifiers and reversed starting seats. Play against ${opponent}.`;
+      if (variant === "poker-duel") return `Poker is a standalone randomly seeded mirror match against ${opponent}. Each player gets six cards, must keep hand sizes within one card of each other, and banks unused turn time. Campaign progress is unaffected.`;
+      if (variant === "puzzle-battle") return `Puzzler is a remote head-to-head mode. Play against ${opponent}.`;
       if (variant === "puzzler") return "Solve a selected card challenge. This is a solo game.";
       if (variant === "abandon") return "Choose board cards, pair them with another board card or draw from the deck. This is a solo game.";
-      return { easy: 'Recommended for learning. The AI makes random legal choices.', normal: 'The AI plans commitments and chooses strong defenses.', hard: 'The AI plans against sampled possibilities for unseen cards.', online: 'Connect to a friend or enter random matchmaking. Each player uses their own account and chosen hero.' }[mode] || '';
+      return { easy: 'Recommended for learning. The AI makes random legal choices.', normal: 'The AI plans commitments and chooses strong defenses.', hard: 'The AI plans against sampled possibilities for unseen cards.', friend: "Challenge a friend using their handle.", online: "Join casual online matchmaking.", ranked: "Compete in a best-of-three ranked series. A tied series after three games awards both players the win payout." }[mode] || '';
     }
 
     function navigateGame(route) {
@@ -4258,6 +4642,25 @@
       return `<p>${esc(hero.flavor || '')}</p><p><strong>${esc(hero.name)}:</strong> Bounty ${formatModifier(hero.bounty || 0)} · Shift ${formatModifier(hero.shift || 0)} · Favored ${formatModifier(hero.favored || 0)} · Draft ${draft}${hero.flip ? ' · Flips the opponent’s Bounty contribution' : ''}</p>`;
     }
 
+    function conductorTuningMarkup(level, id) {
+      if (!level) return "";
+      const options = [["", "No adjustment"]];
+      for (const modifier of ["bounty", "shift", "favored"]) {
+        for (const amount of [-level, -1, 1, level]) {
+          if (!amount || Math.abs(amount) > level || options.some(([value]) => value === `${modifier}:${amount}`)) continue;
+          options.push([`${modifier}:${amount}`, `${modifier[0].toUpperCase()}${modifier.slice(1)} ${formatModifier(amount)}`]);
+        }
+      }
+      return `<label class="hero-select">Conductor tuning<select id="${esc(id)}" data-conductor-tuning>
+        ${options.map(([value, label]) => `<option value="${esc(value)}">${esc(label)}</option>`).join("")}
+      </select></label>`;
+    }
+
+    function conductorTuningPayload(select) {
+      const [conductorModifier, amount] = (select?.value || "").split(":");
+      return conductorModifier ? {conductorModifier, conductorAmount: Number(amount)} : {};
+    }
+
     function affordability(cost, balance, currency) {
       return balance < cost ? `<p class="affordability">Need ${formatNumber(cost - balance)} more ${esc(currency)}.</p>` : '';
     }
@@ -4304,12 +4707,10 @@
         const data = await api('/api/shop',body);
         state.dashboard = data.dashboard;
         openSuitMenu = null;
-        openAbandonSuitMenu = -1;
         openPuzzleSuitMenu = -1;
         render();
         const index = ['B','F','S'].indexOf(body.suit);
-        const cycle = state?.variant === "abandon" ? "#abandonSuitCycle"
-          : state?.variant === "puzzler" ? "#puzzleSuitCycle" : "#suitCycle";
+        const cycle = state?.variant === "puzzler" ? "#puzzleSuitCycle" : "#suitCycle";
         const target = index >= 0
           ? `${cycle} [data-suit-trigger="${index}"]`
           : `${cycle} [data-rotate-colors]`;
@@ -4485,6 +4886,43 @@
       return new Promise(resolve => { pendingConfirmation = {title, description, acceptLabel, resolve}; renderModal(); syncModalAccessibility(); });
     }
 
+    function tokenName(kind) {
+      return ({restart: "Restart Mission", undo: "Undo Last Move", replace: "Replace Any Card", skip: "Campaign Skip"})[kind] || "token";
+    }
+
+    function tokenQuickBuyOffers(kind) {
+      const offers = {
+        restart: [
+          {id: "restart-one", name: "1 token", cost: 20},
+          {id: "restart-six", name: "Pack of 6", cost: 100}
+        ],
+        undo: [
+          {id: "undo-one", name: "1 token", cost: 12},
+          {id: "undo-ten", name: "Pack of 10", cost: 100}
+        ],
+        replace: [
+          {id: "replace-card-one", name: "1 token", cost: 9},
+          {id: "replace-card-ten", name: "Pack of 10", cost: 75}
+        ],
+        skip: [
+          {id: "campaign-skip-one", name: "1 token", cost: 75}
+        ]
+      };
+      return offers[kind] || [];
+    }
+
+    function openTokenBuyDialog(kind) {
+      pendingTokenDialog = {kind};
+      renderModal();
+      syncModalAccessibility();
+    }
+
+    function closeTokenDialog() {
+      pendingTokenDialog = null;
+      renderModal();
+      syncModalAccessibility();
+    }
+
     function settleConfirmation(accepted) {
       const pending = pendingConfirmation;
       pendingConfirmation = null;
@@ -4500,7 +4938,11 @@
       const version = navigationVersion;
       try {
         const hero = document.querySelector(`[data-mission-hero="${campaignId}-${missionIndex}"]`);
-        const data = await api('/api/new', {campaignId, missionIndex, playerHeroId: hero?.value});
+        const conductor = document.getElementById(`missionConductor-${campaignId}-${missionIndex}`);
+        const data = await api('/api/new', {
+          campaignId, missionIndex, playerHeroId: hero?.value,
+          ...conductorTuningPayload(conductor)
+        });
         if (version !== navigationVersion || lifecycle.signal.aborted) return;
         state = data;
         activeMode = state.mode;
@@ -4572,6 +5014,7 @@
       if (!dialog) return;
       if (event.key === 'Escape') {
         event.preventDefault();
+        if (pendingTokenDialog) { closeTokenDialog(); return; }
         if (pendingConfirmation) { settleConfirmation(false); return; }
         if (shopPreviewChromaID) { closeShopPreview(); return; }
         if (state?.phase === 'handoff') return;
@@ -4588,6 +5031,7 @@
     function disposeGame() {
       lifecycle.abort();
       if (pendingConfirmation) { pendingConfirmation.resolve(false); pendingConfirmation = null; }
+      pendingTokenDialog = null;
       window.clearTimeout(battleAnimationTimer);
       window.clearInterval(shopPreviewTimer);
       const account = window.document.querySelector('.account-bar');

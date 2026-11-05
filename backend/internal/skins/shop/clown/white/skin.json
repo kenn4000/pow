@@ -1,6 +1,7 @@
 {
   "id": "clown-white",
   "displayName": "Clown (white)",
+  "rarityRank": 0,
   "hexColor": "#FFFFFF",
   "price": 800,
   "currency": "crowns"
