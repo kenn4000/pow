@@ -111,7 +111,7 @@ var tree = []Node{
 	{ID: "premium-duplicate", Branch: "collection", Name: "Premium Duplicate", Description: "Duplicate hero Crown refunds increase by an additional 30% (stacks with Lucky Duplicate for +50% total).", Tier: 3, CostSkillPoints: 3, Prerequisite: "lucky-duplicate", Effect: EffectDuplicateBonus, Magnitude: 30},
 
 	{ID: "camp-lore", Branch: "camp", Name: "Camp Lore", Description: "Camp Draws arrive after two fewer wins.", Tier: 1, CostSkillPoints: 1, Effect: EffectCampDrawThreshold, Magnitude: 2},
-	{ID: "reroll", Branch: "camp", Name: "Reroll", Description: "Once per Camp Draw, reroll the prize and keep the higher-ranked reward.", Tier: 2, CostSkillPoints: 2, Prerequisite: "camp-lore", Effect: EffectCampDrawReroll, Magnitude: 1},
+	{ID: "reroll", Branch: "camp", Name: "Reroll", Description: "Once per Camp Draw, open two prize boxes and choose which reward to keep.", Tier: 2, CostSkillPoints: 2, Prerequisite: "camp-lore", Effect: EffectCampDrawReroll, Magnitude: 1},
 	{ID: "loaded-deck", Branch: "camp", Name: "Loaded Deck", Description: "Draw one extra card during the Camp Draw minigame.", Tier: 2, CostSkillPoints: 2, Prerequisite: "camp-lore", Effect: EffectCampDrawExtraCard, Magnitude: 1},
 	{ID: "conductor-1", Branch: "camp", Name: "The Conductor", Description: "Tune one modifier by +1 or -1 at hero selection.", Tier: 2, CostSkillPoints: 2, Prerequisite: "camp-lore", Effect: EffectConductor, Magnitude: 1},
 	{ID: "conductor-2", Branch: "camp", Name: "Master Conductor", Description: "Tune one modifier by up to +2 or -2 at hero selection.", Tier: 3, CostSkillPoints: 3, Prerequisite: "conductor-1", Effect: EffectConductor, Magnitude: 2},

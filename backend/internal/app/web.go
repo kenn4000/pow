@@ -33,6 +33,7 @@ import (
 	"prisonersofwar/internal/ladder"
 	"prisonersofwar/internal/lootbox"
 	"prisonersofwar/internal/profile"
+	"prisonersofwar/internal/puzzlebattle"
 	"prisonersofwar/internal/ranked"
 	"prisonersofwar/internal/skills"
 	"prisonersofwar/internal/skins"
@@ -57,6 +58,7 @@ type webServer struct {
 	campDrawPreview     bool
 	lastCampDraw        *lootbox.CampDrawResult
 	lastCampDrawPreview bool
+	cpuPuzzleBattle     *puzzlebattle.Match
 }
 
 func (s *webServer) playerName(playerIndex int) string {
@@ -101,6 +103,7 @@ type webSession struct {
 	pokerDuel           *pokerDuelGame
 	tugWar              *tugwar.Game
 	pokerDuelCPUReadyAt time.Time
+	ladderReadyAt       time.Time
 	whitePlayer         int
 	phase               string
 	actor               int
@@ -464,17 +467,18 @@ type webHeroesPage struct {
 }
 
 type webCampDrawPage struct {
-	DrawsAvailable int                      `json:"drawsAvailable"`
-	PendingBoxes   map[string]int           `json:"pendingBoxes"`
-	Dashboard      *webDashboard            `json:"dashboard"`
-	Started        bool                     `json:"started"`
-	StartingHand   []game.Card              `json:"startingHand,omitempty"`
-	Prompt         *lootbox.CampDrawPrompt  `json:"prompt,omitempty"`
-	Exchanges      []lootbox.ExchangeResult `json:"exchanges,omitempty"`
-	Result         *lootbox.CampDrawResult  `json:"result,omitempty"`
-	BoxResult      *lootbox.BoxOpenResult   `json:"boxResult,omitempty"`
-	RewardChroma   *catalog.Chroma          `json:"rewardChroma,omitempty"`
-	BoxChroma      *catalog.Chroma          `json:"boxChroma,omitempty"`
+	DrawsAvailable int                       `json:"drawsAvailable"`
+	PendingBoxes   map[string]int            `json:"pendingBoxes"`
+	Dashboard      *webDashboard             `json:"dashboard"`
+	Started        bool                      `json:"started"`
+	StartingHand   []game.Card               `json:"startingHand,omitempty"`
+	Prompt         *lootbox.CampDrawPrompt   `json:"prompt,omitempty"`
+	Exchanges      []lootbox.ExchangeResult  `json:"exchanges,omitempty"`
+	Result         *lootbox.CampDrawResult   `json:"result,omitempty"`
+	BoxResult      *lootbox.BoxOpenResult    `json:"boxResult,omitempty"`
+	RewardChroma   *catalog.Chroma           `json:"rewardChroma,omitempty"`
+	RewardChromas  map[string]catalog.Chroma `json:"rewardChromas,omitempty"`
+	BoxChroma      *catalog.Chroma           `json:"boxChroma,omitempty"`
 }
 
 type webCommanderPage struct {
@@ -659,7 +663,13 @@ func (s *webServer) handleSkinAsset(w http.ResponseWriter, r *http.Request) {
 	var asset []byte
 	var err error
 	if strings.HasPrefix(assetPath, "icons/") {
-		asset, err = skins.IconFiles.ReadFile(assetPath)
+		if isChestIconAsset(assetPath) {
+			asset, _, err = chestIconSpriteFrame(assetPath)
+		} else {
+			asset, err = skins.IconFiles.ReadFile(assetPath)
+		}
+	} else if strings.HasPrefix(assetPath, "shop/") && strings.HasSuffix(assetPath, ".png") {
+		asset, err = skinSpriteFrame(assetPath)
 	} else {
 		asset, err = webFiles.ReadFile(assetPath)
 	}
@@ -729,6 +739,12 @@ func (s *webServer) handleState(w http.ResponseWriter, r *http.Request) {
 	}
 	s.mu.Lock()
 	defer s.mu.Unlock()
+	if s.session != nil && s.session.variant == "ladder" {
+		if err := s.advanceLadderAI(); err != nil {
+			writeError(w, http.StatusInternalServerError, err)
+			return
+		}
+	}
 	view, err := s.viewForRequest(r)
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, err)
@@ -1051,7 +1067,7 @@ func (s *webServer) handleCampDraw(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		if _, hasPrompt := s.campDrawSession.Prompt(); !hasPrompt {
-			result, err := s.campDrawSession.Finish(p, s.rng, nil)
+			result, err := s.campDrawSession.FinishWithRewardChoice(p, s.rng)
 			if err != nil {
 				writeError(w, http.StatusBadRequest, err)
 				return
@@ -1074,6 +1090,19 @@ func (s *webServer) handleCampDraw(w http.ResponseWriter, r *http.Request) {
 		boxResult = &result
 		if err := saveWebProfile(p, preview); err != nil {
 			writeError(w, http.StatusInternalServerError, fmt.Errorf("save pending-box opening: %w", err))
+			return
+		}
+	case "choose-reward":
+		if s.lastCampDraw == nil || s.lastCampDrawPreview != preview || !s.lastCampDraw.AwaitingChoice {
+			writeError(w, http.StatusConflict, errors.New("no Camp Draw reward choice is pending"))
+			return
+		}
+		if err := lootbox.SelectCampDrawReward(p, s.lastCampDraw, request.Index); err != nil {
+			writeError(w, http.StatusBadRequest, err)
+			return
+		}
+		if err := saveWebProfile(p, preview); err != nil {
+			writeError(w, http.StatusInternalServerError, fmt.Errorf("save selected Camp Draw reward: %w", err))
 			return
 		}
 	default:
@@ -1106,6 +1135,14 @@ func (s *webServer) campDrawPage(
 	if s.lastCampDraw != nil && s.lastCampDrawPreview == preview {
 		page.Result = s.lastCampDraw
 		page.RewardChroma = chromaPointer(s.lastCampDraw.Reward.ChromaID)
+		if len(s.lastCampDraw.RewardOptions) > 0 {
+			page.RewardChromas = make(map[string]catalog.Chroma)
+			for _, reward := range s.lastCampDraw.RewardOptions {
+				if chroma, ok := catalog.FindChroma(reward.ChromaID); ok {
+					page.RewardChromas[reward.ChromaID] = chroma
+				}
+			}
+		}
 	}
 	if boxResult != nil {
 		page.BoxChroma = chromaPointer(boxResult.ChromaID)
@@ -1813,6 +1850,13 @@ func (s *webServer) applyAction(request actionRequest) error {
 			}
 			session.phase = "abandon-pair-first"
 			session.message = "Choose the first card for the battle."
+		case "abandon-reveal-pair-card":
+			if session.phase != "abandon-pair-second" {
+				return errors.New("choose the first card before revealing a second")
+			}
+			if err := session.abandon.revealPairCard(request.Source, request.Index); err != nil {
+				return err
+			}
 		case "abandon-pair-card":
 			if session.phase != "abandon-pair-first" && session.phase != "abandon-pair-second" {
 				return errors.New("flip a board card before pairing")
@@ -1849,6 +1893,13 @@ func (s *webServer) applyAction(request actionRequest) error {
 			}
 			session.phase = "abandon-duel-pair-first"
 			session.message = "Choose the first card for the battle."
+		case "abandon-duel-reveal-pair-card":
+			if session.phase != "abandon-duel-pair-second" {
+				return errors.New("choose the first card before revealing a second")
+			}
+			if err := duel.revealPairCard(request.Source, request.Index); err != nil {
+				return err
+			}
 		case "abandon-duel-pair-card":
 			if session.phase != "abandon-duel-pair-first" && session.phase != "abandon-duel-pair-second" {
 				return errors.New("flip a board card before pairing")
@@ -1961,6 +2012,11 @@ func (s *webServer) readyAction() error {
 	if session.variant == "poker-duel" {
 		session.pokerDuel.TurnStarted = time.Now()
 		session.message = fmt.Sprintf("Player %d, make your move before the 15-second clock expires.", session.actor+1)
+	} else if session.variant == "ladder" && session.phase == "ladder-opening-reveal" {
+		session.ladderReadyAt = time.Now().Add(3 * time.Second)
+		session.message = "Take a moment to review your full hand. The opening card will be played automatically."
+	} else if session.variant == "ladder" && session.phase == "ladder-opening-choice" {
+		session.message = "Choose a card to open the new ladder."
 	} else if session.variant == "ladder" {
 		session.message = "Choose a legal card to play."
 	} else if session.phase == "rummy-turn" {
@@ -2516,6 +2572,28 @@ func (s *webServer) view() webView {
 			Payout: session.payout,
 		}
 	}
+	if variant == "abandon-duel" {
+		if session.abandonDuel == nil {
+			return webView{Started: true, Variant: variant, Phase: "gameover", Winner: -1, Message: "Abandon Duel state is unavailable."}
+		}
+		canAct := !session.abandonDuel.GameOver &&
+			((s.onlineViewer && session.abandonDuel.ActivePlayer == s.viewerPlayer) ||
+				(!s.onlineViewer && session.abandonDuel.ActivePlayer == 0 &&
+					!isAI(session.mode, session.abandonDuel.ActivePlayer)))
+		duelView := session.abandonDuel.webView(
+			session.phase, session.abandonDuel.ActivePlayer,
+			canAct,
+		)
+		return webView{
+			GameID: s.gameID, Started: true, CanAct: canAct,
+			Dashboard: s.dashboard(), Mode: session.mode, Variant: variant,
+			Phase: session.phase, Actor: session.actor, Winner: session.abandonDuel.Winner,
+			Message: session.message, PlayerHero: heroName(session.playerHeroID),
+			OpponentHero: heroName(session.opponentHeroID), PlayerHeroID: session.playerHeroID,
+			OpponentHeroID: session.opponentHeroID, DefaultHeroID: session.playerHeroID,
+			Heroes: s.heroOptions(), AbandonDuel: duelView, Payout: session.payout,
+		}
+	}
 	if variant == "poker-duel" {
 		if session.pokerDuel == nil {
 			return webView{Started: true, Variant: variant, Phase: "gameover", Winner: -1, Message: "Poker duel state is unavailable."}
@@ -2533,28 +2611,6 @@ func (s *webServer) view() webView {
 			remaining := session.pokerDuelCPUReadyAt.Sub(now)
 			if remaining > 0 {
 				duelView.CPUThinkRemainingMS = (remaining + time.Millisecond - 1).Milliseconds()
-			}
-		}
-		if variant == "abandon-duel" {
-			if session.abandonDuel == nil {
-				return webView{Started: true, Variant: variant, Phase: "gameover", Winner: -1, Message: "Abandon Duel state is unavailable."}
-			}
-			canAct := !session.abandonDuel.GameOver &&
-				((s.onlineViewer && session.abandonDuel.ActivePlayer == s.viewerPlayer) ||
-					(!s.onlineViewer && session.abandonDuel.ActivePlayer == 0 &&
-						!isAI(session.mode, session.abandonDuel.ActivePlayer)))
-			duelView := session.abandonDuel.webView(
-				session.phase, session.abandonDuel.ActivePlayer,
-				canAct,
-			)
-			return webView{
-				GameID: s.gameID, Started: true, CanAct: canAct,
-				Dashboard: s.dashboard(), Mode: session.mode, Variant: variant,
-				Phase: session.phase, Actor: session.actor, Winner: session.abandonDuel.Winner,
-				Message: session.message, PlayerHero: heroName(session.playerHeroID),
-				OpponentHero: heroName(session.opponentHeroID), PlayerHeroID: session.playerHeroID,
-				OpponentHeroID: session.opponentHeroID, DefaultHeroID: session.playerHeroID,
-				Heroes: s.heroOptions(), AbandonDuel: duelView, Payout: session.payout,
 			}
 		}
 		return webView{
@@ -2680,8 +2736,10 @@ func (s *webServer) view() webView {
 }
 
 func redactFogView(view *webView, session *webSession) {
-	for index := range view.DraftPool {
-		view.DraftPool[index] = hideWebCardFace(view.DraftPool[index])
+	if session.phase != "draft" {
+		for index := range view.DraftPool {
+			view.DraftPool[index] = hideWebCardFace(view.DraftPool[index])
+		}
 	}
 	if session.actor == 1 {
 		view.DraftHand = hideCardFaces(view.DraftHand)
@@ -2708,20 +2766,22 @@ func redactFogView(view *webView, session *webSession) {
 		}
 	}
 	view.Scores[1].HighestCard = hiddenFaceRepresentative(view.Scores[1].HighestCard)
-	if view.BattleAttack != nil && session.attacker == 1 {
-		originalFace := view.BattleAttack.Face
-		card := hideWebFaceCard(*view.BattleAttack)
-		view.BattleAttack = &card
-		view.BattleAttack.FaceRange = faceRange(originalFace)
-	}
-	if view.BattleDefend != nil && session.attacker == 0 {
-		originalFace := view.BattleDefend.Face
-		card := hideWebFaceCard(*view.BattleDefend)
-		view.BattleDefend = &card
-		view.BattleDefend.FaceRange = faceRange(originalFace)
-	}
-	if view.BattleOutcome != nil {
-		view.BattleOutcome.HideValues = true
+	if session.phase != "result" {
+		if view.BattleAttack != nil && session.attacker == 1 {
+			originalFace := view.BattleAttack.Face
+			card := hideWebFaceCard(*view.BattleAttack)
+			view.BattleAttack = &card
+			view.BattleAttack.FaceRange = faceRange(originalFace)
+		}
+		if view.BattleDefend != nil && session.attacker == 0 {
+			originalFace := view.BattleDefend.Face
+			card := hideWebFaceCard(*view.BattleDefend)
+			view.BattleDefend = &card
+			view.BattleDefend.FaceRange = faceRange(originalFace)
+		}
+		if view.BattleOutcome != nil {
+			view.BattleOutcome.HideValues = true
+		}
 	}
 	for index := range view.Battles {
 		record := &view.Battles[index]

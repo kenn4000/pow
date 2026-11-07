@@ -132,29 +132,23 @@ or purchased in the Shop for 300 Crowns each or 2,400 Crowns for ten.
 | General Rewards | Quartermaster: +10% base match Marks. Salvager: +15% Marks on losses. Curator: +50% campaign Marks (requires Quartermaster). Bounty Board: +50 Marks on the first win in each mode per day (requires Salvager). |
 | Energy | Expanded Rations: +2 maximum Energy. Quick Recovery: 10% faster recharge (requires Expanded Rations). Stockpile: +4 maximum Energy (requires Expanded Rations). Second Wind: one daily free refill (requires Quick Recovery). Overflow: passive regeneration up to twice maximum Energy (requires Stockpile). |
 | Collection | Thrifty Quartermaster: consumables cost 10% fewer Marks. Hero Broker: Hero Boxes cost 10% fewer Marks (requires Thrifty Quartermaster). Veteran's Discount: Shop chests cost 5% fewer Marks (requires Thrifty Quartermaster). Lucky Duplicate: +20% duplicate hero Crown refunds (requires Thrifty Quartermaster). Premium Duplicate: +30% additional duplicate refund (requires Lucky Duplicate). |
-| Camp | Camp Lore: Camp Draws arrive two wins sooner. Reroll: one automatic prize reroll per Camp Draw, retaining the higher-ranked prize (requires Camp Lore). Loaded Deck: draw one extra card in Camp Draw (requires Camp Lore). The Conductor: tune one hero modifier by ±1 (requires Camp Lore). Master Conductor: tune one modifier by up to ±2 (requires The Conductor). |
+| Camp | Camp Lore: Camp Draws arrive two wins sooner. Reroll: once per Camp Draw, open two prize boxes and choose which reward to keep (requires Camp Lore). Loaded Deck: draw one extra card in Camp Draw (requires Camp Lore). The Conductor: tune one hero modifier by ±1 (requires Camp Lore). Master Conductor: tune one modifier by up to ±2 (requires The Conductor). |
 
 Existing matching unlocks are retained during migration. Retired nodes are
 removed and each grants one compensating Skill Point.
 
-The chroma catalog includes rarity, color, price, and currency. Purchases
-validate balances and ownership. The browser groups chromas by skin family and
-offers a discounted Buy All purchase for families with multiple purchasable
-colors; all chromas in a family use that family's highest individual price.
-Buy All is discounted by 20% of the full family price and is available only
-when none of the family's chromas are owned. Partially owned families can be
-completed by buying remaining colors individually at full price. New profiles
-own Tribal (red), Tribal (blue), and Tribal (yellow). Tribal chromas cost 250
-Marks each, Dragon chromas cost 800 Crowns each, and all five Conquistador
-chromas cost 600 Marks each. Browser suit choices show only owned chromas;
-each can be assigned to Scissors (`B`), Paper (`F`), or Rock (`S`) as long as
-no other suit uses the same color. The selected chroma controls the deck
-artwork and face-number color. Initial assignments are Tribal (blue) for
-Scissors, Tribal (yellow) for Paper, and Tribal (red) for Rock.
-
-Shop prices and currencies come from each skin manifest. Tribal chromas cost
-250 Marks each, and Dragon chromas cost 800 Crowns each. Each skin uses its
-folder color as its color identity and displays that exact skin artwork.
+The chroma catalog reads tier, color, price, and currency from each skin
+spritesheet's metadata. Tier ranks map to Common (0), Uncommon (1), Rare (2),
+Epic (3), and Seasonal/Premium (4). The browser displays family tiles
+alphabetically within each tier; a family with colors in multiple tiers has a
+separate tile in every tier it spans. Opening any tile previews all family
+colors and allows an individual purchase or a full-family purchase at 20% off
+the sum of listed prices. The family discount requires a shared currency and
+no already-owned colors. Partially owned families can be completed by buying
+remaining colors individually at their listed prices. Browser suit
+choices show only owned chromas; each can be assigned to Scissors (`B`),
+Paper (`F`), or Rock (`S`) as long as no other suit uses the same color. The
+selected chroma controls the deck artwork and face-number color.
 
 ## CLI
 

@@ -320,7 +320,41 @@ func TestAbandonWebActionsRequireFlipThenTwoCards(t *testing.T) {
 	if err := web.applyAction(actionRequest{Action: "abandon-pair-card", Source: abandonBoardSource, Index: 0}); err == nil {
 		t.Fatal("same card was allowed twice in one pairing")
 	}
-	if err := web.applyAction(actionRequest{Action: "abandon-pair-card", Source: abandonPileSource, Index: 0}); err != nil {
+	secondSource, secondIndex := abandonPileSource, -1
+	for index, revealed := range web.session.abandon.PileRevealed {
+		if !revealed && !web.session.abandon.PileUsed[index] {
+			secondIndex = index
+			break
+		}
+	}
+	if secondIndex < 0 {
+		secondSource = abandonBoardSource
+		for index, revealed := range web.session.abandon.Revealed {
+			if index != 0 && !revealed && !web.session.abandon.Used[index] {
+				secondIndex = index
+				break
+			}
+		}
+	}
+	if secondIndex < 0 {
+		t.Fatal("no hidden second card was available")
+	}
+	if err := web.applyAction(actionRequest{Action: "abandon-reveal-pair-card", Source: secondSource, Index: secondIndex}); err != nil {
+		t.Fatal(err)
+	}
+	if web.session.phase != "abandon-pair-second" || len(web.session.abandon.Pairings) != 0 {
+		t.Fatalf("revealing the second card resolved the pair: phase=%q pairs=%d",
+			web.session.phase, len(web.session.abandon.Pairings))
+	}
+	revealedView := web.session.abandon.webView()
+	secondPile := revealedView.PersonalPile
+	if secondSource == abandonBoardSource {
+		secondPile = revealedView.Board
+	}
+	if secondPile[secondIndex].Card == nil {
+		t.Fatal("revealed second card was not included in the Abandon view")
+	}
+	if err := web.applyAction(actionRequest{Action: "abandon-pair-card", Source: secondSource, Index: secondIndex}); err != nil {
 		t.Fatal(err)
 	}
 	if web.session.phase != "abandon-reveal" || len(web.session.abandon.Pairings) != 1 {

@@ -1,0 +1,115 @@
+{
+    "frames":  {
+                   "cart_open2.png":  {
+                                          "trimmed":  false,
+                                          "spriteSourceSize":  {
+                                                                   "y":  0,
+                                                                   "w":  640,
+                                                                   "h":  640,
+                                                                   "x":  0
+                                                               },
+                                          "sourceSize":  {
+                                                             "h":  640,
+                                                             "w":  640
+                                                         },
+                                          "rotated":  false,
+                                          "frame":  {
+                                                        "y":  640,
+                                                        "w":  640,
+                                                        "h":  640,
+                                                        "x":  0
+                                                    }
+                                      },
+                   "cart_open3.png":  {
+                                          "trimmed":  false,
+                                          "spriteSourceSize":  {
+                                                                   "y":  0,
+                                                                   "w":  640,
+                                                                   "h":  640,
+                                                                   "x":  0
+                                                               },
+                                          "sourceSize":  {
+                                                             "h":  640,
+                                                             "w":  640
+                                                         },
+                                          "rotated":  false,
+                                          "frame":  {
+                                                        "y":  640,
+                                                        "w":  640,
+                                                        "h":  640,
+                                                        "x":  640
+                                                    }
+                                      },
+                   "cart_open1.png":  {
+                                          "trimmed":  false,
+                                          "spriteSourceSize":  {
+                                                                   "y":  0,
+                                                                   "w":  640,
+                                                                   "h":  640,
+                                                                   "x":  0
+                                                               },
+                                          "sourceSize":  {
+                                                             "h":  640,
+                                                             "w":  640
+                                                         },
+                                          "rotated":  false,
+                                          "frame":  {
+                                                        "y":  0,
+                                                        "w":  640,
+                                                        "h":  640,
+                                                        "x":  1280
+                                                    }
+                                      },
+                   "cart_closed.png":  {
+                                           "trimmed":  false,
+                                           "spriteSourceSize":  {
+                                                                    "y":  0,
+                                                                    "w":  640,
+                                                                    "h":  640,
+                                                                    "x":  0
+                                                                },
+                                           "sourceSize":  {
+                                                              "h":  640,
+                                                              "w":  640
+                                                          },
+                                           "rotated":  false,
+                                           "frame":  {
+                                                         "y":  0,
+                                                         "w":  640,
+                                                         "h":  640,
+                                                         "x":  0
+                                                     }
+                                       },
+                   "cart_open0.png":  {
+                                          "trimmed":  false,
+                                          "spriteSourceSize":  {
+                                                                   "y":  0,
+                                                                   "w":  640,
+                                                                   "h":  640,
+                                                                   "x":  0
+                                                               },
+                                          "sourceSize":  {
+                                                             "h":  640,
+                                                             "w":  640
+                                                         },
+                                          "rotated":  false,
+                                          "frame":  {
+                                                        "y":  0,
+                                                        "w":  640,
+                                                        "h":  640,
+                                                        "x":  640
+                                                    }
+                                      }
+               },
+    "meta":  {
+                 "size":  {
+                              "h":  1280,
+                              "w":  1920
+                          },
+                 "version":  "1.0",
+                 "app":  "dotnet-drawing",
+                 "image":  "herocart_anim.png",
+                 "scale":  "1",
+                 "format":  "RGBA8888"
+             }
+}

@@ -4,6 +4,7 @@ import (
 	"errors"
 	"fmt"
 	"math/rand"
+	"time"
 
 	"prisonersofwar/internal/game"
 	"prisonersofwar/internal/heroes"
@@ -52,6 +53,7 @@ var puzzleCatalog = []puzzleDefinition{
 type puzzleSession struct {
 	Definition puzzleDefinition
 	Modifiers  game.GameModifiers
+	StartedAt  time.Time
 	DrawPile   []game.Card
 	Discard    []game.Card
 	Selected   int
@@ -84,6 +86,7 @@ type webPuzzleState struct {
 	Score         int                `json:"score"`
 	Complete      bool               `json:"complete"`
 	Won           bool               `json:"won"`
+	StartedAt     time.Time          `json:"startedAt"`
 }
 
 type webPuzzleCard struct {
@@ -211,7 +214,7 @@ func heroModifiers(hero heroes.Hero) game.GameModifiers {
 
 func newPuzzleSession(definition puzzleDefinition, hero heroes.Hero) *puzzleSession {
 	return &puzzleSession{
-		Definition: definition, Modifiers: heroModifiers(hero), Selected: -1,
+		Definition: definition, Modifiers: heroModifiers(hero), StartedAt: time.Now(), Selected: -1,
 		Used: make([]bool, len(definition.Cards)), Pairings: []puzzlePairing{},
 		Captured: []game.Card{},
 	}
@@ -390,6 +393,26 @@ func (a *abandonSession) selectPairCard(source string, index int, hero heroes.He
 	return nil
 }
 
+func (a *abandonSession) revealPairCard(source string, index int) error {
+	if a == nil || a.Finished || len(a.Pairings) >= a.PairCount {
+		return errors.New("Abandon game is complete")
+	}
+	if a.SelectedSource == "" {
+		return errors.New("choose the first card before revealing a second")
+	}
+	if a.SelectedSource == source && a.SelectedIndex == index {
+		return errors.New("choose a different second card")
+	}
+	if _, err := a.availableCard(a.SelectedSource, a.SelectedIndex); err != nil {
+		return err
+	}
+	if _, err := a.availableCard(source, index); err != nil {
+		return err
+	}
+	a.revealCard(source, index)
+	return nil
+}
+
 func (a *abandonSession) availableCard(source string, index int) (game.Card, error) {
 	switch source {
 	case abandonBoardSource:
@@ -537,12 +560,18 @@ func (p *puzzleSession) webView() *webPuzzleState {
 		}
 		runningScore = score
 	}
+	startedAt := p.StartedAt
+	if startedAt.IsZero() {
+		startedAt = time.Now()
+		p.StartedAt = startedAt
+	}
 	return &webPuzzleState{
 		ID: p.Definition.ID, Name: p.Definition.Title, Cards: cards,
 		BountySuit: p.Definition.Bounty, Par: p.Definition.Par, Target: p.Definition.Par,
 		Direction: p.Definition.Direction, Hint: p.Definition.Hint, SelectedIndex: p.Selected,
 		PairResults: pairResults, Captured: append([]game.Card(nil), p.Captured...),
 		Modifiers: p.Modifiers, Score: p.Score, Complete: p.complete(), Won: p.Won,
+		StartedAt: startedAt,
 	}
 }
 

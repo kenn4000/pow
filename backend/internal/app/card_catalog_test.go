@@ -79,7 +79,7 @@ func TestCardCatalogExcludesHeroIcons(t *testing.T) {
 
 func TestArtworkThumbnailKeepsAspectRatioAndReducesTransferSize(t *testing.T) {
 	name := "shop/tribal/blue/small_idle.png"
-	asset, err := webFiles.ReadFile(name)
+	asset, err := skinSpriteFrame(name)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -91,7 +91,7 @@ func TestArtworkThumbnailKeepsAspectRatioAndReducesTransferSize(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if image.Width != 160 || image.Height < 250 || image.Height > 270 {
+	if image.Width != 160 || image.Height != 223 {
 		t.Fatalf("unexpected thumbnail dimensions: %+v", image)
 	}
 	if len(data) >= len(asset) {

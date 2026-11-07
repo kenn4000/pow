@@ -99,6 +99,56 @@ func TestRummyTwoPlayerEngineAlternatesAndScoresAfterTwelveTurns(t *testing.T) {
 	}
 }
 
+func TestRummyViewReportsOpponentsLastDraw(t *testing.T) {
+	tests := []struct {
+		name       string
+		prepare    func(*rummySession) error
+		wantAction string
+		wantCard   *game.Card
+	}{
+		{
+			name: "drew two",
+			prepare: func(rummy *rummySession) error {
+				rummy.DrawPile = []game.Card{{Suit: game.Blade, Face: 1}, {Suit: game.Fang, Face: 2}}
+				return rummy.drawTwoForPlayer(1)
+			},
+			wantAction: "draw-two",
+		},
+		{
+			name: "took face-up card",
+			prepare: func(rummy *rummySession) error {
+				card := game.Card{Suit: game.Shield, Face: 8}
+				rummy.FaceUp = []game.Card{card}
+				rummy.DrawPile = []game.Card{{Suit: game.Blade, Face: 1}}
+				return rummy.drawFaceUp(1)
+			},
+			wantAction: "draw-face-up",
+			wantCard:   &game.Card{Suit: game.Shield, Face: 8},
+		},
+	}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			rummy := &rummySession{}
+			if err := test.prepare(rummy); err != nil {
+				t.Fatal(err)
+			}
+			view := rummy.webView(&webSession{actor: 0, phase: "rummy-turn", rummy: rummy}, 0, false)
+			if view.OpponentLastMove == nil || view.OpponentLastMove.Action != test.wantAction {
+				t.Fatalf("opponent last move = %+v, want action %q", view.OpponentLastMove, test.wantAction)
+			}
+			if test.wantCard == nil {
+				if view.OpponentLastMove.Card != nil {
+					t.Fatalf("draw-two move unexpectedly includes a card: %+v", view.OpponentLastMove)
+				}
+				return
+			}
+			if view.OpponentLastMove.Card == nil || *view.OpponentLastMove.Card != *test.wantCard {
+				t.Fatalf("opponent face-up card = %+v, want %+v", view.OpponentLastMove.Card, test.wantCard)
+			}
+		})
+	}
+}
+
 func assertRummyCardAccounting(t *testing.T, rummy *rummySession) {
 	t.Helper()
 	seen := make(map[game.Card]bool, 27)

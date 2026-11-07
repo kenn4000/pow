@@ -73,6 +73,9 @@ func TestPuzzlePairingCaptureTieAndInclusiveTarget(t *testing.T) {
 		Bounty: game.Shield, Par: 2, Direction: "high",
 	}
 	puzzle := newPuzzleSession(definition, heroes.Hero{ID: "recruit"})
+	if puzzle.StartedAt.IsZero() || puzzle.webView().StartedAt.IsZero() {
+		t.Fatal("new puzzle session omitted its start time")
+	}
 	if err := puzzle.pick(0); err != nil {
 		t.Fatal(err)
 	}
@@ -341,6 +344,40 @@ func TestFogRedactionMasksCardFacesAndBattleValues(t *testing.T) {
 	jsonText := string(encoded)
 	if strings.Contains(jsonText, `"attackerValue"`) || strings.Contains(jsonText, `"defenderValue"`) {
 		t.Fatalf("fog response leaked battle value fields: %s", jsonText)
+	}
+}
+
+func TestFogDraftPoolShowsActualFaces(t *testing.T) {
+	view := webView{
+		DraftPool: []webCard{{Card: game.Card{Suit: game.Blade, Face: 8}, Index: 0}},
+	}
+	redactFogView(&view, &webSession{phase: "draft"})
+	if view.DraftPool[0].Card.Face != 8 || view.DraftPool[0].FaceHidden || view.DraftPool[0].FaceRange != "" {
+		t.Fatalf("draft pool face was redacted: %+v", view.DraftPool[0])
+	}
+}
+
+func TestFogBattleResultRevealsBothCardsAndValues(t *testing.T) {
+	attack := game.Card{Suit: game.Fang, Face: 5}
+	defense := game.Card{Suit: game.Shield, Face: 8}
+	view := webView{
+		BattleAttack:  &webFaceCard{Card: attack},
+		BattleDefend:  &webFaceCard{Card: defense},
+		BattleOutcome: &webBattleOutcome{AttackerValue: 17, DefenderValue: 8, Winner: 0},
+	}
+	redactFogView(&view, &webSession{phase: "result", attacker: 1, whitePlayer: 0})
+	if view.BattleAttack.Face != 5 || view.BattleAttack.FaceHidden ||
+		view.BattleDefend.Face != 8 || view.BattleDefend.FaceHidden ||
+		view.BattleOutcome.HideValues {
+		t.Fatalf("locked battle result did not reveal both cards and values: %+v", view)
+	}
+	encoded, err := json.Marshal(view.BattleOutcome)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(string(encoded), `"attackerValue":17`) ||
+		!strings.Contains(string(encoded), `"defenderValue":8`) {
+		t.Fatalf("fog battle result did not serialize resolved values: %s", encoded)
 	}
 }
 

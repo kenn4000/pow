@@ -32,11 +32,13 @@ type ExchangeResult struct {
 }
 
 type CampDrawResult struct {
-	BoxType    string           `json:"box_type"`
-	Rerolled   bool             `json:"rerolled,omitempty"`
-	PlayerWins int              `json:"player_wins"`
-	Exchanges  []ExchangeResult `json:"exchanges"`
-	Reward     BoxOpenResult    `json:"reward"`
+	BoxType        string           `json:"box_type"`
+	Rerolled       bool             `json:"rerolled,omitempty"`
+	AwaitingChoice bool             `json:"awaiting_choice,omitempty"`
+	RewardOptions  []BoxOpenResult  `json:"reward_options,omitempty"`
+	PlayerWins     int              `json:"player_wins"`
+	Exchanges      []ExchangeResult `json:"exchanges"`
+	Reward         BoxOpenResult    `json:"reward"`
 }
 
 type CampDrawPrompt struct {
@@ -210,6 +212,14 @@ func (s *CampDrawSession) Play(playerIndex int, rng *rand.Rand) (ExchangeResult,
 }
 
 func (s *CampDrawSession) Finish(p *profile.Profile, rng *rand.Rand, ui CampDrawUI) (CampDrawResult, error) {
+	return s.finish(p, rng, ui, false)
+}
+
+func (s *CampDrawSession) FinishWithRewardChoice(p *profile.Profile, rng *rand.Rand) (CampDrawResult, error) {
+	return s.finish(p, rng, nil, true)
+}
+
+func (s *CampDrawSession) finish(p *profile.Profile, rng *rand.Rand, ui CampDrawUI, deferRerollChoice bool) (CampDrawResult, error) {
 	if s == nil || s.finished || s.exchangeIndex != 3 {
 		return CampDrawResult{}, errors.New("Camp Draw exchanges are not complete")
 	}
@@ -230,13 +240,19 @@ func (s *CampDrawSession) Finish(p *profile.Profile, rng *rand.Rand, ui CampDraw
 	result.Reward = RollBox(result.BoxType, p, rng)
 	if skills.AggregateBonuses(p).CampDrawReroll {
 		reroll := RollBox(result.BoxType, p, rng)
-		if higherRankedReward(reroll, result.Reward) {
+		if deferRerollChoice {
+			result.Rerolled = true
+			result.RewardOptions = []BoxOpenResult{result.Reward, reroll}
+			result.AwaitingChoice = true
+		} else if higherRankedReward(reroll, result.Reward) {
 			result.Reward = reroll
 			result.Rerolled = true
 		}
 	}
-	if err := applyBoxReward(p, result.Reward); err != nil {
-		return CampDrawResult{}, err
+	if !result.AwaitingChoice {
+		if err := applyBoxReward(p, result.Reward); err != nil {
+			return CampDrawResult{}, err
+		}
 	}
 	p.DrawsAvailable--
 	s.finished = true
@@ -244,6 +260,25 @@ func (s *CampDrawSession) Finish(p *profile.Profile, rng *rand.Rand, ui CampDraw
 		ui.ShowBoxResult(result.BoxType, result.Reward)
 	}
 	return result, nil
+}
+
+func SelectCampDrawReward(p *profile.Profile, result *CampDrawResult, index int) error {
+	if p == nil {
+		return errors.New("profile is required")
+	}
+	if result == nil || !result.AwaitingChoice || len(result.RewardOptions) != 2 {
+		return errors.New("there is no Camp Draw reward choice pending")
+	}
+	if index < 0 || index >= len(result.RewardOptions) {
+		return fmt.Errorf("invalid Camp Draw reward choice %d", index)
+	}
+	reward := result.RewardOptions[index]
+	if err := applyBoxReward(p, reward); err != nil {
+		return err
+	}
+	result.Reward = reward
+	result.AwaitingChoice = false
+	return nil
 }
 
 func higherRankedReward(candidate, current BoxOpenResult) bool {

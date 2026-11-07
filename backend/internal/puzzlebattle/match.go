@@ -102,6 +102,12 @@ type Result struct {
 	CompletedAt time.Time     `json:"completedAt"`
 }
 
+type RewardPayout struct {
+	Marks      int64   `json:"marks"`
+	Crowns     int64   `json:"crowns"`
+	Multiplier float64 `json:"multiplier"`
+}
+
 // Match is the persisted domain state. RNG output is materialized at creation,
 // so restoring this value does not depend on serializing a random generator.
 type Match struct {
@@ -124,6 +130,7 @@ type Match struct {
 	CountdownEndsAt *time.Time         `json:"countdownEndsAt,omitempty"`
 	Deadline        *time.Time         `json:"deadline,omitempty"`
 	Result          *Result            `json:"result,omitempty"`
+	Payouts         *[2]RewardPayout   `json:"payouts,omitempty"`
 	MatchMode       string             `json:"matchMode,omitempty"`
 	RankedSeries    *ranked.Series     `json:"rankedSeries,omitempty"`
 }
@@ -269,6 +276,19 @@ func (m *Match) SetReady(player int, now time.Time) error {
 	return nil
 }
 
+func (m *Match) StartImmediately(now time.Time) error {
+	if err := m.validateNow(now); err != nil {
+		return err
+	}
+	if m.Status != PhaseWaiting {
+		return errors.New("match is not waiting to start")
+	}
+	m.Ready = [2]bool{true, true}
+	m.beginMatch(now)
+	m.UpdatedAt = now
+	return nil
+}
+
 func (m *Match) TogglePair(player, index int, now time.Time) error {
 	if err := validatePlayer(player); err != nil {
 		return err
@@ -303,6 +323,53 @@ func (m *Match) TogglePair(player, index int, now time.Time) error {
 	}
 	state.Pairs = append(state.Pairs, Pair{FirstIndex: state.PendingIndex, SecondIndex: index})
 	state.PendingIndex = -1
+	return nil
+}
+
+func (m *Match) SubmitPair(player, firstIndex, secondIndex int, now time.Time) error {
+	if err := validatePlayer(player); err != nil {
+		return err
+	}
+	if err := m.Advance(now); err != nil {
+		return err
+	}
+	round, err := m.activeRound()
+	if err != nil {
+		return err
+	}
+	state := &round.Players[player]
+	if state.Submitted {
+		return errors.New("player has already submitted this round")
+	}
+	if firstIndex == secondIndex {
+		return errors.New("a pair must contain two different cards")
+	}
+	for _, index := range []int{firstIndex, secondIndex} {
+		if index < 0 || index >= len(round.Board) {
+			return fmt.Errorf("card index %d is outside the board", index)
+		}
+		for _, pair := range state.Pairs {
+			if pair.FirstIndex == index || pair.SecondIndex == index {
+				return fmt.Errorf("card index %d is already in a submitted pair", index)
+			}
+		}
+	}
+	if state.PendingIndex >= 0 {
+		if state.PendingIndex != firstIndex && state.PendingIndex != secondIndex {
+			return errors.New("submitted pair must include the selected card")
+		}
+		state.PendingIndex = -1
+	}
+	if len(state.Pairs) >= requiredPairs(round.Number) {
+		return fmt.Errorf("round %d already has all required pairs", round.Number)
+	}
+
+	state.Pairs = append(state.Pairs, Pair{FirstIndex: firstIndex, SecondIndex: secondIndex})
+	if len(state.Pairs) == requiredPairs(round.Number) {
+		m.finalizePlayerRound(round, player, now, false)
+		m.progressAfterSubmission(round, now)
+	}
+	m.UpdatedAt = now
 	return nil
 }
 

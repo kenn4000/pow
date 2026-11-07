@@ -18,21 +18,33 @@ type rummySession struct {
 	PreviousBuried []game.Card `json:"Buried,omitempty"`
 	FaceUp         []game.Card
 	Hands          [2][]game.Card
+	LastMoves      [2]rummyLastMove `json:"LastMoves,omitempty"`
 	Turns          int
 	Results        [2]game.RummyPartition
 }
 
+type rummyLastMove struct {
+	Action string     `json:"action"`
+	Card   *game.Card `json:"card,omitempty"`
+}
+
 type webRummyState struct {
-	Parameters     game.RummyParameters `json:"parameters"`
-	Hand           []webCard            `json:"hand,omitempty"`
-	OpponentHand   int                  `json:"opponentHand"`
-	DrawPileCount  int                  `json:"drawPileCount"`
-	FaceUpPile     []game.Card          `json:"faceUpPile"`
-	CanDrawFaceUp  bool                 `json:"canDrawFaceUp"`
-	CanDrawTwo     bool                 `json:"canDrawTwo"`
-	TurnsCompleted int                  `json:"turnsCompleted"`
-	TurnLimit      int                  `json:"turnLimit"`
-	Results        []webRummyResult     `json:"results,omitempty"`
+	Parameters       game.RummyParameters `json:"parameters"`
+	Hand             []webCard            `json:"hand,omitempty"`
+	OpponentHand     int                  `json:"opponentHand"`
+	DrawPileCount    int                  `json:"drawPileCount"`
+	FaceUpPile       []game.Card          `json:"faceUpPile"`
+	OpponentLastMove *webRummyMove        `json:"opponentLastMove,omitempty"`
+	CanDrawFaceUp    bool                 `json:"canDrawFaceUp"`
+	CanDrawTwo       bool                 `json:"canDrawTwo"`
+	TurnsCompleted   int                  `json:"turnsCompleted"`
+	TurnLimit        int                  `json:"turnLimit"`
+	Results          []webRummyResult     `json:"results,omitempty"`
+}
+
+type webRummyMove struct {
+	Action string     `json:"action"`
+	Card   *game.Card `json:"card,omitempty"`
 }
 
 type webRummyResult struct {
@@ -90,6 +102,14 @@ func (r *rummySession) webView(session *webSession, viewer int, online bool) *we
 		FaceUpPile:     append([]game.Card(nil), r.FaceUp...),
 		TurnsCompleted: r.Turns,
 		TurnLimit:      rummyTurnLimit,
+	}
+	lastMove := r.LastMoves[1-viewerPlayer]
+	if lastMove.Action != "" {
+		result.OpponentLastMove = &webRummyMove{Action: lastMove.Action}
+		if lastMove.Card != nil {
+			card := *lastMove.Card
+			result.OpponentLastMove.Card = &card
+		}
 	}
 	canDrawTwo := session.phase == "rummy-opening" || session.phase == "rummy-turn"
 	result.CanDrawTwo = canAct && canDrawTwo && r.deckCount() >= 2
@@ -176,6 +196,7 @@ func (r *rummySession) drawTwoForPlayer(player int) error {
 		}
 		r.Hands[player] = append(r.Hands[player], card)
 	}
+	r.LastMoves[player] = rummyLastMove{Action: "draw-two"}
 	return nil
 }
 
@@ -191,9 +212,11 @@ func (r *rummySession) drawFaceUp(player int) error {
 		return errors.New("not enough cards remain to draw")
 	}
 	lastFaceUp := len(r.FaceUp) - 1
-	r.Hands[player] = append(r.Hands[player], r.FaceUp[lastFaceUp])
+	taken := r.FaceUp[lastFaceUp]
+	r.Hands[player] = append(r.Hands[player], taken)
 	r.FaceUp = r.FaceUp[:lastFaceUp]
 	r.FaceUp = append(r.FaceUp, replacement)
+	r.LastMoves[player] = rummyLastMove{Action: "draw-face-up", Card: &taken}
 	return nil
 }
 

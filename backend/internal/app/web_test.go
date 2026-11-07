@@ -3,6 +3,8 @@ package app
 import (
 	"bytes"
 	"encoding/json"
+	"fmt"
+	"image/png"
 	"math/rand"
 	"net/http"
 	"net/http/httptest"
@@ -11,11 +13,122 @@ import (
 	"time"
 
 	"prisonersofwar/internal/campaigns"
+	"prisonersofwar/internal/catalog"
 	"prisonersofwar/internal/energy"
 	"prisonersofwar/internal/game"
 	"prisonersofwar/internal/heroes"
+	"prisonersofwar/internal/lootbox"
 	"prisonersofwar/internal/profile"
+	"prisonersofwar/internal/skins"
 )
+
+func TestAbandonDuelViewIncludesAbandonState(t *testing.T) {
+	playerProfile, err := profile.New(time.Now())
+	if err != nil {
+		t.Fatal(err)
+	}
+	playerProfile.UnlockedHeroes = []string{"recruit", "warden"}
+	playerProfile.SetSaveHandler(func(*profile.Profile) error { return nil })
+	playerHero, _ := heroes.ByID("recruit")
+	opponentHero, _ := heroes.ByID("warden")
+	rng := rand.New(rand.NewSource(71))
+	duel, err := newAbandonDuelGame(playerHero, opponentHero, rng)
+	if err != nil {
+		t.Fatal(err)
+	}
+	web := &webServer{
+		rng: rng, playerProfile: playerProfile,
+		session: &webSession{
+			mode: "normal", variant: "abandon-duel", abandonDuel: duel,
+			phase: duel.phase(), actor: duel.ActivePlayer, winner: -1,
+			playerHeroID: playerHero.ID, opponentHeroID: opponentHero.ID,
+		},
+	}
+
+	view := web.view()
+	if view.Variant != "abandon-duel" || view.AbandonDuel == nil ||
+		len(view.AbandonDuel.Board) == 0 || view.AbandonDuel.Modifiers == (abandonDuelModifiers{}) {
+		t.Fatalf("Abandon Duel view omitted duel data: %+v", view)
+	}
+}
+
+func TestAbandonDuelRevealsSecondCardBeforeResolvingPair(t *testing.T) {
+	playerProfile, err := profile.New(time.Now())
+	if err != nil {
+		t.Fatal(err)
+	}
+	playerProfile.UnlockedHeroes = []string{"recruit", "warden"}
+	playerProfile.SetSaveHandler(func(*profile.Profile) error { return nil })
+	playerHero, _ := heroes.ByID("recruit")
+	opponentHero, _ := heroes.ByID("warden")
+	rng := rand.New(rand.NewSource(72))
+	duel, err := newAbandonDuelGame(playerHero, opponentHero, rng)
+	if err != nil {
+		t.Fatal(err)
+	}
+	web := &webServer{
+		rng: rng, playerProfile: playerProfile,
+		session: &webSession{
+			mode: "normal", variant: "abandon-duel", abandonDuel: duel,
+			phase: duel.phase(), actor: duel.ActivePlayer, winner: -1,
+			playerHeroID: playerHero.ID, opponentHeroID: opponentHero.ID,
+		},
+	}
+	if web.session.phase == "abandon-duel-reveal" {
+		hidden := duel.hiddenBoardIndices()
+		if len(hidden) == 0 {
+			t.Fatal("no hidden board card available to flip")
+		}
+		if err := web.applyAction(actionRequest{Action: "abandon-duel-flip", Index: hidden[0]}); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if err := web.applyAction(actionRequest{
+		Action: "abandon-duel-pair-card", Source: abandonBoardSource, Index: 0,
+	}); err != nil {
+		t.Fatal(err)
+	}
+	if web.session.phase != "abandon-duel-pair-second" {
+		t.Fatalf("first card selection phase = %q", web.session.phase)
+	}
+	secondIndex := -1
+	for index, revealed := range duel.BoardRevealed {
+		if index != 0 && !revealed && !duel.BoardUsed[index] {
+			secondIndex = index
+			break
+		}
+	}
+	if secondIndex < 0 {
+		t.Fatal("no hidden second board card available")
+	}
+	if err := web.applyAction(actionRequest{
+		Action: "abandon-duel-reveal-pair-card", Source: abandonBoardSource, Index: secondIndex,
+	}); err != nil {
+		t.Fatal(err)
+	}
+	if web.session.phase != "abandon-duel-pair-second" || len(duel.Pairings) != 0 ||
+		!duel.BoardRevealed[secondIndex] || duel.BoardUsed[secondIndex] {
+		t.Fatalf("second-card reveal resolved the pair: phase=%q pairings=%d revealed=%v used=%v",
+			web.session.phase, len(duel.Pairings), duel.BoardRevealed[secondIndex], duel.BoardUsed[secondIndex])
+	}
+	view := web.view().AbandonDuel
+	if view.Board[secondIndex].Card == nil {
+		t.Fatal("revealed second card was not included in the Abandon Duel view")
+	}
+	if err := web.applyAction(actionRequest{
+		Action: "abandon-duel-pair-card", Source: abandonBoardSource, Index: secondIndex,
+	}); err != nil {
+		t.Fatal(err)
+	}
+	if len(duel.Pairings) != 1 || !duel.BoardUsed[secondIndex] {
+		t.Fatalf("second-card selection did not resolve the pair: pairings=%d used=%v",
+			len(duel.Pairings), duel.BoardUsed[secondIndex])
+	}
+	view = web.view().AbandonDuel
+	if view.Board[secondIndex].Card != nil {
+		t.Fatal("used board card remained visible in the Abandon Duel view")
+	}
+}
 
 func TestWebGameFlowRedactsHandsAndAutoPlaysThirdBattle(t *testing.T) {
 	playerProfile, err := profile.New(time.Now())
@@ -161,12 +274,15 @@ func TestWebSkinAssetsAreServedWithImageHeaders(t *testing.T) {
 	if response.Body.Len() == 0 {
 		t.Fatal("skin image response is empty")
 	}
-	original, err := webFiles.ReadFile("shop/tribal/red/small_idle.png")
+	original, err := skinSpriteFrame("shop/tribal/red/small_idle.png")
 	if err != nil {
-		t.Fatalf("read source skin image: %v", err)
+		t.Fatalf("read cropped sprite frame: %v", err)
 	}
 	if !bytes.Equal(response.Body.Bytes(), original) {
-		t.Fatal("skin image response changed the source image")
+		t.Fatal("skin image response differs from the spritesheet frame")
+	}
+	if _, err := webFiles.ReadFile("shop/tribal/red/small_idle.png"); err == nil {
+		t.Fatal("individual skin artwork should not be embedded")
 	}
 	for _, assetPath := range []string{
 		"/skins/shop/conq/lime/small_idle.png",
@@ -184,14 +300,20 @@ func TestWebSkinAssetsAreServedWithImageHeaders(t *testing.T) {
 		"/skins/shop/orc/white/large_idle.png",
 		"/skins/shop/reptile/pink/large_idle.png",
 		"/skins/shop/zulu/orange/large_idle.png",
+		"/skins/shop/santa/gold/large_idle.png",
 		"/skins/icons/marks.png",
 		"/skins/icons/crowns.png",
 		"/skins/icons/energy.png",
+		"/skins/icons/victory_banner.png",
+		"/skins/icons/defeat_banner.png",
+		"/skins/icons/trichooser.png",
 		"/skins/icons/wooden_chest.png",
 		"/skins/icons/silver_chest.png",
 		"/skins/icons/golden_chest.png",
 		"/skins/icons/prismatic_chest.png",
 		"/skins/icons/hero_chest.png",
+		"/skins/icons/animations/clouds.png",
+		"/skins/icons/animations/clouds.json",
 	} {
 		request = httptest.NewRequest(http.MethodGet, assetPath, nil)
 		response = httptest.NewRecorder()
@@ -220,11 +342,180 @@ func TestWebSkillBranchIconsAreServed(t *testing.T) {
 				response.Header().Get("Content-Type"), response.Body.Len())
 		}
 	}
+
 	request := httptest.NewRequest(http.MethodGet, "/skills/icons/../skills.go", nil)
 	response := httptest.NewRecorder()
 	web.handleSkillIcon(response, request)
 	if response.Code != http.StatusNotFound {
 		t.Errorf("traversal status = %d, want %d", response.Code, http.StatusNotFound)
+	}
+}
+
+func TestBattleCloudSpriteAssetsAreServed(t *testing.T) {
+	web := &webServer{}
+	for _, assetPath := range []string{
+		"/skins/icons/animations/clouds.png",
+		"/skins/icons/animations/clouds.json",
+	} {
+		response := httptest.NewRecorder()
+		web.handleSkinAsset(response, httptest.NewRequest(http.MethodGet, assetPath, nil))
+		if response.Code != http.StatusOK || response.Body.Len() == 0 {
+			t.Fatalf("asset %q status=%d body-size=%d", assetPath, response.Code, response.Body.Len())
+		}
+	}
+
+	response := httptest.NewRecorder()
+	web.handleSkinAsset(response, httptest.NewRequest(http.MethodGet, "/skins/icons/animations/clouds.json", nil))
+	var atlas struct {
+		Frames map[string]json.RawMessage `json:"frames"`
+	}
+	if err := json.Unmarshal(response.Body.Bytes(), &atlas); err != nil {
+		t.Fatalf("decode cloud animation metadata: %v", err)
+	}
+	for _, frame := range []string{
+		"cloud.png", "cloud_prism.png", "cloud_brown.png",
+		"cloud_red.png", "cloud_orange.png", "cloud_yellow.png",
+		"cloud_lime.png", "cloud_green.png", "cloud_skyblue.png",
+		"cloud_blue.png", "cloud_purple.png", "cloud_pink.png",
+	} {
+		if _, ok := atlas.Frames[frame]; !ok {
+			t.Errorf("cloud animation frame %q is missing", frame)
+		}
+	}
+}
+
+func TestChestAnimationAtlasesHaveExplicitFrameSequences(t *testing.T) {
+	tests := []struct {
+		prefix string
+		sheet  string
+	}{
+		{prefix: "wooden", sheet: "wooden_chest_anim"},
+		{prefix: "silver", sheet: "silver_chest_anim"},
+		{prefix: "golden", sheet: "golden_chest_anim"},
+		{prefix: "prismatic", sheet: "prismatic_chest_anim"},
+	}
+	web := &webServer{}
+	for _, test := range tests {
+		for _, extension := range []string{"png", "json"} {
+			assetPath := "/skins/icons/animations/" + test.sheet + "." + extension
+			response := httptest.NewRecorder()
+			web.handleSkinAsset(response, httptest.NewRequest(http.MethodGet, assetPath, nil))
+			if response.Code != http.StatusOK || response.Body.Len() == 0 {
+				t.Fatalf("asset %q status=%d body-size=%d", assetPath, response.Code, response.Body.Len())
+			}
+			if extension != "json" {
+				continue
+			}
+			var atlas struct {
+				Frames map[string]json.RawMessage `json:"frames"`
+			}
+			if err := json.Unmarshal(response.Body.Bytes(), &atlas); err != nil {
+				t.Fatalf("decode chest metadata %q: %v", assetPath, err)
+			}
+			expected := []string{test.prefix + "_chest.png"}
+			for index := 1; index <= 6; index++ {
+				expected = append(expected, test.prefix+"_shake_0"+fmt.Sprint(index)+".png")
+			}
+			expected = append(expected, test.prefix+"_ajar1.png", test.prefix+"_ajar2.png", test.prefix+"_open.png")
+			if len(atlas.Frames) != len(expected) {
+				t.Errorf("%s has %d frames, want %d", test.sheet, len(atlas.Frames), len(expected))
+			}
+			for _, name := range expected {
+				if _, ok := atlas.Frames[name]; !ok {
+					t.Errorf("%s is missing frame %q", test.sheet, name)
+				}
+			}
+		}
+	}
+}
+
+func TestShopChestIconsAreCroppedFromAnimationSheets(t *testing.T) {
+	web := &webServer{}
+	for assetPath, definition := range chestIconDefinitions {
+		metadataPath := "icons/animations/" + definition.sheet + ".json"
+		metadata, err := skins.IconFiles.ReadFile(metadataPath)
+		if err != nil {
+			t.Fatal(err)
+		}
+		var atlas chestIconAtlas
+		if err := json.Unmarshal(metadata, &atlas); err != nil {
+			t.Fatal(err)
+		}
+		imageData, err := skins.IconFiles.ReadFile("icons/animations/" + atlas.Meta.Image)
+		if err != nil {
+			t.Fatal(err)
+		}
+		image, err := png.Decode(bytes.NewReader(imageData))
+		if err != nil {
+			t.Fatal(err)
+		}
+		expected, err := skins.CropSpriteFrame(image, atlas.Frames[definition.frame])
+		if err != nil {
+			t.Fatal(err)
+		}
+
+		response := httptest.NewRecorder()
+		web.handleSkinAsset(response, httptest.NewRequest(http.MethodGet, "/skins/"+assetPath, nil))
+		if response.Code != http.StatusOK || !bytes.Equal(response.Body.Bytes(), expected) {
+			t.Errorf("shop chest icon %q was not served from its sprite frame", assetPath)
+		}
+	}
+}
+
+func TestCampDrawRewardChoiceAppliesOnlySelectedReward(t *testing.T) {
+	p, err := profile.New(time.Now())
+	if err != nil {
+		t.Fatal(err)
+	}
+	p.DrawsAvailable = 1
+	p.SkillNodes["reroll"] = true
+	p.SetSaveHandler(func(*profile.Profile) error { return nil })
+	rng := rand.New(rand.NewSource(42))
+	session, err := lootbox.BeginCampDraw(p, rng)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for sessionIndex := 0; sessionIndex < 3; sessionIndex++ {
+		if _, err := session.Play(0, rng); err != nil {
+			t.Fatal(err)
+		}
+	}
+	result, err := session.FinishWithRewardChoice(p, rng)
+	if err != nil {
+		t.Fatal(err)
+	}
+	selected := result.RewardOptions[1]
+	before := *p
+	web := &webServer{playerProfile: p, rng: rng, lastCampDraw: &result}
+	request := httptest.NewRequest(http.MethodPost, "/api/camp-draw", bytes.NewBufferString(`{"action":"choose-reward","index":1}`))
+	request.Header.Set("Content-Type", "application/json")
+	response := httptest.NewRecorder()
+	web.handleCampDraw(response, request)
+	if response.Code != http.StatusOK {
+		t.Fatalf("choose reward status = %d, body=%s", response.Code, response.Body.String())
+	}
+	var page webCampDrawPage
+	if err := json.Unmarshal(response.Body.Bytes(), &page); err != nil {
+		t.Fatal(err)
+	}
+	if page.Result == nil || page.Result.AwaitingChoice || page.Result.Reward != selected {
+		t.Fatalf("selected reward was not returned: %+v", page.Result)
+	}
+	if p.Marks != before.Marks+selected.Marks || p.Crowns != before.Crowns+selected.Crowns ||
+		p.Energy < before.Energy || p.Energy > before.Energy+selected.Energy {
+		t.Fatalf("selected reward was not applied: marks=%d crowns=%d energy=%d reward=%+v",
+			p.Marks, p.Crowns, p.Energy, selected)
+	}
+	if selected.ChromaID != "" && !p.OwnedChromas[selected.ChromaID] {
+		t.Fatalf("selected chroma %q was not added to the account", selected.ChromaID)
+	}
+
+	request = httptest.NewRequest(http.MethodPost, "/api/camp-draw", bytes.NewBufferString(`{"action":"choose-reward","index":1}`))
+	request.Header.Set("Content-Type", "application/json")
+	response = httptest.NewRecorder()
+	web.handleCampDraw(response, request)
+	if response.Code != http.StatusConflict {
+		t.Fatalf("second choice status = %d, want %d", response.Code, http.StatusConflict)
 	}
 }
 
@@ -432,7 +723,7 @@ func TestWebWaitingStateIncludesLiveDashboardData(t *testing.T) {
 		dashboard.UnseenAchievements != 1 {
 		t.Fatalf("dashboard data = %+v", dashboard)
 	}
-	for _, id := range []string{"crimson", "cobalt", "sunflower"} {
+	for _, id := range []string{"tribal-red", "tribal-blue", "tribal-yellow"} {
 		found := false
 		for _, ownedID := range dashboard.OwnedChromas {
 			if ownedID == id {
@@ -461,7 +752,7 @@ func TestWebDashboardFeatureActionsUseTemporaryPreviewProfile(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	p.Marks = 1000
+	p.Marks = 10000
 	p.AchievementTiers["aggressor"] = 1
 	web := &webServer{rng: rand.New(rand.NewSource(71)), playerProfile: p}
 
@@ -523,7 +814,11 @@ func TestWebDashboardFeatureActionsUseTemporaryPreviewProfile(t *testing.T) {
 	if shopResponse.Code != http.StatusOK {
 		t.Fatalf("chroma purchase status = %d: %s", shopResponse.Code, shopResponse.Body.String())
 	}
-	if p.Marks != 1000 || web.previewProfile.Marks != previewMarksBeforeShop-600 ||
+	conqLime, ok := catalog.FindChroma("conq-lime")
+	if !ok {
+		t.Fatal("Conquistador lime chroma is missing")
+	}
+	if p.Marks != 10000 || web.previewProfile.Marks != previewMarksBeforeShop-conqLime.Cost ||
 		!web.previewProfile.OwnedChromas["conq-lime"] {
 		t.Fatalf("preview shop purchase affected wrong profile: saved=%d preview=%d", p.Marks, web.previewProfile.Marks)
 	}
@@ -554,7 +849,11 @@ func TestShopChromaPurchasePersistsCurrencyAndOwnership(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	p.Marks = 600
+	conqLime, ok := catalog.FindChroma("conq-lime")
+	if !ok {
+		t.Fatal("Conquistador lime chroma is missing")
+	}
+	p.Marks = conqLime.Cost
 	profilePath := filepath.Join(t.TempDir(), "profile.json")
 	p.SetSaveHandler(func(saved *profile.Profile) error { return saved.SaveTo(profilePath) })
 	web := &webServer{playerProfile: p, rng: rand.New(rand.NewSource(72))}
@@ -609,7 +908,15 @@ func TestShopChromaFamilyPurchasePersistsDiscountAndOwnership(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	p.Marks = 4000
+	var familyFullPrice int64
+	for _, id := range []string{"alien-blue", "alien-red", "alien-yellow"} {
+		chroma, ok := catalog.FindChroma(id)
+		if !ok {
+			t.Fatalf("Alien chroma %q is missing", id)
+		}
+		familyFullPrice += chroma.Cost
+	}
+	p.Marks = (familyFullPrice*4 + 2) / 5
 	profilePath := filepath.Join(t.TempDir(), "profile.json")
 	p.SetSaveHandler(func(saved *profile.Profile) error { return saved.SaveTo(profilePath) })
 	web := &webServer{playerProfile: p, rng: rand.New(rand.NewSource(73))}

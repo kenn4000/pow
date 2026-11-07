@@ -24,6 +24,7 @@ var (
 	ErrGameOver       = errors.New("Ladder game is over")
 	ErrWrongTurn      = errors.New("it is not this player's turn")
 	ErrCardNotInHand  = errors.New("card is not in this player's hand")
+	ErrOpeningPending = errors.New("the opening card has not been played yet")
 )
 
 type SharedStats struct {
@@ -38,10 +39,16 @@ type LadderState struct {
 	HandB                    []game.Card `json:"handB"`
 	Deck                     []game.Card `json:"deck"`
 	Discard                  []game.Card `json:"discard"`
+	PlayedCards              []game.Card `json:"playedCards"`
+	ChainCard                *game.Card  `json:"chainCard,omitempty"`
 	ChainValue               *int        `json:"chainValue,omitempty"`
 	ChainSuit                *game.Suit  `json:"chainSuit,omitempty"`
 	ChainIsWild              bool        `json:"chainIsWild"`
 	Current                  PlayerID    `json:"current"`
+	OpeningPending           bool        `json:"openingPending,omitempty"`
+	OpeningPlayer            PlayerID    `json:"openingPlayer,omitempty"`
+	OpeningCard              *game.Card  `json:"openingCard,omitempty"`
+	OpeningResponder         PlayerID    `json:"openingResponder,omitempty"`
 	SharedStats              SharedStats `json:"sharedStats"`
 	SharedShift              int         `json:"sharedShift"`
 	SharedFavor              int         `json:"sharedFavor"`
@@ -57,10 +64,16 @@ type LadderGame struct {
 	handB                    []game.Card
 	deck                     []game.Card
 	discard                  []game.Card
+	playedCards              []game.Card
+	chainCard                *game.Card
 	chainValue               *int
 	chainSuit                *game.Suit
 	chainIsWild              bool
 	current                  PlayerID
+	openingPending           bool
+	openingPlayer            PlayerID
+	openingCard              *game.Card
+	openingResponder         PlayerID
 	sharedStats              SharedStats
 	wildFaceRaw              int
 	bountyCard               game.Card
@@ -87,6 +100,14 @@ func SharedStatsFor(a, b heroes.Hero) SharedStats {
 }
 
 func NewLadderGame(heroA, heroB heroes.Hero, deck []game.Card, seed int64) (*LadderGame, error) {
+	return newLadderGame(heroA, heroB, deck, seed, false)
+}
+
+func NewLadderGameWithDeferredOpening(heroA, heroB heroes.Hero, deck []game.Card, seed int64) (*LadderGame, error) {
+	return newLadderGame(heroA, heroB, deck, seed, true)
+}
+
+func newLadderGame(heroA, heroB heroes.Hero, deck []game.Card, seed int64, deferOpening bool) (*LadderGame, error) {
 	stats := SharedStatsFor(heroA, heroB)
 	if deck == nil {
 		deck = game.NewDeck()
@@ -129,9 +150,26 @@ func NewLadderGame(heroA, heroB heroes.Hero, deck []game.Card, seed int64) (*Lad
 		bountyCard: bountyCard, initiativeSuit: initiativeSuit,
 		fallbackNoInitiativeSuit: fallbackNoInitiativeSuit,
 	}
-	result.openFreshChain(leader)
-	if result.winner == nil {
-		result.current = otherPlayer(leader)
+	var opening game.Card
+	if fallbackNoInitiativeSuit {
+		opening = chooseOpening(result.handFor(leader), result.wildFaceRaw)
+	} else {
+		var found bool
+		opening, found = lowestCardOfSuit(result.handFor(leader), result.initiativeSuit)
+		if !found {
+			return nil, errors.New("Ladder leader has no card of the initiative suit")
+		}
+	}
+	if deferOpening {
+		result.openingPending = true
+		result.openingPlayer = leader
+		result.openingCard = cloneCard(&opening)
+		result.current = leader
+	} else {
+		result.openChainWithCard(leader, opening)
+		if result.winner == nil {
+			result.current = otherPlayer(leader)
+		}
 	}
 	return result, nil
 }
@@ -141,12 +179,16 @@ func (g *LadderGame) State() LadderState {
 		return LadderState{HandA: []game.Card{}, HandB: []game.Card{}}
 	}
 	return LadderState{
-		HandA:      append([]game.Card(nil), g.handA...),
-		HandB:      append([]game.Card(nil), g.handB...),
-		Deck:       append([]game.Card(nil), g.deck...),
-		Discard:    append([]game.Card(nil), g.discard...),
-		ChainValue: cloneInt(g.chainValue), ChainSuit: cloneSuit(g.chainSuit),
+		HandA:       append([]game.Card(nil), g.handA...),
+		HandB:       append([]game.Card(nil), g.handB...),
+		Deck:        append([]game.Card(nil), g.deck...),
+		Discard:     append([]game.Card(nil), g.discard...),
+		PlayedCards: append([]game.Card(nil), g.playedCards...),
+		ChainCard:   cloneCard(g.chainCard),
+		ChainValue:  cloneInt(g.chainValue), ChainSuit: cloneSuit(g.chainSuit),
 		ChainIsWild: g.chainIsWild, Current: g.current, SharedStats: g.sharedStats,
+		OpeningPending: g.openingPending, OpeningPlayer: g.openingPlayer,
+		OpeningCard: cloneCard(g.openingCard), OpeningResponder: g.openingResponder,
 		SharedShift: g.sharedStats.Shift, SharedFavor: g.sharedStats.Favor,
 		WildFaceRaw: g.wildFaceRaw, BountyCard: g.bountyCard,
 		InitiativeSuit:           g.initiativeSuit,
@@ -156,15 +198,34 @@ func (g *LadderGame) State() LadderState {
 }
 
 func Restore(state LadderState) *LadderGame {
+	chainCard := cloneCard(state.ChainCard)
+	if chainCard == nil {
+		chainCard = inferLegacyChainCard(state)
+	}
+	chainValue := cloneInt(state.ChainValue)
+	if chainCard != nil && !state.ChainIsWild {
+		value := chainCard.Face + state.SharedStats.Shift
+		chainValue = &value
+	}
+	playedCards := append([]game.Card(nil), state.PlayedCards...)
+	if len(playedCards) == 0 && chainCard != nil {
+		playedCards = append(playedCards, *chainCard)
+	}
 	return &LadderGame{
 		handA:                    append([]game.Card(nil), state.HandA...),
 		handB:                    append([]game.Card(nil), state.HandB...),
 		deck:                     append([]game.Card(nil), state.Deck...),
 		discard:                  append([]game.Card(nil), state.Discard...),
-		chainValue:               cloneInt(state.ChainValue),
+		playedCards:              playedCards,
+		chainCard:                chainCard,
+		chainValue:               chainValue,
 		chainSuit:                cloneSuit(state.ChainSuit),
 		chainIsWild:              state.ChainIsWild,
 		current:                  state.Current,
+		openingPending:           state.OpeningPending,
+		openingPlayer:            state.OpeningPlayer,
+		openingCard:              cloneCard(state.OpeningCard),
+		openingResponder:         state.OpeningResponder,
 		sharedStats:              state.SharedStats,
 		wildFaceRaw:              state.WildFaceRaw,
 		bountyCard:               state.BountyCard,
@@ -174,9 +235,45 @@ func Restore(state LadderState) *LadderGame {
 	}
 }
 
+func inferLegacyChainCard(state LadderState) *game.Card {
+	if state.ChainSuit == nil {
+		return nil
+	}
+	if state.ChainIsWild {
+		if state.WildFaceRaw < 1 || state.WildFaceRaw > 9 {
+			return nil
+		}
+		return &game.Card{Suit: *state.ChainSuit, Face: state.WildFaceRaw}
+	}
+	if state.ChainValue == nil {
+		return nil
+	}
+	faces := make(map[int]struct{}, 2)
+	addFace := func(face int) {
+		if face >= 1 && face <= 9 {
+			faces[face] = struct{}{}
+		}
+	}
+	addFace(*state.ChainValue - state.SharedStats.Shift)
+	scaledValue := *state.ChainValue - state.SharedStats.Favor
+	if scaledValue%2 == 0 {
+		addFace(scaledValue/2 - state.SharedStats.Shift)
+	}
+	if len(faces) != 1 {
+		return nil
+	}
+	for face := range faces {
+		return &game.Card{Suit: *state.ChainSuit, Face: face}
+	}
+	return nil
+}
+
 func (g *LadderGame) ReplaceCard(player PlayerID, index int, rng *rand.Rand) error {
 	if g == nil || g.winner != nil {
 		return ErrGameOver
+	}
+	if g.openingPending {
+		return ErrOpeningPending
 	}
 	if !validPlayer(player) {
 		return fmt.Errorf("%w: unknown player %d", ErrIllegalPlay, player)
@@ -204,7 +301,7 @@ func (g *LadderGame) ReplaceCard(player PlayerID, index int, rng *rand.Rand) err
 
 func (g *LadderGame) LegalPlays(player PlayerID) []game.Card {
 	legal := make([]game.Card, 0)
-	if g == nil || g.winner != nil || !validPlayer(player) {
+	if g == nil || g.winner != nil || g.openingPending || !validPlayer(player) {
 		return legal
 	}
 	for _, card := range g.handFor(player) {
@@ -227,6 +324,9 @@ func (g *LadderGame) Play(player PlayerID, card game.Card) error {
 	if g == nil || g.winner != nil {
 		return ErrGameOver
 	}
+	if g.openingPending {
+		return ErrOpeningPending
+	}
 	if !validPlayer(player) {
 		return fmt.Errorf("%w: unknown player %d", ErrIllegalPlay, player)
 	}
@@ -243,7 +343,7 @@ func (g *LadderGame) Play(player PlayerID, card game.Card) error {
 	}
 	hand = removeCardAt(hand, index)
 	g.setHand(player, hand)
-	g.setChainFromPlayedCard(card, false)
+	g.setChainFromPlayedCard(card)
 	if len(hand) == 0 {
 		winner := player
 		g.winner = &winner
@@ -256,6 +356,9 @@ func (g *LadderGame) Play(player PlayerID, card game.Card) error {
 func (g *LadderGame) PassTurn(player PlayerID) error {
 	if g == nil || g.winner != nil {
 		return ErrGameOver
+	}
+	if g.openingPending {
+		return ErrOpeningPending
 	}
 	if !validPlayer(player) {
 		return fmt.Errorf("%w: unknown player %d", ErrIllegalPlay, player)
@@ -273,16 +376,74 @@ func (g *LadderGame) PassTurn(player PlayerID) error {
 		g.winner = &winner
 		return nil
 	}
-	opening := chooseOpening(opponentHand, g.wildFaceRaw)
-	opponentHand = removeCardAt(opponentHand, cardIndex(opponentHand, opening))
-	g.setHand(opponent, opponentHand)
-	g.setChainFromPlayedCard(opening, true)
-	if len(opponentHand) == 0 {
-		winner := opponent
+	g.openingPending = true
+	g.openingPlayer = opponent
+	g.openingCard = nil
+	g.openingResponder = player
+	g.current = opponent
+	return nil
+}
+
+func (g *LadderGame) PlayOpeningCard() error {
+	if g == nil || g.winner != nil {
+		return ErrGameOver
+	}
+	if !g.openingPending || g.openingCard == nil {
+		return ErrOpeningPending
+	}
+	if g.openingPlayer != g.current {
+		return ErrWrongTurn
+	}
+	if !validPlayer(g.openingPlayer) {
+		return fmt.Errorf("%w: unknown player %d", ErrIllegalPlay, g.openingPlayer)
+	}
+	if cardIndex(g.handFor(g.openingPlayer), *g.openingCard) < 0 {
+		return ErrCardNotInHand
+	}
+	player, opening := g.openingPlayer, *g.openingCard
+	g.openingPending = false
+	g.openingPlayer = 0
+	g.openingCard = nil
+	g.openingResponder = 0
+	g.openChainWithCard(player, opening)
+	if g.winner == nil {
+		g.current = otherPlayer(player)
+	}
+	return nil
+}
+
+func (g *LadderGame) OpenStack(player PlayerID, card game.Card) error {
+	if g == nil || g.winner != nil {
+		return ErrGameOver
+	}
+	if !g.openingPending || g.openingCard != nil {
+		return ErrOpeningPending
+	}
+	if !validPlayer(player) {
+		return fmt.Errorf("%w: unknown player %d", ErrIllegalPlay, player)
+	}
+	if player != g.openingPlayer || player != g.current {
+		return ErrWrongTurn
+	}
+	hand := g.handFor(player)
+	index := cardIndex(hand, card)
+	if index < 0 {
+		return ErrCardNotInHand
+	}
+	responder := g.openingResponder
+	hand = removeCardAt(hand, index)
+	g.setHand(player, hand)
+	g.playedCards = nil
+	g.openingPending = false
+	g.openingPlayer = 0
+	g.openingResponder = 0
+	g.setChainFromPlayedCard(card)
+	if len(hand) == 0 {
+		winner := player
 		g.winner = &winner
 		return nil
 	}
-	g.current = player
+	g.current = responder
 	return nil
 }
 
@@ -341,16 +502,31 @@ func (g *LadderGame) openFreshChain(player PlayerID) {
 		g.winner = &winner
 		return
 	}
-	opening := chooseOpening(hand, g.wildFaceRaw)
+	g.openChainWithCard(player, chooseOpening(hand, g.wildFaceRaw))
+}
+
+func (g *LadderGame) openInitiativeChain(player PlayerID) bool {
+	opening, found := lowestCardOfSuit(g.handFor(player), g.initiativeSuit)
+	if !found {
+		return false
+	}
+	g.openChainWithCard(player, opening)
+	return true
+}
+
+func (g *LadderGame) openChainWithCard(player PlayerID, opening game.Card) {
+	hand := g.handFor(player)
 	g.setHand(player, removeCardAt(hand, cardIndex(hand, opening)))
-	g.setChainFromPlayedCard(opening, true)
+	g.setChainFromPlayedCard(opening)
 	if len(g.handFor(player)) == 0 {
 		winner := player
 		g.winner = &winner
 	}
 }
 
-func (g *LadderGame) setChainFromPlayedCard(card game.Card, fresh bool) {
+func (g *LadderGame) setChainFromPlayedCard(card game.Card) {
+	g.playedCards = append(g.playedCards, card)
+	g.chainCard = cloneCard(&card)
 	if card.Face == g.wildFaceRaw {
 		g.chainIsWild = true
 		g.chainSuit = suitPointer(card.Suit)
@@ -358,9 +534,6 @@ func (g *LadderGame) setChainFromPlayedCard(card game.Card, fresh bool) {
 		return
 	}
 	value := card.Face + g.sharedStats.Shift
-	if !fresh {
-		value = Effective(card, g.chainSuit, g.sharedStats.Shift, g.sharedStats.Favor)
-	}
 	g.chainIsWild = false
 	g.chainValue = &value
 	g.chainSuit = suitPointer(card.Suit)
@@ -487,6 +660,18 @@ func lowestFaceOfSuit(hand []game.Card, suit game.Suit) (int, bool) {
 	return lowest, found
 }
 
+func lowestCardOfSuit(hand []game.Card, suit game.Suit) (game.Card, bool) {
+	var lowest game.Card
+	found := false
+	for _, card := range hand {
+		if card.Suit == suit && (!found || card.Face < lowest.Face) {
+			lowest = card
+			found = true
+		}
+	}
+	return lowest, found
+}
+
 func lowestFace(hand []game.Card) int {
 	lowest := 10
 	for _, card := range hand {
@@ -574,6 +759,14 @@ func clamp(value, minimum, maximum int) int {
 }
 
 func cloneInt(value *int) *int {
+	if value == nil {
+		return nil
+	}
+	copy := *value
+	return &copy
+}
+
+func cloneCard(value *game.Card) *game.Card {
 	if value == nil {
 		return nil
 	}

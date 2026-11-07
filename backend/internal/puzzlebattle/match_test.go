@@ -98,6 +98,24 @@ func TestNewAndReadinessCountdown(t *testing.T) {
 	}
 }
 
+func TestStartImmediatelyStartsRoundOne(t *testing.T) {
+	now := time.Date(2026, 1, 2, 3, 4, 5, 0, time.UTC)
+	match := testMatch(t, 13, now)
+	if err := match.StartImmediately(now); err != nil {
+		t.Fatal(err)
+	}
+	if match.Status != PhaseRoundOne || match.Rounds[0].Status != RoundStatusActive ||
+		!match.Rounds[0].StartedAt.Equal(now) || match.Deadline == nil {
+		t.Fatalf("immediate start did not initialize round one: %+v", match)
+	}
+	if !match.Ready[0] || !match.Ready[1] {
+		t.Fatalf("immediate start did not ready both players: %v", match.Ready)
+	}
+	if err := match.StartImmediately(now); err == nil {
+		t.Fatal("immediate start accepted a match that had already started")
+	}
+}
+
 func TestTogglePairSubmitAndPrivateView(t *testing.T) {
 	now := time.Date(2026, 2, 3, 4, 5, 6, 0, time.UTC)
 	match := testMatch(t, 17, now)
@@ -195,6 +213,44 @@ func TestSubmitRequiresAllPairsAndInputValidation(t *testing.T) {
 	}
 	if _, err := match.ViewFor(-1, start); !errors.Is(err, ErrInvalidPlayer) {
 		t.Fatalf("view invalid player error = %v", err)
+	}
+}
+
+func TestSubmitPairLocksEachPairAndSubmitsOnTheLastPair(t *testing.T) {
+	now := time.Date(2026, 2, 3, 4, 5, 6, 0, time.UTC)
+	match := testMatch(t, 23, now)
+	start := startMatch(t, match, now)
+	pairs := [2][]Pair{
+		{{FirstIndex: 0, SecondIndex: 1}, {FirstIndex: 2, SecondIndex: 3}, {FirstIndex: 4, SecondIndex: 5}},
+		{{FirstIndex: 0, SecondIndex: 2}, {FirstIndex: 1, SecondIndex: 3}, {FirstIndex: 4, SecondIndex: 5}},
+	}
+
+	if err := match.SubmitPair(0, 0, 1, start); err != nil {
+		t.Fatal(err)
+	}
+	if err := match.SubmitPair(0, 0, 6, start); err == nil {
+		t.Fatal("a card from an already submitted pair was accepted again")
+	}
+	if match.Rounds[0].Players[0].Submitted {
+		t.Fatal("player submitted before completing all required pairs")
+	}
+
+	for _, pair := range pairs[0][1:] {
+		if err := match.SubmitPair(0, pair.FirstIndex, pair.SecondIndex, start); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if !match.Rounds[0].Players[0].Submitted || match.Status != PhaseRoundOne {
+		t.Fatalf("last pair did not submit the player's round: status=%q state=%+v", match.Status, match.Rounds[0].Players[0])
+	}
+
+	for _, pair := range pairs[1] {
+		if err := match.SubmitPair(1, pair.FirstIndex, pair.SecondIndex, start); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if match.Status != PhaseRoundTwo {
+		t.Fatalf("round two did not start after both players submitted their last pair: %q", match.Status)
 	}
 }
 

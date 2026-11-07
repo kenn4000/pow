@@ -87,8 +87,6 @@ function AuthForm({ onLogin }) {
 }
 
 function App() {
-  const frontendBuild = { hash: import.meta.env.VITE_BUILD_HASH || 'unknown', date: import.meta.env.VITE_BUILD_DATE || 'unknown' };
-  const [backendBuild, setBackendBuild] = useState({ hash: 'unknown', date: 'unknown' });
   const [user, setUser] = useState(undefined);
   const accountScreens = { 'saved-games': 'history', admin: 'admin', cards: 'cards', password: 'password' };
   const routeScreen = () => accountScreens[window.location.hash.split('/')[1]] || 'game';
@@ -99,17 +97,16 @@ function App() {
   const accountBar = useRef(null);
 
   useEffect(() => {
-    fetch(`${import.meta.env.BASE_URL}build-info`).then(response => response.ok ? response.json() : null).then(info => { if (info) setBackendBuild(info); }).catch(() => {});
-  }, []);
-
-  useEffect(() => {
-    if (!accountBar.current) return;
+    if (!accountBar.current) {
+      document.documentElement.style.setProperty('--account-height', '0px');
+      return;
+    }
     const observer = new ResizeObserver(([entry]) => {
       document.documentElement.style.setProperty('--account-height', `${entry.target.getBoundingClientRect().height}px`);
     });
     observer.observe(accountBar.current);
     return () => observer.disconnect();
-  }, [user]);
+  }, [user, screen]);
 
   function navigate(path) {
     window.location.hash = `/${path}`;
@@ -164,7 +161,7 @@ function App() {
   if (user === undefined) return <main className="account-page"><p role="status">{error || 'Loading account…'}</p>{error && <button onClick={loadAccount}>Retry</button>}</main>;
   if (!user) return <AuthForm onLogin={setUser} />;
   return <>
-    <header ref={accountBar} className={`account-bar${accountOpen ? ' account-open' : ''}`}>
+    {screen !== 'game' && <header ref={accountBar} className={`account-bar${accountOpen ? ' account-open' : ''}`}>
       <span className="account-identity">{displayName
         ? <><strong className="account-name">{displayName}</strong><small className="account-email">{user.email}</small></>
         : user.email}{user.role === 'admin' && <small className="role-badge">Administrator</small>}</span>
@@ -179,13 +176,8 @@ function App() {
           <button onClick={logout}>Sign out</button>
         </span>}
       </nav>
-      <section className="build-info" aria-label="Build information">
-        <span className="build-info-title">Build information</span>
-        <span className="build-version"><span>Frontend</span><code>{frontendBuild.hash}</code><time>{frontendBuild.date}</time></span>
-        <span className="build-version"><span>Backend</span><code>{backendBuild.hash}</code><time>{backendBuild.date}</time></span>
-      </section>
       {error && <p role="alert">{error}</p>}
-    </header>
+    </header>}
     {screen === 'admin' && user.role === 'admin'
       ? <AdminUsers currentUser={user} onRoleChange={(id, role) => { if (id === user.id) { setUser({ ...user, role }); if (role !== 'admin') navigate('home'); } }} />
       : screen === 'cards' ? <CardCatalog />

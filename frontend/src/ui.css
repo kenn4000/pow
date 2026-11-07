@@ -1,4 +1,4 @@
-:root { --account-height: 62px; }
+:root { --account-height: 0px; }
 [hidden] { display: none !important; }
 a { color: #f4d46f; }
 button, input, select, summary { touch-action: manipulation; }
@@ -16,14 +16,12 @@ button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible
 .rules-guide li + li { margin-top: .5rem; }
 .account-toggle { display: none; }
 .account-identity { overflow-wrap: anywhere; }
-.shell, .dashboard-shell { width: min(1100px, 100%); height: calc(100dvh - var(--account-height)); min-height: 0; border-radius: 14px; }
+.shell, .dashboard-shell { width: min(430px, 100%); max-width: 430px; height: calc(100dvh - var(--account-height)); min-height: 0; border-radius: 14px; }
 .dashboard-shell { padding-bottom: 76px; }
-.dashboard-footer { width: min(1100px, 100%); font-size: 14px; }
+.dashboard-footer { width: min(430px, 100%); max-width: 430px; font-size: 14px; }
 .dashboard-footer button { font-size: 12px; min-height: 46px; }
-.dashboard-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); grid-template-areas: 'commander actions' 'onboarding actions' 'offer offer'; align-content: start; align-items: start; padding-bottom: 20px; }
-.dashboard-grid > .commander-card { grid-area: commander; grid-row: auto; }
-#dashboardOnboarding { grid-area: onboarding; }
-#dashboardQuickActions { grid-area: actions; }
+.dashboard-grid { display: grid; grid-template-columns: minmax(0, 1fr); grid-template-areas: 'offer' 'actions'; align-content: start; align-items: start; padding-bottom: 20px; }
+#dashboardQuickActions { grid-area: actions; width: 100%; }
 #dashboardShop { grid-area: offer; grid-template-columns: minmax(0,1fr) 140px; grid-template-areas: 'heading artwork' 'offeritem artwork'; align-items: center; align-content: center; }
 #dashboardShop .shop-preview-head { grid-area: heading; }
 #dashboardShop .shop-preview-item { grid-area: offeritem; }
@@ -49,10 +47,9 @@ button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible
 .battle-log li { padding: 8px 0; border-bottom: 1px solid #344159; }
 .dashboard-panel p { line-height: 1.55; color: #c1cbda; }
 .dashboard-panel h2, .feature-section h2 { font: 700 15px 'Segoe UI', sans-serif; letter-spacing: .03em; text-transform: none; }
-.dashboard-resource-copy span, .commander-quick-stats span { font-size: 11px; }
-.dashboard-resource strong, .commander-quick-stats strong { font-size: 14px; }
-.dashboard-commander, .featured-copy span:last-child { font-size: 13px; }
-.featured-copy .eyebrow, .shop-preview-head .eyebrow, .shop-preview-open { font-size: 11px; }
+.dashboard-resource strong { font-size: 14px; }
+.dashboard-commander { font-size: 13px; }
+.shop-preview-head .eyebrow { font-size: 11px; }
 .dashboard-action { font-size: 14px; }
 .dashboard-action.play small, .shop-preview-item small, .shop-preview-price { font-size: 12px; }
 .feature-balances { position: relative; z-index: 1; padding: 10px 14px; font-size: 14px; background: #101624; color: #f1d578; }
@@ -74,16 +71,47 @@ button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible
 .filters label { display: grid; gap: .35rem; }
 .feature-section select, .feature-section input { max-width: 100%; padding: .6rem; color: #eef1f7; background: #101624; border: 1px solid #62718b; border-radius: 6px; font: inherit; }
 .affordability { color: #f2ce78 !important; }
-.battle-help { position: relative; grid-area: help; font-size: 14px; padding: .7rem; border: 1px solid #344159; border-radius: 8px; line-height: 1.5; }
-.battle-help summary { cursor: pointer; }
-.board { display: grid; grid-template-columns: 1fr 1fr; grid-template-areas: 'track track' 'info info' 'battle players' 'actions players' 'help help'; align-content: start; align-items: start; gap: 14px; }
-#gameShell[data-variant="puzzler"] .board { grid-template-columns: minmax(0, 1fr); grid-template-areas: 'track' 'battle' 'players' 'help'; }
-#gameShell[data-variant="puzzler"] .actions { display: none; }
-#gameShell[data-variant="rummy"] .board { grid-template-columns: minmax(0, 1fr); grid-template-areas: 'battle' 'actions' 'help'; }
+.board { display: grid; grid-template-columns: 1fr 1fr; grid-template-areas: 'track track' 'info info' 'battle players' 'actions players'; align-content: start; align-items: start; gap: 14px; }
+#gameShell[data-variant="puzzler"] .board { grid-template-columns: minmax(0, 1fr); grid-template-areas: 'track' 'info' 'battle' 'players' 'actions'; }
+#gameShell[data-variant="rummy"] .board { grid-template-columns: minmax(0, 1fr); grid-template-areas: 'info' 'battle' 'actions'; }
 #gameShell[data-variant="rummy"] #players { display: none; }
-#gameShell[data-variant="poker"] .board { grid-template-columns: minmax(0, 1fr); grid-template-rows: max-content max-content max-content max-content; grid-template-areas: 'battle' 'players' 'actions' 'help'; }
+#gameShell[data-variant="rummy"] .match-info {
+  grid-template-columns: minmax(0, 1fr) minmax(110px, 1.2fr) minmax(0, 1fr);
+  grid-template-areas: 'white center black'; gap: 5px; margin: 0; padding: 8px;
+  border: 1px solid #344159; border-radius: 10px; background: #101624;
+}
+#gameShell[data-variant="rummy"] #whiteHeroPanel { grid-area: white; }
+#gameShell[data-variant="rummy"] .match-center { grid-area: center; }
+#gameShell[data-variant="rummy"] #blackHeroPanel { grid-area: black; }
+#gameShell[data-variant="rummy"] .hero-portrait { width: clamp(54px, 16vw, 72px); }
+#gameShell[data-variant="poker-duel"] .match-info {
+  grid-template-columns: minmax(0, 1fr) minmax(110px, 1.2fr) minmax(0, 1fr);
+  grid-template-areas: 'white center black'; gap: 5px; margin: 0; padding: 8px;
+  border: 1px solid #344159; border-radius: 10px; background: #101624;
+}
+#gameShell[data-variant="poker-duel"] #whiteHeroPanel { grid-area: white; }
+#gameShell[data-variant="poker-duel"] .match-center { grid-area: center; }
+#gameShell[data-variant="poker-duel"] #blackHeroPanel { grid-area: black; }
+#gameShell[data-variant="poker-duel"] .hero-portrait { width: clamp(54px, 16vw, 72px); }
+#gameShell[data-variant="poker-duel"] .poker-duel-players { grid-template-columns: minmax(0, 1fr); }
+#gameShell[data-variant="ladder"] .board { grid-template-columns: minmax(0, 1fr); grid-template-areas: 'info' 'battle' 'actions'; }
+#gameShell[data-variant="ladder"] #players { display: none; }
+#gameShell[data-variant="ladder"] .hero-portrait { width: clamp(54px, 16vw, 72px); }
+#gameShell[data-variant="tug-war"] .board { grid-template-columns: minmax(0, 1fr); grid-template-areas: 'info' 'battle' 'actions'; }
+#gameShell[data-variant="tug-war"] #players { display: none; }
+#gameShell[data-variant="puzzle-battle"] .board { grid-template-columns: minmax(0, 1fr); grid-template-areas: 'battle'; }
+#gameShell[data-variant="abandon-duel"] .board {
+  grid-template-columns: minmax(0, 1fr); grid-template-rows: max-content max-content max-content;
+  grid-template-areas: 'info' 'battle' 'actions';
+}
+#gameShell[data-variant="abandon-duel"] #players { display: none; }
+#gameShell[data-variant="puzzle-battle"] #matchInfo,
+#gameShell[data-variant="puzzle-battle"] #players,
+#gameShell[data-variant="puzzle-battle"] .actions { display: none !important; }
+.puzzle-battle-board .card.used { filter: grayscale(1); opacity: .42; }
+#gameShell[data-variant="poker"] .board { grid-template-columns: minmax(0, 1fr); grid-template-rows: max-content max-content max-content; grid-template-areas: 'battle' 'players' 'actions'; }
 #gameShell[data-variant="poker"] .players { gap: 12px; }
-#gameShell[data-variant="poker-duel"] .board { grid-template-columns: minmax(0, 1fr); grid-template-areas: 'battle' 'actions' 'help'; }
+#gameShell[data-variant="poker-duel"] .board { grid-template-columns: minmax(0, 1fr); grid-template-areas: 'info' 'battle' 'actions'; }
 #gameShell[data-variant="poker-duel"] #players { display: none; }
 .track { grid-area: track; }
 .match-info { grid-area: info; margin: 0; }
@@ -96,12 +124,12 @@ button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible
 .suit-name { display: block; color: #eef1f7; text-align: center; font-size: 12px; background: #101624; }
 .suit-cycle { max-width: 200px; margin-bottom: 10px; }
 .hero-score.black { color: #e6ecf7; text-shadow: none; }
-.hero-portrait { width: clamp(102px, 14.4vw, 179px); }
+.hero-portrait { width: clamp(54px, 16vw, 72px); }
 .match-rules { font-size: 13px; }
 .round-label { font-size: 12px; }
 .row-label { font-size: 12px; }
 .modal-backdrop { z-index: 50; overflow-y: auto; }
-.modal { width: min(600px, 100%); max-height: calc(100dvh - 36px); overflow-y: auto; }
+.modal { width: min(430px, 100%); max-width: 430px; max-height: calc(100dvh - 36px); overflow-y: auto; }
 .modal .mode-list small { display: block; font-weight: 400; font-size: 12px; margin-top: 4px; }
 .modal a { display: inline-block; margin-top: 10px; }
 .score-details { text-align: left; margin-block: 14px; padding: 12px; border: 1px solid #526047; border-radius: 8px; }
@@ -132,7 +160,7 @@ button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible
 .artwork-error { position: absolute; inset: 0; display: flex; flex-direction: column; justify-content: center; gap: 8px; padding: 12px; color: #f2d174; font-size: 13px; line-height: 1.4; }
 .artwork-error > span { color: #b8c6db; font-size: 12px; }
 @media (max-width: 700px) {
-  :root { --account-height: 56px; }
+  :root { --account-height: 0px; }
   .auth-layout { grid-template-columns: 1fr; gap: 2rem; padding: 1rem; }
   .development-accounts { padding: 1rem; }
   .account-bar { min-height: 56px; padding: .45rem .65rem; position: relative; }
@@ -144,21 +172,16 @@ button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible
   .dashboard-grid { display: flex; flex-direction: column; }
   .dashboard-grid > * { width: 100%; }
   #dashboardQuickActions { order: 0; }
-  #dashboardCommanderCard { order: 1; }
-  #dashboardOnboarding { order: 2; }
-  #dashboardShop { order: 3; grid-template-columns: minmax(0,1fr) 82px; }
+  #dashboardShop { order: -1; grid-template-columns: minmax(0,1fr) 82px; }
   #dashboardShop .chroma-preview-frame { height: 110px; }
   .dashboard-brand { font-size: 16px; }
-  .featured-copy .eyebrow { font-size: 10px; letter-spacing: .06em; }
-  .dashboard-resource-copy span, .commander-quick-stats span { font-size: 10px; }
-  .commander-quick-stats strong { font-size: 12px; white-space: normal; }
   .feature-tabs { gap: 4px; padding: 6px; }
   .feature-tab { font-size: 12px; }
   .feature-content { padding: 10px 10px 24px; }
   .feature-balances { font-size: 12px; padding: 8px 12px; }
-  .board { grid-template-columns: 1fr; grid-template-areas: 'battle' 'players' 'actions' 'track' 'info' 'help'; gap: 10px; }
-  .hero-portrait { width: clamp(74px, 22.4vw, 109px); }
-  #gameShell[data-phase="commit"] .board { grid-template-areas: 'players' 'actions' 'track' 'info' 'battle' 'help'; }
+  .board { grid-template-columns: 1fr; grid-template-areas: 'track' 'info' 'battle' 'players' 'actions'; gap: 10px; }
+  .hero-portrait { width: clamp(54px, 16vw, 72px); }
+  #gameShell[data-phase="commit"] .board { grid-template-areas: 'track' 'info' 'players' 'actions' 'battle'; }
   #gameShell[data-phase="commit"] .empty-pile { display: none; }
   .player-panel { padding: 10px; }
   .player-heading { margin-bottom: 5px; }
@@ -186,6 +209,7 @@ button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible
 .battle.drafting { grid-template-columns: minmax(0, 1fr); min-height: 0; }
 .battle.drafting #battleVs, .battle.drafting #battleRight { display: none; }
 .battle.drafting #battleLeft { width: 100%; }
+.board.drafting { grid-template-columns: minmax(0, 1fr); grid-template-areas: 'track' 'info' 'battle' 'players' 'actions'; }
 .draft-battlefield { width: 100%; min-width: 0; }
 .draft-card-pool { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 8px; margin-top: 10px; }
 .draft-card-pool .card { width: clamp(48px, 8vw, 82px); height: clamp(62px, 10vw, 102px); justify-self: center; }
@@ -197,15 +221,37 @@ button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible
 .rummy-status { color: #f0d484; }
 .rummy-parameters { display: flex; gap: 8px 18px; flex-wrap: wrap; color: #c8d1df; font-size: 13px; }
 .rummy-parameters strong { color: #f0d484; }
-.rummy-piles { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
+.rummy-piles { display: grid; grid-template-columns: minmax(0, 1fr); gap: 12px; }
 .rummy-pile, .rummy-hand, .rummy-result { min-width: 0; padding: 12px; border: 1px solid #344159; border-radius: 10px; background: #101624; }
 .rummy-pile h3, .rummy-hand h3 { display: flex; justify-content: space-between; gap: 8px; margin-bottom: 10px; font-size: 14px; }
 .rummy-pile h3 span, .rummy-hand h3 span { color: #aebbd0; font-size: 12px; font-weight: 400; }
+.rummy-pile { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); align-items: start; gap: 12px; }
+.rummy-pile-top, .rummy-opponent-last { display: grid; justify-items: center; align-content: start; gap: 8px; min-width: 0; }
+.rummy-pile-top h3, .rummy-opponent-last h3 { width: 100%; justify-content: center; text-align: center; }
 .rummy-pile .card { width: clamp(56px, 8vw, 88px); height: clamp(74px, 11vw, 112px); }
-.rummy-card-row, .rummy-result-cards { display: flex; flex-wrap: wrap; justify-content: center; gap: 8px; min-height: 76px; }
-.rummy-card-row .card, .rummy-result-cards .card { width: clamp(46px, 7vw, 68px); height: clamp(60px, 9vw, 88px); }
+.rummy-opponent-cards { display: flex; justify-content: center; flex-wrap: wrap; gap: 8px; min-height: 74px; }
+.rummy-opponent-cards .card { width: clamp(42px, 6vw, 64px); height: clamp(58px, 8vw, 84px); }
+.rummy-pile-details { grid-column: 1 / -1; display: flex; justify-content: space-between; flex-wrap: wrap; gap: 6px 12px; margin-top: 4px; padding-top: 10px; border-top: 1px solid #344159; color: #c8d1df; font-size: 13px; }
+.rummy-pile-details strong { color: #f0d484; }
+.rummy-turn-actions { display: flex; justify-content: center; flex-wrap: wrap; gap: 8px; }
+.rummy-turn-actions .action { flex: 1 1 150px; max-width: 260px; min-height: 42px; }
+.rummy-card-row { display: grid; grid-template-columns: repeat(var(--rummy-hand-columns, 4), minmax(0, 1fr)); justify-items: center; gap: 8px; min-height: 76px; }
+.rummy-card-row[data-hand-size="5"] { --rummy-hand-columns: 5; }
+.rummy-card-row[data-hand-size="6"] { --rummy-hand-columns: 3; }
+.rummy-card-row[data-hand-size="7"],
+.rummy-card-row[data-hand-size="8"],
+.rummy-card-row[data-hand-size="11"],
+.rummy-card-row[data-hand-size="12"] { --rummy-hand-columns: 4; }
+.rummy-card-row[data-hand-size="9"],
+.rummy-card-row[data-hand-size="10"] { --rummy-hand-columns: 5; }
+.rummy-card-row .empty-row { grid-column: 1 / -1; }
+.rummy-result-cards { display: flex; flex-wrap: wrap; justify-content: center; gap: 8px; min-height: 76px; }
+.rummy-card-row .card { width: min(100%, clamp(54px, 16vw, 78px)); height: clamp(72px, 21vw, 104px); }
+.rummy-result-cards .card { width: clamp(46px, 7vw, 68px); height: clamp(60px, 9vw, 88px); }
 .rummy-card-row .card.chosen { outline: 3px solid #f0d484; outline-offset: 2px; transform: translateY(-4px); }
 .rummy-selection { margin: 8px 0 0; color: #f0d484; text-align: center; }
+.rummy-discard-choices { display: flex; justify-content: center; flex-wrap: wrap; gap: 8px; margin-top: 12px; }
+.rummy-discard-choices .action { flex: 1 1 130px; min-height: 38px; }
 .rummy-results { display: grid; gap: 12px; }
 .rummy-result h3 { margin: 0; }
 .rummy-result ul { padding-left: 20px; }
@@ -241,6 +287,7 @@ button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible
 .poker-next-hero { display: grid; gap: 5px; max-width: 320px; margin-block: 10px; }
 .poker-next-hero select { min-height: 38px; padding: 6px 10px; }
 .poker-duel-overview { display: grid; gap: 14px; width: min(100%, 1120px); margin-inline: auto; text-align: left; }
+.poker-duel-overview > .poker-duel-clock { margin: 0; text-align: right; }
 .poker-duel-heading, .poker-duel-player-heading { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
 .poker-duel-heading h2, .poker-duel-heading p, .poker-duel-player-heading h3, .poker-duel-player-heading span { margin: 0; }
 .poker-duel-clock { color: #f0d484; font-size: 17px; }
@@ -254,12 +301,25 @@ button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible
 .poker-duel-pile { min-width: 0; padding: 8px; border: 1px solid #344159; border-radius: 8px; }
 .poker-duel-pile h4, .poker-duel-held h4 { display: flex; justify-content: space-between; gap: 8px; margin: 0 0 8px; font-size: 13px; }
 .poker-duel-pile .card { width: 42px; height: 56px; }
-.poker-duel-cards { display: flex; align-items: center; flex-wrap: wrap; gap: 6px; min-height: 58px; }
+.poker-duel-cards { display: flex; align-items: center; flex-wrap: wrap; gap: 6px; min-height: 58px; padding-top: 14px; }
 .poker-duel-cards .card { width: clamp(36px, 4vw, 48px); height: clamp(48px, 5.3vw, 64px); }
 .poker-duel-table { display: grid; gap: 8px; }
 .poker-duel-table .poker-slot { padding: 8px; }
 .poker-duel-table .poker-slot h4 { display: flex; justify-content: space-between; margin: 0 0 6px; font-size: 13px; }
 .poker-duel-table .poker-slot h4 span { color: #aebbd0; font-weight: 400; }
+.poker-duel-table .poker-slot.opponent-turn-active { animation: poker-duel-turn-flash 1.2s ease-in-out infinite; }
+@keyframes poker-duel-turn-flash {
+  0%, 100% { border-color: #344159; box-shadow: 0 0 0 0 #f0d48400; }
+  50% { border-color: #f0d484; box-shadow: 0 0 0 3px #f0d48499; }
+}
+.poker-duel-placement-actions { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 5px; }
+.poker-duel-placement-actions .action {
+  width: 100%; min-width: 0; min-height: 40px; padding: 0 3px;
+  font-size: clamp(10px, 2.8vw, 13px); white-space: nowrap;
+}
+#gameShell .poker-duel-placement-actions .action:disabled {
+  border-color: #4b5465; background: #363d49; color: #a0a8b5; opacity: 1;
+}
 .poker-duel-held { padding: 9px; }
 .poker-duel-held .card.chosen { outline: 3px solid #f0d484; outline-offset: 2px; transform: translateY(-4px); }
 .poker-duel-score, .poker-duel-log { grid-column: 1 / -1; }
@@ -269,22 +329,27 @@ button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible
 .poker-duel-final-score h3, .poker-duel-final-score p { margin: 4px 0; }
 .poker-duel-result-log { text-align: left; }
 .abandon-duel-overview { display: grid; gap: 12px; width: min(100%, 1120px); margin-inline: auto; text-align: left; }
-.abandon-duel-overview .variant-panel { display: grid; gap: 8px; }
-.abandon-duel-overview .variant-panel > p { margin: 0; }
-.abandon-duel-scores { display: flex; flex-wrap: wrap; gap: 8px 18px; color: #d3d9e4; }
+.abandon-round-scores { color: #e9ece8; font-size: clamp(10px, 1.3vw, 13px); line-height: 1.25; }
+.abandon-round-scores span { display: block; }
 .abandon-duel-board { grid-template-columns: repeat(4, minmax(0, 1fr)); }
-.abandon-duel-players { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
+.abandon-duel-jail { display: grid; gap: 8px; }
+.abandon-duel-jail-row { display: grid; grid-template-columns: 58px minmax(0, 1fr); align-items: center; gap: 7px; }
+.abandon-duel-jail-label { color: #d3d9e4; font-size: 12px; }
+.abandon-duel-jail-cells { display: grid; grid-template-columns: repeat(6, minmax(0, 1fr)); gap: 5px; }
+.abandon-duel-jail-cells .track-cell { height: 72px; }
+.abandon-duel-players { display: grid; grid-template-columns: minmax(0, 1fr); gap: 12px; }
 .abandon-duel-player { display: grid; align-content: start; gap: 10px; min-width: 0; }
-.abandon-duel-prisoners { display: grid; gap: 6px; color: #d3d9e4; font-size: 13px; }
-.abandon-duel-prisoner-cards { display: flex; flex-wrap: wrap; gap: 5px; min-height: 54px; }
-.abandon-duel-prisoner-cards .card { width: 38px; height: 52px; }
 @media (max-width: 760px) {
   .poker-duel-players { grid-template-columns: minmax(0, 1fr); }
   .poker-duel-score, .poker-duel-log { grid-column: auto; }
-  .abandon-duel-players { grid-template-columns: minmax(0, 1fr); }
 }
 @media (max-width: 560px) {
   .poker-duel-final-scores { grid-template-columns: minmax(0, 1fr); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .poker-duel-table .poker-slot.opponent-turn-active {
+    animation: none; border-color: #f0d484; box-shadow: 0 0 0 2px #f0d48499;
+  }
 }
 @media (max-width: 680px) {
   .poker-score-hands { grid-template-columns: minmax(0, 1fr); }
@@ -333,10 +398,8 @@ html:has(.auth-layout), html:has(.auth-layout) body { min-height: 100%; backgrou
 @media (max-width: 700px) { .account-email { display: none; } }
 
 /* Iteration 12 · mobile Battle: keep the live score visible in the top bar */
-.top-score { display: none; margin: 0; }
 @media (max-width: 700px) {
   .topline { flex-wrap: wrap; row-gap: 4px; }
-  .top-score:not([hidden]) { display: block; padding: 2px 10px; border: 1px solid #7f6233; border-radius: 999px; background: #1f1a0e; color: #f6e3a6; font-size: 12px; font-weight: 800; white-space: nowrap; }
 }
 
 /* Iteration 13 · Camp Draw */
@@ -461,7 +524,8 @@ details.mission > summary .mission-title { flex: 1; }
 .rotate-colors { border-color: #8d99ad; background: #1a2333; }
 
 /* Iteration 24 · CR-1/CR-2: account screens share the game shell's width and heading style */
-.account-page:not(.auth-layout):not(.password-page) { max-width: 1100px; box-sizing: border-box; }
+.account-page { width: min(430px, 100%); max-width: 430px; box-sizing: border-box; }
+.account-page.auth-layout { grid-template-columns: minmax(0, 1fr); }
 .account-page > h1 { color: #f6d46f; font: 800 26px Georgia, "Times New Roman", serif; letter-spacing: .02em; }
 .account-page > h2, .account-page section > h2 { color: #f3f4ef; font-family: Georgia, "Times New Roman", serif; }
 

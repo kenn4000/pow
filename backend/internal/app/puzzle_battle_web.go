@@ -30,12 +30,14 @@ type puzzleBattleQueryRower interface {
 }
 
 type puzzleBattleRequest struct {
-	Action    string `json:"action"`
-	MatchMode string `json:"matchMode"`
-	HeroID    string `json:"heroId"`
-	Recipient string `json:"recipient"`
-	InviteID  string `json:"inviteId"`
-	Index     int    `json:"index"`
+	Action      string `json:"action"`
+	MatchMode   string `json:"matchMode"`
+	HeroID      string `json:"heroId"`
+	Recipient   string `json:"recipient"`
+	InviteID    string `json:"inviteId"`
+	Index       int    `json:"index"`
+	FirstIndex  int    `json:"firstIndex"`
+	SecondIndex int    `json:"secondIndex"`
 }
 
 type puzzleBattleInvite struct {
@@ -68,13 +70,15 @@ type puzzleBattleHistoryEntry struct {
 }
 
 type puzzleBattleResponse struct {
-	Status    string                     `json:"status"`
-	MatchMode string                     `json:"matchMode,omitempty"`
-	Match     *puzzleBattlePublicMatch   `json:"match,omitempty"`
-	Incoming  []puzzleBattleInvite       `json:"incomingInvites"`
-	Outgoing  []puzzleBattleInvite       `json:"outgoingInvites"`
-	History   []puzzleBattleHistoryEntry `json:"history"`
-	InviteID  string                     `json:"inviteId,omitempty"`
+	Status      string                     `json:"status"`
+	MatchMode   string                     `json:"matchMode,omitempty"`
+	Match       *puzzleBattlePublicMatch   `json:"match,omitempty"`
+	Payout      *puzzlebattle.RewardPayout `json:"payout,omitempty"`
+	CPUPractice bool                       `json:"cpuPractice,omitempty"`
+	Incoming    []puzzleBattleInvite       `json:"incomingInvites"`
+	Outgoing    []puzzleBattleInvite       `json:"outgoingInvites"`
+	History     []puzzleBattleHistoryEntry `json:"history"`
+	InviteID    string                     `json:"inviteId,omitempty"`
 }
 
 type puzzleBattleHistoryResponse struct {
@@ -188,6 +192,7 @@ func (s *webServer) getPuzzleBattle(w http.ResponseWriter, r *http.Request, user
 		}
 		response.Match = &public
 		response.Status, response.MatchMode = match.Status, match.MatchMode
+		response.Payout = puzzleBattlePayoutForPlayer(match, player)
 	} else {
 		var queuedMode string
 		if err := tx.QueryRowContext(r.Context(), "SELECT match_mode FROM puzzle_battle_queue WHERE user_id=$1", user.ID).Scan(&queuedMode); err != nil && !errors.Is(err, sql.ErrNoRows) {
@@ -215,6 +220,7 @@ func (s *webServer) getPuzzleBattle(w http.ResponseWriter, r *http.Request, user
 				}
 				response.Match = &public
 				response.Status = puzzlebattle.PhaseComplete
+				response.Payout = puzzleBattlePayoutForPlayer(match, player)
 			}
 		}
 	}
@@ -735,6 +741,8 @@ func (s *webServer) handlePuzzleBattleAction(w http.ResponseWriter, r *http.Requ
 			err = match.SetReady(player, now)
 		case "toggle-pair":
 			err = match.TogglePair(player, request.Index, now)
+		case "submit-pair":
+			err = match.SubmitPair(player, request.FirstIndex, request.SecondIndex, now)
 		case "submit":
 			err = match.Submit(player, now)
 		default:
@@ -797,7 +805,18 @@ func (s *webServer) handlePuzzleBattleAction(w http.ResponseWriter, r *http.Requ
 		databaseError(w, err)
 		return
 	}
-	writeJSON(w, http.StatusOK, puzzleBattleResponse{Status: match.Status, MatchMode: match.MatchMode, Match: &public})
+	writeJSON(w, http.StatusOK, puzzleBattleResponse{
+		Status: match.Status, MatchMode: match.MatchMode, Match: &public,
+		Payout: puzzleBattlePayoutForPlayer(match, player),
+	})
+}
+
+func puzzleBattlePayoutForPlayer(match *puzzlebattle.Match, player int) *puzzlebattle.RewardPayout {
+	if match == nil || match.Payouts == nil || player < 0 || player >= len(match.Payouts) {
+		return nil
+	}
+	payout := (*match.Payouts)[player]
+	return &payout
 }
 
 func (s *webServer) handlePuzzleBattleHistory(w http.ResponseWriter, r *http.Request) {
@@ -943,6 +962,13 @@ func buildPuzzleBattlePublicMatch(ctx context.Context, queryer puzzleBattleQuery
 }
 
 func (s *webServer) savePuzzleBattleTx(ctx context.Context, tx *sql.Tx, match *puzzlebattle.Match, wasActive bool, now time.Time) error {
+	if wasActive && match.Status == puzzlebattle.PhaseComplete {
+		var payouts [2]puzzlebattle.RewardPayout
+		if err := creditPuzzleBattleProfiles(ctx, tx, match, &payouts); err != nil {
+			return err
+		}
+		match.Payouts = &payouts
+	}
 	state, err := json.Marshal(match)
 	if err != nil {
 		return fmt.Errorf("encode Puzzle Battle state: %w", err)
@@ -967,11 +993,6 @@ func (s *webServer) savePuzzleBattleTx(ctx context.Context, tx *sql.Tx, match *p
 		state, result, status, match.LastHeartbeatAt[0], match.LastHeartbeatAt[1], now, completedAt, match.ID)
 	if err != nil {
 		return fmt.Errorf("save Puzzle Battle state: %w", err)
-	}
-	if wasActive && match.Status == puzzlebattle.PhaseComplete {
-		if err := creditPuzzleBattleProfiles(ctx, tx, match); err != nil {
-			return err
-		}
 	}
 	return nil
 }
@@ -1095,13 +1116,18 @@ func queryPuzzleBattleHistory(ctx context.Context, queryer interface {
 	return matches, nil
 }
 
-func creditPuzzleBattleProfiles(ctx context.Context, tx *sql.Tx, match *puzzlebattle.Match) error {
+func creditPuzzleBattleProfiles(ctx context.Context, tx *sql.Tx, match *puzzlebattle.Match, payouts *[2]puzzlebattle.RewardPayout) error {
 	if match.Result == nil {
 		return errors.New("completed Puzzle Battle has no result")
 	}
+	if payouts == nil {
+		return errors.New("Puzzle Battle payout storage is required")
+	}
 	var players [2]*profile.Profile
 	indices := []int{0, 1}
-	if match.PlayerIDs[0] > match.PlayerIDs[1] {
+	if match.MatchMode == "cpu_easy" {
+		indices = []int{0}
+	} else if match.PlayerIDs[0] > match.PlayerIDs[1] {
 		indices[0], indices[1] = 1, 0
 	}
 	for _, player := range indices {
@@ -1115,85 +1141,14 @@ func creditPuzzleBattleProfiles(ctx context.Context, tx *sql.Tx, match *puzzleba
 		}
 	}
 	for player, p := range players {
-		opponent := 1 - player
-		seriesTie := match.MatchMode == "ranked" && match.RankedSeries != nil &&
-			match.RankedSeries.Complete && match.RankedSeries.Draw
-		won := match.Result.Winner == player || seriesTie
-		tied := match.Result.Draw
-		playerScore, opponentScore := match.Result.Scores[player], match.Result.Scores[opponent]
-		seat := game.SeatX
-		if player == 1 {
-			seat = game.SeatY
+		if p == nil {
+			continue
 		}
-		jails, captured, clashes := puzzleBattleResultCards(match.Result)
-		playerJail, opponentJail := jails[player], jails[opponent]
-		gameResult := game.MatchResult{
-			Won: won, Tied: tied, PlayerSeat: seat,
-			PlayerScore: playerScore, OpponentScore: opponentScore,
-			Games: []game.MatchGame{{
-				Won: won, PlayerSeat: seat, PlayerScore: playerScore, OpponentScore: opponentScore,
-				PlayerJail: playerJail, OpponentJail: opponentJail,
-				PlayerCapturedByRound: captured[player], OpponentCapturedByRound: captured[opponent],
-				Modifiers: match.Modifiers, PlayerHeroID: match.PlayerHeroIDs[player],
-				OpponentHeroID: match.PlayerHeroIDs[opponent], BountySuit: match.BountySuit,
-				Clashes: clashes[player], ScoreAfterR2: playerScore, OpponentAfterR2: opponentScore,
-			}},
-		}
-		mode := economy.ModeFriendCasual
-		if match.MatchMode == "ranked" {
-			mode = economy.ModeRanked
-		}
-		updateAchievementStats(p, gameResult, mode)
-		if won {
-			p.TotalWins++
-			p.CurrentStreak++
-			p.WinsSinceCampDraw++
-			if p.WinsSinceCampDraw >= lootbox.RequiredWins(p) {
-				if p.DrawsAvailable < lootbox.MaxDrawsStored {
-					p.DrawsAvailable++
-				}
-				p.WinsSinceCampDraw = 0
-			}
-			if p.CurrentStreak > p.BestStreak {
-				p.BestStreak = p.CurrentStreak
-			}
-		} else if tied {
-			p.TotalDraws++
-			p.CurrentStreak = 0
-		} else {
-			p.TotalLosses++
-			p.CurrentStreak = 0
-		}
-		payout, err := economy.CalculateMultiplayerPayout(
-			"puzzle-battle", playerScore, won, tied, won, "", mode, p, match.Result.CompletedAt,
-		)
+		payout, err := creditPuzzleBattleProfile(p, match, player)
 		if err != nil {
-			return fmt.Errorf("calculate Puzzle Battle rewards: %w", err)
+			return err
 		}
-		achievementContext := achievements.NewMatchContext(p, gameResult, economy.ModeID(mode), seat.String())
-		achievementContext.Now = match.Result.CompletedAt
-		for _, event := range achievements.EvaluateAll(achievementContext) {
-			applyUnlockEvent(p, event)
-		}
-		p.RecordMatch(profile.MatchRecord{
-			GameID: match.ID, At: match.Result.CompletedAt, Mode: economy.ModeID(mode),
-			PlayerSeat: seat.String(), PlayerScore: playerScore, OppScore: opponentScore, Won: won,
-			BountySuit:      achievements.SuitRoleID(match.BountySuit),
-			PlayerPrisoners: len(playerJail), OppPrisoners: len(opponentJail),
-			PlayerPrisonerSuits: puzzleBattleSuitCounts(playerJail), Clashes: clashes[player],
-			MarksEarned: payout.TotalMarks,
-		})
-		if p.HeroPlayCounts == nil {
-			p.HeroPlayCounts = make(map[string]int)
-		}
-		if p.HeroWinCounts == nil {
-			p.HeroWinCounts = make(map[string]int)
-		}
-		p.HeroPlayCounts[match.PlayerHeroIDs[player]]++
-		if won {
-			p.HeroWinCounts[match.PlayerHeroIDs[player]]++
-		}
-		p.UpdatedAt = match.Result.CompletedAt
+		payouts[player] = payout
 		data, err := json.Marshal(p)
 		if err != nil {
 			return fmt.Errorf("encode Puzzle Battle reward profile: %w", err)
@@ -1210,6 +1165,105 @@ func creditPuzzleBattleProfiles(ctx context.Context, tx *sql.Tx, match *puzzleba
 		}
 	}
 	return nil
+}
+
+func creditPuzzleBattleProfile(p *profile.Profile, match *puzzlebattle.Match, player int) (puzzlebattle.RewardPayout, error) {
+	if p == nil {
+		return puzzlebattle.RewardPayout{}, errors.New("Puzzle Battle reward profile is required")
+	}
+	if match == nil || match.Result == nil {
+		return puzzlebattle.RewardPayout{}, errors.New("completed Puzzle Battle has no result")
+	}
+	if player < 0 || player > 1 {
+		return puzzlebattle.RewardPayout{}, errors.New("Puzzle Battle player index must be 0 or 1")
+	}
+	opponent := 1 - player
+	seriesTie := match.MatchMode == "ranked" && match.RankedSeries != nil &&
+		match.RankedSeries.Complete && match.RankedSeries.Draw
+	won := match.Result.Winner == player || seriesTie
+	tied := match.Result.Draw
+	playerScore, opponentScore := match.Result.Scores[player], match.Result.Scores[opponent]
+	seat := game.SeatX
+	if player == 1 {
+		seat = game.SeatY
+	}
+	jails, captured, clashes := puzzleBattleResultCards(match.Result)
+	playerJail, opponentJail := jails[player], jails[opponent]
+	gameResult := game.MatchResult{
+		Won: won, Tied: tied, PlayerSeat: seat,
+		PlayerScore: playerScore, OpponentScore: opponentScore,
+		Games: []game.MatchGame{{
+			Won: won, PlayerSeat: seat, PlayerScore: playerScore, OpponentScore: opponentScore,
+			PlayerJail: playerJail, OpponentJail: opponentJail,
+			PlayerCapturedByRound: captured[player], OpponentCapturedByRound: captured[opponent],
+			Modifiers: match.Modifiers, PlayerHeroID: match.PlayerHeroIDs[player],
+			OpponentHeroID: match.PlayerHeroIDs[opponent], BountySuit: match.BountySuit,
+			Clashes: clashes[player], ScoreAfterR2: playerScore, OpponentAfterR2: opponentScore,
+		}},
+	}
+	mode := economy.ModeFriendCasual
+	aiDifficulty := ""
+	if match.MatchMode == "cpu_easy" {
+		mode = economy.ModeCPUEasy
+		aiDifficulty = "easy"
+	} else if match.MatchMode == "ranked" {
+		mode = economy.ModeRanked
+	}
+	updateAchievementStats(p, gameResult, mode)
+	if won {
+		p.TotalWins++
+		p.CurrentStreak++
+		p.WinsSinceCampDraw++
+		if p.WinsSinceCampDraw >= lootbox.RequiredWins(p) {
+			if p.DrawsAvailable < lootbox.MaxDrawsStored {
+				p.DrawsAvailable++
+			}
+			p.WinsSinceCampDraw = 0
+		}
+		if p.CurrentStreak > p.BestStreak {
+			p.BestStreak = p.CurrentStreak
+		}
+	} else if tied {
+		p.TotalDraws++
+		p.CurrentStreak = 0
+	} else {
+		p.TotalLosses++
+		p.CurrentStreak = 0
+	}
+	payout, err := economy.CalculateMultiplayerPayout(
+		"puzzle-battle", playerScore, won, tied, won, aiDifficulty, mode, p, match.Result.CompletedAt,
+	)
+	if err != nil {
+		return puzzlebattle.RewardPayout{}, fmt.Errorf("calculate Puzzle Battle rewards: %w", err)
+	}
+	reward := puzzlebattle.RewardPayout{
+		Marks: payout.TotalMarks, Crowns: payout.TotalCrowns, Multiplier: payout.AIMultiplier,
+	}
+	achievementContext := achievements.NewMatchContext(p, gameResult, economy.ModeID(mode), seat.String())
+	achievementContext.Now = match.Result.CompletedAt
+	for _, event := range achievements.EvaluateAll(achievementContext) {
+		applyUnlockEvent(p, event)
+	}
+	p.RecordMatch(profile.MatchRecord{
+		GameID: match.ID, At: match.Result.CompletedAt, Mode: economy.ModeID(mode),
+		PlayerSeat: seat.String(), PlayerScore: playerScore, OppScore: opponentScore, Won: won,
+		BountySuit:      achievements.SuitRoleID(match.BountySuit),
+		PlayerPrisoners: len(playerJail), OppPrisoners: len(opponentJail),
+		PlayerPrisonerSuits: puzzleBattleSuitCounts(playerJail), Clashes: clashes[player],
+		MarksEarned: payout.TotalMarks,
+	})
+	if p.HeroPlayCounts == nil {
+		p.HeroPlayCounts = make(map[string]int)
+	}
+	if p.HeroWinCounts == nil {
+		p.HeroWinCounts = make(map[string]int)
+	}
+	p.HeroPlayCounts[match.PlayerHeroIDs[player]]++
+	if won {
+		p.HeroWinCounts[match.PlayerHeroIDs[player]]++
+	}
+	p.UpdatedAt = match.Result.CompletedAt
+	return reward, nil
 }
 
 func puzzleBattleResultCards(result *puzzlebattle.Result) ([2][]game.Card, [2][3][3]int, [2]int) {

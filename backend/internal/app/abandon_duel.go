@@ -376,6 +376,26 @@ func (g *abandonDuelGame) flipBoardCard(index int) error {
 	return nil
 }
 
+func (g *abandonDuelGame) revealPairCard(source string, index int) error {
+	if g == nil || g.GameOver {
+		return errors.New("Abandon Duel is complete")
+	}
+	if g.SelectedSource == "" {
+		return errors.New("choose the first card before revealing a second")
+	}
+	if g.SelectedSource == source && g.SelectedIndex == index {
+		return errors.New("choose a different second card")
+	}
+	if _, err := g.availableCard(g.SelectedSource, g.SelectedIndex); err != nil {
+		return err
+	}
+	if _, err := g.availableCard(source, index); err != nil {
+		return err
+	}
+	g.revealCard(source, g.ActivePlayer, index)
+	return nil
+}
+
 func (g *abandonDuelGame) selectPairCard(source string, index int, rng *rand.Rand) (bool, error) {
 	if g == nil || g.GameOver {
 		return false, errors.New("Abandon Duel is complete")

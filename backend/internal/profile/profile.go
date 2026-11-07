@@ -11,7 +11,7 @@ import (
 	"time"
 )
 
-const SchemaVersion = 13
+const SchemaVersion = 14
 
 const DefaultHeroID = "recruit"
 
@@ -136,8 +136,8 @@ func New(now time.Time) (*Profile, error) {
 		FreeRefillResetAt:   nextLocalMidnight(now),
 		SkillNodes:          make(map[string]bool),
 		DailyModeWins:       make(map[string]bool),
-		OwnedChromas:        map[string]bool{"crimson": true, "cobalt": true, "sunflower": true},
-		AssignedChromas:     map[string]string{"B": "cobalt", "F": "sunflower", "S": "crimson"},
+		OwnedChromas:        map[string]bool{"tribal-red": true, "tribal-blue": true, "tribal-yellow": true},
+		AssignedChromas:     map[string]string{"B": "tribal-blue", "F": "tribal-yellow", "S": "tribal-red"},
 		SeenChromas:         make(map[string]bool),
 		PendingBoxes:        make(map[string]int),
 		MatchHistory:        make([]MatchRecord, 0),
@@ -253,11 +253,36 @@ func migrateProfile(p *Profile, previousSchema int) {
 	if previousSchema < 13 {
 		migrateSkillTree(p)
 	}
+	if previousSchema < 14 {
+		migrateLegacyChromaIDs(p)
+	}
 	if !containsHero(p.UnlockedHeroes, "recruit") {
 		p.UnlockedHeroes = append(p.UnlockedHeroes, "recruit")
 	}
 	if p.DefaultHeroID == "" || !containsHero(p.UnlockedHeroes, p.DefaultHeroID) {
 		p.DefaultHeroID = DefaultHeroID
+	}
+}
+
+func migrateLegacyChromaIDs(p *Profile) {
+	legacyIDs := map[string]string{
+		"crimson": "tribal-red", "cobalt": "tribal-blue", "sunflower": "tribal-yellow",
+		"emerald": "tribal-green", "tangerine": "tribal-orange", "amethyst": "tribal-purple",
+	}
+	for legacyID, currentID := range legacyIDs {
+		if p.OwnedChromas[legacyID] {
+			p.OwnedChromas[currentID] = true
+			delete(p.OwnedChromas, legacyID)
+		}
+		if seen, ok := p.SeenChromas[legacyID]; ok {
+			p.SeenChromas[currentID] = seen || p.SeenChromas[currentID]
+			delete(p.SeenChromas, legacyID)
+		}
+		for suit, chromaID := range p.AssignedChromas {
+			if chromaID == legacyID {
+				p.AssignedChromas[suit] = currentID
+			}
+		}
 	}
 }
 
@@ -442,9 +467,9 @@ func normalizeResources(p *Profile) {
 	if p.OwnedChromas == nil {
 		p.OwnedChromas = make(map[string]bool)
 	}
-	p.OwnedChromas["crimson"] = true
-	p.OwnedChromas["cobalt"] = true
-	p.OwnedChromas["sunflower"] = true
+	p.OwnedChromas["tribal-red"] = true
+	p.OwnedChromas["tribal-blue"] = true
+	p.OwnedChromas["tribal-yellow"] = true
 	if p.AssignedChromas == nil {
 		p.AssignedChromas = make(map[string]string)
 	}

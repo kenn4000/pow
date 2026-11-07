@@ -1,0 +1,263 @@
+{
+    "frames":  {
+                   "large_attack.png":  {
+                                            "trimmed":  false,
+                                            "spriteSourceSize":  {
+                                                                     "y":  0,
+                                                                     "w":  366,
+                                                                     "h":  512,
+                                                                     "x":  0
+                                                                 },
+                                            "sourceSize":  {
+                                                               "h":  512,
+                                                               "w":  366
+                                                           },
+                                            "rotated":  false,
+                                            "frame":  {
+                                                          "y":  0,
+                                                          "w":  366,
+                                                          "h":  512,
+                                                          "x":  0
+                                                      }
+                                        },
+                   "large_win.png":  {
+                                         "trimmed":  false,
+                                         "spriteSourceSize":  {
+                                                                  "y":  0,
+                                                                  "w":  366,
+                                                                  "h":  512,
+                                                                  "x":  0
+                                                              },
+                                         "sourceSize":  {
+                                                            "h":  512,
+                                                            "w":  366
+                                                        },
+                                         "rotated":  false,
+                                         "frame":  {
+                                                       "y":  0,
+                                                       "w":  366,
+                                                       "h":  512,
+                                                       "x":  1098
+                                                   }
+                                     },
+                   "med_idle.png":  {
+                                        "trimmed":  false,
+                                        "spriteSourceSize":  {
+                                                                 "y":  0,
+                                                                 "w":  366,
+                                                                 "h":  512,
+                                                                 "x":  0
+                                                             },
+                                        "sourceSize":  {
+                                                           "h":  512,
+                                                           "w":  366
+                                                       },
+                                        "rotated":  false,
+                                        "frame":  {
+                                                      "y":  512,
+                                                      "w":  366,
+                                                      "h":  512,
+                                                      "x":  366
+                                                  }
+                                    },
+                   "small_win.png":  {
+                                         "trimmed":  false,
+                                         "spriteSourceSize":  {
+                                                                  "y":  0,
+                                                                  "w":  366,
+                                                                  "h":  512,
+                                                                  "x":  0
+                                                              },
+                                         "sourceSize":  {
+                                                            "h":  512,
+                                                            "w":  366
+                                                        },
+                                         "rotated":  false,
+                                         "frame":  {
+                                                       "y":  1024,
+                                                       "w":  366,
+                                                       "h":  512,
+                                                       "x":  1098
+                                                   }
+                                     },
+                   "small_attack.png":  {
+                                            "trimmed":  false,
+                                            "spriteSourceSize":  {
+                                                                     "y":  0,
+                                                                     "w":  366,
+                                                                     "h":  512,
+                                                                     "x":  0
+                                                                 },
+                                            "sourceSize":  {
+                                                               "h":  512,
+                                                               "w":  366
+                                                           },
+                                            "rotated":  false,
+                                            "frame":  {
+                                                          "y":  1024,
+                                                          "w":  366,
+                                                          "h":  512,
+                                                          "x":  0
+                                                      }
+                                        },
+                   "large_lose.png":  {
+                                          "trimmed":  false,
+                                          "spriteSourceSize":  {
+                                                                   "y":  0,
+                                                                   "w":  366,
+                                                                   "h":  512,
+                                                                   "x":  0
+                                                               },
+                                          "sourceSize":  {
+                                                             "h":  512,
+                                                             "w":  366
+                                                         },
+                                          "rotated":  false,
+                                          "frame":  {
+                                                        "y":  0,
+                                                        "w":  366,
+                                                        "h":  512,
+                                                        "x":  732
+                                                    }
+                                      },
+                   "large_idle.png":  {
+                                          "trimmed":  false,
+                                          "spriteSourceSize":  {
+                                                                   "y":  0,
+                                                                   "w":  366,
+                                                                   "h":  512,
+                                                                   "x":  0
+                                                               },
+                                          "sourceSize":  {
+                                                             "h":  512,
+                                                             "w":  366
+                                                         },
+                                          "rotated":  false,
+                                          "frame":  {
+                                                        "y":  0,
+                                                        "w":  366,
+                                                        "h":  512,
+                                                        "x":  366
+                                                    }
+                                      },
+                   "med_win.png":  {
+                                       "trimmed":  false,
+                                       "spriteSourceSize":  {
+                                                                "y":  0,
+                                                                "w":  366,
+                                                                "h":  512,
+                                                                "x":  0
+                                                            },
+                                       "sourceSize":  {
+                                                          "h":  512,
+                                                          "w":  366
+                                                      },
+                                       "rotated":  false,
+                                       "frame":  {
+                                                     "y":  512,
+                                                     "w":  366,
+                                                     "h":  512,
+                                                     "x":  1098
+                                                 }
+                                   },
+                   "small_idle.png":  {
+                                          "trimmed":  false,
+                                          "spriteSourceSize":  {
+                                                                   "y":  0,
+                                                                   "w":  366,
+                                                                   "h":  512,
+                                                                   "x":  0
+                                                               },
+                                          "sourceSize":  {
+                                                             "h":  512,
+                                                             "w":  366
+                                                         },
+                                          "rotated":  false,
+                                          "frame":  {
+                                                        "y":  1024,
+                                                        "w":  366,
+                                                        "h":  512,
+                                                        "x":  366
+                                                    }
+                                      },
+                   "med_lose.png":  {
+                                        "trimmed":  false,
+                                        "spriteSourceSize":  {
+                                                                 "y":  0,
+                                                                 "w":  366,
+                                                                 "h":  512,
+                                                                 "x":  0
+                                                             },
+                                        "sourceSize":  {
+                                                           "h":  512,
+                                                           "w":  366
+                                                       },
+                                        "rotated":  false,
+                                        "frame":  {
+                                                      "y":  512,
+                                                      "w":  366,
+                                                      "h":  512,
+                                                      "x":  732
+                                                  }
+                                    },
+                   "small_lose.png":  {
+                                          "trimmed":  false,
+                                          "spriteSourceSize":  {
+                                                                   "y":  0,
+                                                                   "w":  366,
+                                                                   "h":  512,
+                                                                   "x":  0
+                                                               },
+                                          "sourceSize":  {
+                                                             "h":  512,
+                                                             "w":  366
+                                                         },
+                                          "rotated":  false,
+                                          "frame":  {
+                                                        "y":  1024,
+                                                        "w":  366,
+                                                        "h":  512,
+                                                        "x":  732
+                                                    }
+                                      },
+                   "med_attack.png":  {
+                                          "trimmed":  false,
+                                          "spriteSourceSize":  {
+                                                                   "y":  0,
+                                                                   "w":  366,
+                                                                   "h":  512,
+                                                                   "x":  0
+                                                               },
+                                          "sourceSize":  {
+                                                             "h":  512,
+                                                             "w":  366
+                                                         },
+                                          "rotated":  false,
+                                          "frame":  {
+                                                        "y":  512,
+                                                        "w":  366,
+                                                        "h":  512,
+                                                        "x":  0
+                                                    }
+                                      }
+               },
+    "meta":  {
+                 "size":  {
+                              "h":  1536,
+                              "w":  1464
+                          },
+                 "version":  "1.0",
+                 "app":  "dotnet-drawing",
+                 "image":  "orc_copper.png",
+                 "scale":  "1",
+                 "format":  "RGBA8888",
+                 "skinData":  {
+                                  "id":  "orc-copper",
+                                  "displayName":  "Orc (copper)",
+                                  "rarityRank":  0,
+                                  "hexColor":  "#997B4B",
+                                  "price":  5500,
+                                  "currency":  "marks"
+                              }
+             }
+}

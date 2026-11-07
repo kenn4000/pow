@@ -38,6 +38,7 @@ type sessionSnapshot struct {
 	PokerDuel           *pokerDuelGame
 	TugWar              *tugwar.Game
 	PokerDuelCPUReadyAt time.Time
+	LadderReadyAt       time.Time
 	WhitePlayer         int
 	Phase               string
 	Actor               int
@@ -81,6 +82,7 @@ func snapshotSession(s *webSession) *sessionSnapshot {
 		AbandonDuel: s.abandonDuel, Rummy: s.rummy, Ladder: ladderState,
 		Poker: s.poker, PokerDuel: s.pokerDuel, TugWar: s.tugWar,
 		PokerDuelCPUReadyAt: s.pokerDuelCPUReadyAt,
+		LadderReadyAt:       s.ladderReadyAt,
 		WhitePlayer:         s.whitePlayer, Phase: s.phase, Actor: s.actor, HandoffTarget: s.handoffTarget,
 		HandoffPhase: s.handoffPhase, Exchange: s.exchange, Attacker: s.attacker,
 		AttackIndex: s.attackIndex, AttackCard: s.attackCard, LastAttack: s.lastAttack,
@@ -157,6 +159,7 @@ func (s *sessionSnapshot) restore() *webSession {
 	return &webSession{
 		state: s.State, mode: s.Mode, variant: variant, puzzle: s.Puzzle, abandon: abandon, abandonDuel: s.AbandonDuel, rummy: rummy, ladder: ladderGame, poker: s.Poker, pokerDuel: s.PokerDuel, tugWar: s.TugWar,
 		pokerDuelCPUReadyAt: s.PokerDuelCPUReadyAt,
+		ladderReadyAt:       s.LadderReadyAt,
 		whitePlayer:         s.WhitePlayer, phase: phase, actor: s.Actor, handoffTarget: s.HandoffTarget,
 		handoffPhase: s.HandoffPhase, exchange: s.Exchange, attacker: s.Attacker,
 		attackIndex: s.AttackIndex, attackCard: s.AttackCard, lastAttack: s.LastAttack,

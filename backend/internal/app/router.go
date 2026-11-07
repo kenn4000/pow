@@ -43,6 +43,11 @@ func (s *webServer) applicationRoutes(r chi.Router) {
 		api.Use(sameOrigin)
 		if s.db == nil {
 			s.registerGameRoutes(api)
+			api.Route("/puzzle-battle/cpu", func(cpu chi.Router) {
+				cpu.Get("/", s.gameEndpoint((*webServer).handleLocalPuzzleBattleCPU))
+				cpu.Post("/", s.gameEndpoint((*webServer).handleLocalPuzzleBattleCPU))
+				cpu.Post("/{matchID}/action", s.gameEndpoint((*webServer).handleLocalPuzzleBattleCPUAction))
+			})
 			return
 		}
 		api.Route("/auth", func(auth chi.Router) {
@@ -68,6 +73,9 @@ func (s *webServer) applicationRoutes(r chi.Router) {
 				puzzleBattle.Get("/", s.handlePuzzleBattle)
 				puzzleBattle.Post("/", s.handlePuzzleBattle)
 				puzzleBattle.Get("/history", s.handlePuzzleBattleHistory)
+				puzzleBattle.Get("/cpu", s.handlePuzzleBattleCPU)
+				puzzleBattle.Post("/cpu", s.handlePuzzleBattleCPU)
+				puzzleBattle.Post("/cpu/{matchID}/action", s.handlePuzzleBattleCPUAction)
 				puzzleBattle.Post("/{matchID}/action", s.handlePuzzleBattleAction)
 			})
 			protected.Route("/online-battle", func(onlineBattle chi.Router) {

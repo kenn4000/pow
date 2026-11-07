@@ -118,7 +118,7 @@ func NewGame(heroA, heroB heroes.Hero, rng *rand.Rand) (*Game, error) {
 		Winner:  -1,
 		S:       min(heroA.Shift+heroB.Shift, ShiftCap),
 		F:       heroA.Favored + heroB.Favored,
-		B:       clamp(heroA.Bounty+heroB.Bounty, BountyMin, BountyMax),
+		B:       clamp(1+heroA.Bounty+heroB.Bounty, BountyMin, BountyMax),
 	}
 	pushesEach := 2 + clamp(heroA.Draft+heroB.Draft, DraftMin, DraftMax)
 	state.Pushes = [2]int{pushesEach, pushesEach}

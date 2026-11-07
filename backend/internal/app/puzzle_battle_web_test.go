@@ -145,10 +145,7 @@ func TestPuzzleBattlePairingsRemainPrivateUntilCompletion(t *testing.T) {
 		actor = second
 	}
 	actor.request("POST", "/puzzle-battle/"+matchID+"/action", map[string]any{
-		"action": "toggle-pair", "index": 0,
-	}, http.StatusOK)
-	actor.request("POST", "/puzzle-battle/"+matchID+"/action", map[string]any{
-		"action": "toggle-pair", "index": 1,
+		"action": "submit-pair", "firstIndex": 0, "secondIndex": 1,
 	}, http.StatusOK)
 
 	actorViewClient, otherViewClient := actor, first
@@ -168,5 +165,93 @@ func TestPuzzleBattlePairingsRemainPrivateUntilCompletion(t *testing.T) {
 	}
 	if len(otherView.Match.View.OwnPairs) != 0 || otherView.Match.View.OpponentSubmitted {
 		t.Fatalf("opponent selection leaked through private view: %+v", otherView.Match.View)
+	}
+
+	submitPairs := func(client testAccountClient, pairs [][2]int) []byte {
+		t.Helper()
+		var data []byte
+		for _, pair := range pairs {
+			data = client.request("POST", "/puzzle-battle/"+matchID+"/action", map[string]any{
+				"action": "submit-pair", "firstIndex": pair[0], "secondIndex": pair[1],
+			}, http.StatusOK)
+		}
+		return data
+	}
+	submitPairs(actor, [][2]int{{2, 3}, {4, 5}})
+	submitPairs(otherViewClient, [][2]int{{0, 1}, {2, 3}, {4, 5}})
+	submitPairs(actor, [][2]int{{0, 1}, {2, 3}, {4, 5}, {6, 7}})
+	completedBytes := submitPairs(otherViewClient, [][2]int{{0, 1}, {2, 3}, {4, 5}, {6, 7}})
+	var completed puzzleBattleResponse
+	if err := json.Unmarshal(completedBytes, &completed); err != nil {
+		t.Fatal(err)
+	}
+	if completed.Match == nil || completed.Match.View.Status != puzzlebattle.PhaseComplete {
+		t.Fatalf("match did not complete after the final pair: %+v", completed.Match)
+	}
+	if completed.Payout == nil || completed.Payout.Marks <= 0 {
+		t.Fatalf("completed match response omitted the player's reward payout: %+v", completed.Payout)
+	}
+	var reloaded puzzleBattleResponse
+	if err := json.Unmarshal(otherViewClient.request("GET", "/puzzle-battle", nil, http.StatusOK), &reloaded); err != nil {
+		t.Fatal(err)
+	}
+	if reloaded.Payout == nil || reloaded.Payout.Marks != completed.Payout.Marks ||
+		reloaded.Payout.Crowns != completed.Payout.Crowns {
+		t.Fatalf("reloaded match payout = %+v, want %+v", reloaded.Payout, completed.Payout)
+	}
+}
+
+func TestPuzzleBattleEasyCPURewardsHalfPayout(t *testing.T) {
+	_, newClient := newPuzzleBattleTestServer(t)
+	client := newClient()
+	puzzleBattleSignup(t, client, "easy-cpu@example.com")
+
+	var started puzzleBattleResponse
+	if err := json.Unmarshal(client.request("POST", "/puzzle-battle/cpu", map[string]string{
+		"action": "start", "heroId": "recruit",
+	}, http.StatusCreated), &started); err != nil {
+		t.Fatal(err)
+	}
+	if !started.CPUPractice || started.Match == nil ||
+		started.Match.View.Status != puzzlebattle.PhaseRoundOne {
+		t.Fatalf("Easy CPU match did not start: %+v", started)
+	}
+	matchID := started.Match.View.MatchID
+	submitPairs := func(pairs [][2]int) []byte {
+		t.Helper()
+		var data []byte
+		for _, pair := range pairs {
+			data = client.request("POST", "/puzzle-battle/cpu/"+matchID+"/action", map[string]any{
+				"action": "submit-pair", "firstIndex": pair[0], "secondIndex": pair[1],
+			}, http.StatusOK)
+		}
+		return data
+	}
+	roundTwoBytes := submitPairs([][2]int{{0, 1}, {2, 3}, {4, 5}})
+	var roundTwo puzzleBattleResponse
+	if err := json.Unmarshal(roundTwoBytes, &roundTwo); err != nil {
+		t.Fatal(err)
+	}
+	if roundTwo.Match == nil || roundTwo.Match.View.Status != puzzlebattle.PhaseRoundTwo {
+		t.Fatalf("CPU did not automatically resolve round one: %+v", roundTwo.Match)
+	}
+
+	completedBytes := submitPairs([][2]int{{0, 1}, {2, 3}, {4, 5}, {6, 7}})
+	var completed puzzleBattleResponse
+	if err := json.Unmarshal(completedBytes, &completed); err != nil {
+		t.Fatal(err)
+	}
+	if completed.Match == nil || completed.Match.View.Status != puzzlebattle.PhaseComplete {
+		t.Fatalf("Easy CPU match did not complete: %+v", completed.Match)
+	}
+	if completed.Payout == nil || completed.Payout.Multiplier != 0.5 || completed.Payout.Marks <= 0 {
+		t.Fatalf("Easy CPU payout = %+v, want a positive payout at 50%%", completed.Payout)
+	}
+	var reloaded puzzleBattleResponse
+	if err := json.Unmarshal(client.request("GET", "/puzzle-battle/cpu", nil, http.StatusOK), &reloaded); err != nil {
+		t.Fatal(err)
+	}
+	if reloaded.Payout == nil || *reloaded.Payout != *completed.Payout {
+		t.Fatalf("reloaded Easy CPU payout = %+v, want %+v", reloaded.Payout, completed.Payout)
 	}
 }

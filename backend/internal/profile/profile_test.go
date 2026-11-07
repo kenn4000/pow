@@ -47,7 +47,7 @@ func TestLoadSaveProfileRoundTripAndSchemaValidation(t *testing.T) {
 	if p.PlayerID == "" || p.Energy != DefaultMaxEnergy {
 		t.Fatalf("new profile = ID %q, energy %d", p.PlayerID, p.Energy)
 	}
-	for _, id := range []string{"crimson", "cobalt", "sunflower"} {
+	for _, id := range []string{"tribal-red", "tribal-blue", "tribal-yellow"} {
 		if !p.OwnedChromas[id] {
 			t.Errorf("new profile does not own default chroma %q", id)
 		}
@@ -127,10 +127,13 @@ func TestSchemaV7MigrationGrantsAndPersistsDefaultTribalChromas(t *testing.T) {
 	if p.SchemaVersion != SchemaVersion {
 		t.Fatalf("migrated schema = %d, want %d", p.SchemaVersion, SchemaVersion)
 	}
-	for _, id := range []string{"crimson", "cobalt", "sunflower", "emerald"} {
+	for _, id := range []string{"tribal-red", "tribal-blue", "tribal-yellow", "tribal-green"} {
 		if !p.OwnedChromas[id] {
 			t.Errorf("migration did not preserve/grant chroma %q", id)
 		}
+	}
+	if p.OwnedChromas["emerald"] {
+		t.Fatal("migration retained the legacy Tribal chroma ID")
 	}
 	data, err := os.ReadFile(path)
 	if err != nil {
@@ -140,9 +143,9 @@ func TestSchemaV7MigrationGrantsAndPersistsDefaultTribalChromas(t *testing.T) {
 	if err := json.Unmarshal(data, &persisted); err != nil {
 		t.Fatal(err)
 	}
-	for _, id := range []string{"crimson", "cobalt", "sunflower"} {
+	for _, id := range []string{"tribal-red", "tribal-blue", "tribal-yellow", "tribal-green"} {
 		if !persisted.OwnedChromas[id] {
-			t.Errorf("migration did not persist default chroma %q", id)
+			t.Errorf("migration did not persist chroma %q", id)
 		}
 	}
 }

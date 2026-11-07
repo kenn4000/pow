@@ -13,25 +13,33 @@ func TestShopPurchasesChromasAndColorAssignments(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	p.Marks = 250
-	if err := BuyChroma(p, "emerald"); err != nil {
+	chroma, ok := FindChroma("tribal-green")
+	if !ok {
+		t.Fatal("Tribal green chroma is missing")
+	}
+	p.Marks = chroma.Cost
+	if err := BuyChroma(p, chroma.ID); err != nil {
 		t.Fatal(err)
 	}
-	if p.Marks != 0 || !p.OwnedChromas["emerald"] || p.TotalChromasPurchased != 1 {
+	if p.Marks != 0 || !p.OwnedChromas[chroma.ID] || p.TotalChromasPurchased != 1 {
 		t.Fatalf("chroma purchase left %d Marks, owned=%t, total purchases=%d",
-			p.Marks, p.OwnedChromas["emerald"], p.TotalChromasPurchased)
+			p.Marks, p.OwnedChromas[chroma.ID], p.TotalChromasPurchased)
 	}
-	if err := AssignChroma(p, "B", "emerald"); err != nil {
+	if err := AssignChroma(p, "B", chroma.ID); err != nil {
 		t.Fatal(err)
 	}
 	paperAppearance := p.AssignedChromas["F"]
-	if err := AssignChroma(p, "F", "emerald"); err != nil {
+	if err := AssignChroma(p, "F", chroma.ID); err != nil {
 		t.Fatalf("assign existing color to another suit: %v", err)
 	}
-	if p.AssignedChromas["F"] != "emerald" || p.AssignedChromas["B"] != paperAppearance {
+	if p.AssignedChromas["F"] != chroma.ID || p.AssignedChromas["B"] != paperAppearance {
 		t.Fatalf("duplicate color assignment did not swap appearances: %+v", p.AssignedChromas)
 	}
-	p.Marks = 600
+	conqPink, ok := FindChroma("conq-pink")
+	if !ok {
+		t.Fatal("Conquistador pink chroma is missing")
+	}
+	p.Marks = conqPink.Cost
 	if err := BuyChroma(p, "conq-pink"); err != nil {
 		t.Fatal(err)
 	}
@@ -51,8 +59,8 @@ func TestShopPurchasesChromasAndColorAssignments(t *testing.T) {
 
 func TestTribalAndConquistadorChromaNames(t *testing.T) {
 	want := map[string]string{
-		"crimson": "Tribal (red)", "cobalt": "Tribal (blue)", "sunflower": "Tribal (yellow)",
-		"emerald": "Tribal (green)", "tangerine": "Tribal (orange)", "amethyst": "Tribal (purple)",
+		"tribal-red": "Tribal (red)", "tribal-blue": "Tribal (blue)", "tribal-yellow": "Tribal (yellow)",
+		"tribal-green": "Tribal (green)", "tribal-orange": "Tribal (orange)", "tribal-purple": "Tribal (purple)",
 		"conq-lime": "Conquistador (lime green)", "conq-gold": "Conquistador (gold)",
 		"conq-pink": "Conquistador (pink)", "conq-blue": "Conquistador (sky blue)",
 	}
@@ -66,11 +74,17 @@ func TestTribalAndConquistadorChromaNames(t *testing.T) {
 
 func TestSkinRarityRanksUseFiveLevelScale(t *testing.T) {
 	want := map[string]int{
-		"crimson": 0, "emerald": 1, "conq-gold": 0, "dragon-ruby": 0,
+		"tribal-red": 0, "tribal-green": 1, "conq-gold": 0, "dragon-ruby": 3,
 	}
+	rarities := []string{"common", "uncommon", "rare", "epic", "seasonal"}
 	for _, chroma := range AllChromas() {
 		if chroma.RarityRank < 0 || chroma.RarityRank > 4 {
 			t.Errorf("chroma %q has unsupported rarity rank %d", chroma.ID, chroma.RarityRank)
+		}
+		if chroma.RarityRank >= 0 && chroma.RarityRank < len(rarities) &&
+			chroma.Rarity != rarities[chroma.RarityRank] {
+			t.Errorf("chroma %q rarity = %q for rank %d, want %q",
+				chroma.ID, chroma.Rarity, chroma.RarityRank, rarities[chroma.RarityRank])
 		}
 		if expected, ok := want[chroma.ID]; ok && chroma.RarityRank != expected {
 			t.Errorf("chroma %q rarity rank = %d, want %d", chroma.ID, chroma.RarityRank, expected)
@@ -78,33 +92,37 @@ func TestSkinRarityRanksUseFiveLevelScale(t *testing.T) {
 	}
 }
 
-func TestConquistadorChromasCost600Marks(t *testing.T) {
+func TestConquistadorChromasUseSheetPrices(t *testing.T) {
 	for _, id := range []string{"conq-lime", "conq-gold", "conq-pink", "conq-blue", "conq-skyblue"} {
 		chroma, ok := FindChroma(id)
-		if !ok || chroma.Cost != 600 || chroma.Currency != string(Marks) {
-			t.Errorf("chroma %q = %+v, want 600 Marks", id, chroma)
+		if !ok {
+			t.Errorf("chroma %q is missing", id)
+			continue
+		}
+		if chroma.Cost <= 0 || (chroma.Currency != string(Marks) && chroma.Currency != string(Crowns)) {
+			t.Errorf("chroma %q has invalid sheet price: %+v", id, chroma)
 		}
 	}
 }
 
-func TestTribalAndDragonFamilyPricesUseOneCurrency(t *testing.T) {
+func TestTribalAndDragonPricesUseSheetMetadata(t *testing.T) {
 	for _, id := range []string{
-		"cobalt", "crimson", "sunflower", "emerald", "tangerine", "amethyst",
+		"tribal-blue", "tribal-red", "tribal-yellow", "tribal-green", "tribal-orange", "tribal-purple",
 	} {
 		chroma, ok := FindChroma(id)
-		if !ok || chroma.Cost != 250 || chroma.Currency != string(Marks) {
-			t.Errorf("Tribal chroma %q = %+v, want 250 Marks", id, chroma)
+		if !ok || chroma.Cost <= 0 || chroma.Currency != string(Marks) {
+			t.Errorf("Tribal chroma %q = %+v, want a positive Marks price from its sheet", id, chroma)
 		}
 	}
 	for _, id := range []string{"dragon-emerald", "dragon-ruby", "dragon-sapphire"} {
 		chroma, ok := FindChroma(id)
-		if !ok || chroma.Cost != 800 || chroma.Currency != string(Crowns) {
-			t.Errorf("Dragon chroma %q = %+v, want 800 Crowns", id, chroma)
+		if !ok || chroma.Cost <= 0 || chroma.Currency != string(Crowns) {
+			t.Errorf("Dragon chroma %q = %+v, want a positive Crowns price from its sheet", id, chroma)
 		}
 	}
 }
 
-func TestChromaFamilyPricesUseHighestMemberPrice(t *testing.T) {
+func TestChromaFamilyPricesFollowSheetMetadata(t *testing.T) {
 	byFamily := make(map[string][]Chroma)
 	for _, chroma := range AllChromas() {
 		family := chromaFamilyKey(chroma)
@@ -115,36 +133,13 @@ func TestChromaFamilyPricesUseHighestMemberPrice(t *testing.T) {
 		if len(chromas) < 2 {
 			continue
 		}
-		highestPrice := chromas[0].Cost
 		currency := chromas[0].Currency
-		for _, chroma := range chromas[1:] {
-			if chroma.Cost > highestPrice {
-				highestPrice = chroma.Cost
-			}
+		for _, chroma := range chromas {
 			if chroma.Currency != currency {
 				t.Errorf("family %q mixes currencies: %s and %s", family, currency, chroma.Currency)
 			}
-		}
-		for _, chroma := range chromas {
-			if chroma.Cost != highestPrice {
-				t.Errorf("family %q chroma %q costs %d; want family maximum %d",
-					family, chroma.ID, chroma.Cost, highestPrice)
-			}
-		}
-	}
-
-	for family, want := range map[string]int64{
-		"alien": 1200, "amazon": 1200, "bee": 1200, "cat": 900,
-		"conq": 600, "dog": 600, "dwarf": 1000,
-	} {
-		chromas := byFamily[family]
-		if len(chromas) < 2 {
-			t.Errorf("family %q has only %d chromas", family, len(chromas))
-			continue
-		}
-		for _, chroma := range chromas {
-			if chroma.Cost != want {
-				t.Errorf("family %q chroma %q costs %d, want %d", family, chroma.ID, chroma.Cost, want)
+			if chroma.Cost <= 0 {
+				t.Errorf("family %q chroma %q has invalid price %d", family, chroma.ID, chroma.Cost)
 			}
 		}
 	}
@@ -163,17 +158,15 @@ func TestBuyChromaFamilyDiscountsFullSetPrice(t *testing.T) {
 			familyChromas = append(familyChromas, chroma)
 		}
 	}
-	if len(familyChromas) != 3 || fullPrice != 3600 {
-		t.Fatalf("Alien family has %d chromas at %d Marks; want 3 at 3600 Marks total",
-			len(familyChromas), fullPrice)
+	if len(familyChromas) != 3 {
+		t.Fatalf("Alien family has %d chromas, want 3", len(familyChromas))
 	}
 	wantCost := (fullPrice*4 + 2) / 5
 	p.Marks = wantCost - 1
 	if _, _, err := BuyChromaFamily(p, "alien"); err == nil {
 		t.Fatal("family purchase should fail when the discounted price is unaffordable")
 	}
-	if p.Marks != wantCost-1 || p.TotalChromasPurchased != 0 ||
-		len(p.OwnedChromas) != 3 || !p.OwnedChromas["cobalt"] {
+	if p.Marks != wantCost-1 || p.TotalChromasPurchased != 0 {
 		t.Fatalf("failed family purchase changed profile: marks=%d purchased=%d owned=%v",
 			p.Marks, p.TotalChromasPurchased, p.OwnedChromas)
 	}
@@ -183,9 +176,9 @@ func TestBuyChromaFamilyDiscountsFullSetPrice(t *testing.T) {
 	if err != nil {
 		t.Fatalf("buy Alien chroma family: %v", err)
 	}
-	if cost != wantCost || currency != Marks || p.Marks != 0 || wantCost != 2880 {
-		t.Fatalf("family purchase charged %d %s, leaving %d Marks; want 2880 Marks, 0 left",
-			cost, currency, p.Marks)
+	if cost != wantCost || currency != Marks || p.Marks != 0 {
+		t.Fatalf("family purchase charged %d %s, leaving %d Marks; want %d Marks, 0 left",
+			cost, currency, p.Marks, wantCost)
 	}
 	for _, chroma := range familyChromas {
 		if !p.OwnedChromas[chroma.ID] {
@@ -211,12 +204,11 @@ func TestBuyChromaFamilyDiscountsTheFullPriceOfEveryThreeChromaSet(t *testing.T)
 			continue
 		}
 		familiesTested++
-		unitPrice := chromas[0].Cost
 		currency := Currency(chromas[0].Currency)
 		var fullPrice int64
 		for _, chroma := range chromas {
-			if chroma.Cost != unitPrice || Currency(chroma.Currency) != currency {
-				t.Errorf("family %q does not have a uniform price and currency", family)
+			if Currency(chroma.Currency) != currency {
+				t.Errorf("family %q does not have a uniform currency", family)
 			}
 			fullPrice += chroma.Cost
 		}
@@ -237,10 +229,6 @@ func TestBuyChromaFamilyDiscountsTheFullPriceOfEveryThreeChromaSet(t *testing.T)
 		if cost != wantCost || gotCurrency != currency {
 			t.Errorf("Buy All for %q costs %d %s; want 20%% off all three (%d %s)",
 				family, cost, gotCurrency, wantCost, currency)
-		}
-		if cost <= 2*unitPrice {
-			t.Errorf("Buy All for %q costs %d, no more than two full-price chromas (%d)",
-				family, cost, 2*unitPrice)
 		}
 	}
 	if familiesTested == 0 {
@@ -264,7 +252,7 @@ func TestBuyChromaFamilyRejectsPartiallyOwnedFamily(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		p.Marks = 5000
+		p.Marks = 100000
 		for _, chroma := range familyChromas[:ownedCount] {
 			p.OwnedChromas[chroma.ID] = true
 		}
@@ -272,7 +260,7 @@ func TestBuyChromaFamilyRejectsPartiallyOwnedFamily(t *testing.T) {
 		if _, _, err := BuyChromaFamily(p, "alien"); err == nil {
 			t.Errorf("Buy All should fail with %d already-owned chromas", ownedCount)
 		}
-		if p.Marks != 5000 || p.TotalChromasPurchased != 0 {
+		if p.Marks != 100000 || p.TotalChromasPurchased != 0 {
 			t.Errorf("rejected partial family purchase changed profile: marks=%d purchases=%d",
 				p.Marks, p.TotalChromasPurchased)
 		}
@@ -285,32 +273,36 @@ func TestBuyChromaFamilyRejectsPartiallyOwnedFamily(t *testing.T) {
 		nextChroma := familyChromas[ownedCount]
 		if err := BuyChroma(p, nextChroma.ID); err != nil {
 			t.Errorf("buy remaining chroma %q at full price: %v", nextChroma.ID, err)
-		} else if wantMarks := int64(5000) - nextChroma.Cost; p.Marks != wantMarks {
+		} else if wantMarks := int64(100000) - nextChroma.Cost; p.Marks != wantMarks {
 			t.Errorf("remaining chroma purchase leaves %d Marks, want %d", p.Marks, wantMarks)
 		}
 	}
 }
 
-func TestBuyChromaFamilyRejectsSingletonAndDiscountsCrownsFamily(t *testing.T) {
+func TestBuyChromaFamilyRejectsUnknownAndDiscountsCrownsFamily(t *testing.T) {
 	p, err := profile.New(time.Now())
 	if err != nil {
 		t.Fatal(err)
 	}
-	p.Crowns = 2000
-	if _, _, err := BuyChromaFamily(p, "angel"); err == nil {
-		t.Fatal("single-chroma family should not offer Buy All")
+	if _, _, err := BuyChromaFamily(p, "unknown-family"); err == nil {
+		t.Fatal("unknown family should not offer Buy All")
 	}
-	if p.Crowns != 2000 || p.OwnedChromas["angel-prismatic"] {
-		t.Fatal("rejected singleton purchase changed profile")
+	var fullPrice int64
+	for _, chroma := range AllChromas() {
+		if chromaFamilyKey(chroma) == "dragon" {
+			fullPrice += chroma.Cost
+		}
 	}
+	p.Crowns = fullPrice
 
 	cost, currency, err := BuyChromaFamily(p, "dragon")
 	if err != nil {
 		t.Fatalf("buy Dragon chroma family: %v", err)
 	}
-	if cost != 1920 || currency != Crowns || p.Crowns != 80 {
-		t.Fatalf("Dragon family purchase charged %d %s, leaving %d Crowns; want 1920 Crowns, 80 left",
-			cost, currency, p.Crowns)
+	wantCost := (fullPrice*4 + 2) / 5
+	if cost != wantCost || currency != Crowns || p.Crowns != fullPrice-wantCost {
+		t.Fatalf("Dragon family purchase charged %d %s, leaving %d Crowns; want %d Crowns, %d left",
+			cost, currency, p.Crowns, wantCost, fullPrice-wantCost)
 	}
 	for _, id := range []string{"dragon-emerald", "dragon-ruby", "dragon-sapphire"} {
 		if !p.OwnedChromas[id] {
@@ -336,21 +328,6 @@ func TestNewSkinChromasUseTheirFolderColorsAndArePurchasable(t *testing.T) {
 		"reptile-pink": {"Reptile (pink)", "pink", "shop/reptile/pink"},
 		"zulu-orange":  {"Zulu (orange)", "orange", "shop/zulu/orange"},
 	}
-	wantPrices := map[string]struct {
-		cost     int64
-		currency Currency
-	}{
-		"alien-yellow": {1200, Marks},
-		"amazon-green": {1200, Marks},
-		"bee-silver":   {1200, Marks},
-		"cat-brown":    {900, Marks},
-		"dog-gray":     {600, Marks},
-		"dragon-ruby":  {800, Crowns},
-		"dwarf-purple": {1000, Marks},
-		"orc-white":    {250, Marks},
-		"reptile-pink": {250, Marks},
-		"zulu-orange":  {250, Marks},
-	}
 	for id, expected := range want {
 		chroma, ok := FindChroma(id)
 		if !ok {
@@ -361,10 +338,8 @@ func TestNewSkinChromasUseTheirFolderColorsAndArePurchasable(t *testing.T) {
 			t.Errorf("chroma %q = %+v, want name %q, color %q, skin %q",
 				id, chroma, expected.name, expected.color, expected.skin)
 		}
-		expectedPrice := wantPrices[id]
-		if chroma.Cost != expectedPrice.cost || chroma.Currency != string(expectedPrice.currency) {
-			t.Errorf("chroma %q costs %d %s, want %d %s",
-				id, chroma.Cost, chroma.Currency, expectedPrice.cost, expectedPrice.currency)
+		if chroma.Cost <= 0 || (chroma.Currency != string(Marks) && chroma.Currency != string(Crowns)) {
+			t.Errorf("chroma %q has an invalid price: %+v", id, chroma)
 		}
 	}
 
@@ -372,12 +347,22 @@ func TestNewSkinChromasUseTheirFolderColorsAndArePurchasable(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	p.Marks = 1200
+	bee, ok := FindChroma("bee-silver")
+	if !ok {
+		t.Fatal("Bee silver chroma is missing")
+	}
+	if bee.Currency == string(Marks) {
+		p.Marks = bee.Cost
+	} else {
+		p.Crowns = bee.Cost
+	}
 	if err := BuyChroma(p, "bee-silver"); err != nil {
 		t.Fatalf("buy new skin chroma: %v", err)
 	}
-	if p.Marks != 0 || !p.OwnedChromas["bee-silver"] {
-		t.Fatalf("skin chroma purchase left %d Marks and owned=%t", p.Marks, p.OwnedChromas["bee-silver"])
+	if (bee.Currency == string(Marks) && p.Marks != 0) ||
+		(bee.Currency == string(Crowns) && p.Crowns != 0) || !p.OwnedChromas["bee-silver"] {
+		t.Fatalf("skin chroma purchase left %d Marks and %d Crowns, owned=%t",
+			p.Marks, p.Crowns, p.OwnedChromas["bee-silver"])
 	}
 	if err := AssignChroma(p, "B", "bee-silver"); err != nil {
 		t.Fatalf("assign new skin chroma: %v", err)

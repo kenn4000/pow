@@ -2,13 +2,14 @@ package app
 
 import (
 	"fmt"
-	"image/png"
 	"io/fs"
 	"net/http"
 	"path"
 	"strings"
 
+	"prisonersofwar/internal/catalog"
 	"prisonersofwar/internal/game"
+	"prisonersofwar/internal/skins"
 )
 
 type cardArtwork struct {
@@ -40,7 +41,7 @@ type cardCatalog struct {
 
 func loadCardCatalog() (cardCatalog, error) {
 	result := cardCatalog{Cards: []catalogCard{}, Artwork: []cardArtwork{}}
-	skins := []string{"shop/tribal/blue", "shop/tribal/yellow", "shop/tribal/red"}
+	defaultSkins := []string{"shop/tribal/blue", "shop/tribal/yellow", "shop/tribal/red"}
 	for _, card := range game.NewDeck() {
 		tier := "large"
 		if card.Face <= 3 {
@@ -48,54 +49,38 @@ func loadCardCatalog() (cardCatalog, error) {
 		} else if card.Face <= 6 {
 			tier = "med"
 		}
-		result.Cards = append(result.Cards, catalogCard{card.Code(), card.Suit.String(), card.Face, tier, game.Suit((int(card.Suit) + 1) % 3).String(), game.Suit((int(card.Suit) + 2) % 3).String(), skins[card.Suit]})
+		result.Cards = append(result.Cards, catalogCard{card.Code(), card.Suit.String(), card.Face, tier, game.Suit((int(card.Suit) + 1) % 3).String(), game.Suit((int(card.Suit) + 2) % 3).String(), defaultSkins[card.Suit]})
 	}
-	err := fs.WalkDir(webFiles, ".", func(path string, entry fs.DirEntry, err error) error {
+	for _, chroma := range catalog.AllChromas() {
+		parts := strings.Split(chroma.Skin, "/")
+		if len(parts) != 3 || parts[0] != "shop" {
+			return cardCatalog{}, fmt.Errorf("invalid chroma skin path %q", chroma.Skin)
+		}
+		sheet, err := skins.ReadShopSheet(webFiles, parts[1], parts[2])
 		if err != nil {
-			return err
+			return cardCatalog{}, err
 		}
-		if entry.IsDir() || !strings.HasPrefix(path, "shop/") || !strings.HasSuffix(path, ".png") {
-			return nil
-		}
-		art, err := inspectArtwork(path)
+		sheetInfo, err := fs.Stat(webFiles, path.Join("skinshop", sheet.Meta.Image))
 		if err != nil {
-			return err
+			return cardCatalog{}, fmt.Errorf("stat skin sprite image %q: %w", sheet.Meta.Image, err)
 		}
-		result.Artwork = append(result.Artwork, art)
-		return nil
-	})
-	return result, err
-}
-
-func inspectArtwork(assetPath string) (cardArtwork, error) {
-	skin := path.Dir(assetPath)
-	parts := strings.Split(skin, "/")
-	if len(parts) != 3 || parts[0] != "shop" {
-		return cardArtwork{}, fmt.Errorf("invalid artwork path %q", assetPath)
+		for _, tier := range []string{"small", "med", "large"} {
+			for _, pose := range []string{"idle", "attack", "win", "lose"} {
+				filename := tier + "_" + pose + ".png"
+				frame, ok := sheet.Frames[filename]
+				if !ok {
+					return cardCatalog{}, fmt.Errorf("skin sprite sheet %q is missing frame %q", sheet.Meta.Image, filename)
+				}
+				assetPath := path.Join(chroma.Skin, filename)
+				result.Artwork = append(result.Artwork, cardArtwork{
+					ID: assetPath, Path: "skins/" + assetPath, Skin: chroma.Skin,
+					Color: strings.ReplaceAll(parts[2], "-", " "), Tier: tier, Pose: pose,
+					Width: frame.SourceSize.Width, Height: frame.SourceSize.Height, Bytes: sheetInfo.Size(),
+				})
+			}
+		}
 	}
-	file := path.Base(assetPath)
-	if path.Ext(file) != ".png" {
-		return cardArtwork{}, fmt.Errorf("invalid artwork name %q", file)
-	}
-	color := strings.ReplaceAll(parts[2], "-", " ")
-	tier, pose, ok := strings.Cut(strings.TrimSuffix(file, ".png"), "_")
-	if !ok {
-		return cardArtwork{}, fmt.Errorf("invalid artwork path %q", assetPath)
-	}
-	asset, err := webFiles.Open(assetPath)
-	if err != nil {
-		return cardArtwork{}, err
-	}
-	defer asset.Close()
-	info, err := asset.Stat()
-	if err != nil {
-		return cardArtwork{}, err
-	}
-	dimensions, err := png.DecodeConfig(asset)
-	if err != nil {
-		return cardArtwork{}, err
-	}
-	return cardArtwork{assetPath, "skins/" + assetPath, skin, color, tier, pose, dimensions.Width, dimensions.Height, info.Size()}, nil
+	return result, nil
 }
 
 func (s *webServer) handleCardCatalog(w http.ResponseWriter, r *http.Request) {

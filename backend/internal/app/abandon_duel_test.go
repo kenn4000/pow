@@ -200,6 +200,7 @@ func TestAbandonDuelCompletesBothSixPairRoundsAndSwapsStarter(t *testing.T) {
 		t.Fatal(err)
 	}
 	for !duel.GameOver {
+		round := duel.Round
 		if duel.phase() == "abandon-duel-reveal" {
 			hidden := duel.hiddenBoardIndices()
 			if len(hidden) == 0 {
@@ -246,6 +247,14 @@ func TestAbandonDuelCompletesBothSixPairRoundsAndSwapsStarter(t *testing.T) {
 		}
 		if err := duel.validateState(); err != nil {
 			t.Fatal(err)
+		}
+		if round == 1 && duel.Round == 2 {
+			for player, state := range duel.Players {
+				if len(state.Prisoners) != 0 {
+					t.Fatalf("player %d carried %d prisoners into round 2",
+						player, len(state.Prisoners))
+				}
+			}
 		}
 	}
 	if duel.RoundPairCounts != [2][2]int{{6, 6}, {6, 6}} {

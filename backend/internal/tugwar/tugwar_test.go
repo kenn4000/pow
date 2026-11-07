@@ -29,8 +29,8 @@ func TestNewGameDealsAndDerivesHeroStats(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if g.State.S != 0 || g.State.F != 0 || g.State.B != 2 {
-		t.Fatalf("derived stats = S:%d F:%d B:%d, want 0, 0, 2", g.State.S, g.State.F, g.State.B)
+	if g.State.S != 0 || g.State.F != 0 || g.State.B != 3 {
+		t.Fatalf("derived stats = S:%d F:%d B:%d, want 0, 0, 3", g.State.S, g.State.F, g.State.B)
 	}
 	if g.State.Pushes != [2]int{1, 1} {
 		t.Fatalf("pushes = %v, want [1 1]", g.State.Pushes)
@@ -63,6 +63,17 @@ func TestNewGameDealsAndDerivesHeroStats(t *testing.T) {
 	}
 	if len(seen) != 26 {
 		t.Fatalf("setup contains %d cards, want 26", len(seen))
+	}
+}
+
+func TestNewGameStartsAtBaseBountyWithoutHeroModifiers(t *testing.T) {
+	recruit, _ := heroes.ByID("recruit")
+	g, err := NewGame(recruit, recruit, rand.New(rand.NewSource(8)))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if g.State.B != 1 {
+		t.Fatalf("base bounty = %d, want 1", g.State.B)
 	}
 }
 

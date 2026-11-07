@@ -1,0 +1,255 @@
+{
+    "frames":  {
+                   "cloud_brown.png":  {
+                                           "trimmed":  false,
+                                           "spriteSourceSize":  {
+                                                                    "y":  0,
+                                                                    "w":  1066,
+                                                                    "h":  640,
+                                                                    "x":  0
+                                                                },
+                                           "sourceSize":  {
+                                                              "h":  640,
+                                                              "w":  1066
+                                                          },
+                                           "rotated":  false,
+                                           "frame":  {
+                                                         "y":  0,
+                                                         "w":  1066,
+                                                         "h":  640,
+                                                         "x":  2132
+                                                     }
+                                       },
+                   "cloud_orange.png":  {
+                                            "trimmed":  false,
+                                            "spriteSourceSize":  {
+                                                                     "y":  0,
+                                                                     "w":  1066,
+                                                                     "h":  640,
+                                                                     "x":  0
+                                                                 },
+                                            "sourceSize":  {
+                                                               "h":  640,
+                                                               "w":  1066
+                                                           },
+                                            "rotated":  false,
+                                            "frame":  {
+                                                          "y":  640,
+                                                          "w":  1066,
+                                                          "h":  640,
+                                                          "x":  1066
+                                                      }
+                                        },
+                   "cloud_blue.png":  {
+                                          "trimmed":  false,
+                                          "spriteSourceSize":  {
+                                                                   "y":  0,
+                                                                   "w":  1066,
+                                                                   "h":  640,
+                                                                   "x":  0
+                                                               },
+                                          "sourceSize":  {
+                                                             "h":  640,
+                                                             "w":  1066
+                                                         },
+                                          "rotated":  false,
+                                          "frame":  {
+                                                        "y":  0,
+                                                        "w":  1066,
+                                                        "h":  640,
+                                                        "x":  1066
+                                                    }
+                                      },
+                   "cloud_pink.png":  {
+                                          "trimmed":  false,
+                                          "spriteSourceSize":  {
+                                                                   "y":  0,
+                                                                   "w":  1066,
+                                                                   "h":  640,
+                                                                   "x":  0
+                                                               },
+                                          "sourceSize":  {
+                                                             "h":  640,
+                                                             "w":  1066
+                                                         },
+                                          "rotated":  false,
+                                          "frame":  {
+                                                        "y":  640,
+                                                        "w":  1066,
+                                                        "h":  640,
+                                                        "x":  2132
+                                                    }
+                                      },
+                   "cloud.png":  {
+                                     "trimmed":  false,
+                                     "spriteSourceSize":  {
+                                                              "y":  0,
+                                                              "w":  1066,
+                                                              "h":  640,
+                                                              "x":  0
+                                                          },
+                                     "sourceSize":  {
+                                                        "h":  640,
+                                                        "w":  1066
+                                                    },
+                                     "rotated":  false,
+                                     "frame":  {
+                                                   "y":  0,
+                                                   "w":  1066,
+                                                   "h":  640,
+                                                   "x":  0
+                                               }
+                                 },
+                   "cloud_purple.png":  {
+                                            "trimmed":  false,
+                                            "spriteSourceSize":  {
+                                                                     "y":  0,
+                                                                     "w":  1066,
+                                                                     "h":  640,
+                                                                     "x":  0
+                                                                 },
+                                            "sourceSize":  {
+                                                               "h":  640,
+                                                               "w":  1066
+                                                           },
+                                            "rotated":  false,
+                                            "frame":  {
+                                                          "y":  1280,
+                                                          "w":  1066,
+                                                          "h":  640,
+                                                          "x":  0
+                                                      }
+                                        },
+                   "cloud_prism.png":  {
+                                           "trimmed":  false,
+                                           "spriteSourceSize":  {
+                                                                    "y":  0,
+                                                                    "w":  1066,
+                                                                    "h":  640,
+                                                                    "x":  0
+                                                                },
+                                           "sourceSize":  {
+                                                              "h":  640,
+                                                              "w":  1066
+                                                          },
+                                           "rotated":  false,
+                                           "frame":  {
+                                                         "y":  640,
+                                                         "w":  1066,
+                                                         "h":  640,
+                                                         "x":  3198
+                                                     }
+                                       },
+                   "cloud_yellow.png":  {
+                                            "trimmed":  false,
+                                            "spriteSourceSize":  {
+                                                                     "y":  0,
+                                                                     "w":  1066,
+                                                                     "h":  640,
+                                                                     "x":  0
+                                                                 },
+                                            "sourceSize":  {
+                                                               "h":  640,
+                                                               "w":  1066
+                                                           },
+                                            "rotated":  false,
+                                            "frame":  {
+                                                          "y":  1280,
+                                                          "w":  1066,
+                                                          "h":  640,
+                                                          "x":  3198
+                                                      }
+                                        },
+                   "cloud_red.png":  {
+                                         "trimmed":  false,
+                                         "spriteSourceSize":  {
+                                                                  "y":  0,
+                                                                  "w":  1066,
+                                                                  "h":  640,
+                                                                  "x":  0
+                                                              },
+                                         "sourceSize":  {
+                                                            "h":  640,
+                                                            "w":  1066
+                                                        },
+                                         "rotated":  false,
+                                         "frame":  {
+                                                       "y":  1280,
+                                                       "w":  1066,
+                                                       "h":  640,
+                                                       "x":  1066
+                                                   }
+                                     },
+                   "cloud_green.png":  {
+                                           "trimmed":  false,
+                                           "spriteSourceSize":  {
+                                                                    "y":  0,
+                                                                    "w":  1066,
+                                                                    "h":  640,
+                                                                    "x":  0
+                                                                },
+                                           "sourceSize":  {
+                                                              "h":  640,
+                                                              "w":  1066
+                                                          },
+                                           "rotated":  false,
+                                           "frame":  {
+                                                         "y":  0,
+                                                         "w":  1066,
+                                                         "h":  640,
+                                                         "x":  3198
+                                                     }
+                                       },
+                   "cloud_lime.png":  {
+                                          "trimmed":  false,
+                                          "spriteSourceSize":  {
+                                                                   "y":  0,
+                                                                   "w":  1066,
+                                                                   "h":  640,
+                                                                   "x":  0
+                                                               },
+                                          "sourceSize":  {
+                                                             "h":  640,
+                                                             "w":  1066
+                                                         },
+                                          "rotated":  false,
+                                          "frame":  {
+                                                        "y":  640,
+                                                        "w":  1066,
+                                                        "h":  640,
+                                                        "x":  0
+                                                    }
+                                      },
+                   "cloud_skyblue.png":  {
+                                             "trimmed":  false,
+                                             "spriteSourceSize":  {
+                                                                      "y":  0,
+                                                                      "w":  1066,
+                                                                      "h":  640,
+                                                                      "x":  0
+                                                                  },
+                                             "sourceSize":  {
+                                                                "h":  640,
+                                                                "w":  1066
+                                                            },
+                                             "rotated":  false,
+                                             "frame":  {
+                                                           "y":  1280,
+                                                           "w":  1066,
+                                                           "h":  640,
+                                                           "x":  2132
+                                                       }
+                                         }
+               },
+    "meta":  {
+                 "size":  {
+                              "h":  1920,
+                              "w":  4264
+                          },
+                 "version":  "1.0",
+                 "app":  "dotnet-drawing",
+                 "image":  "clouds.png",
+                 "scale":  "1",
+                 "format":  "RGBA8888"
+             }
+}

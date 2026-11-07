@@ -27,7 +27,7 @@ function ArtworkFacts({ art }) {
     <dt>Tier</dt><dd>{tierLabel(art.tier)}</dd>
     <dt>Pose</dt><dd>{title(art.pose)}</dd>
     <dt>Dimensions</dt><dd>{art.width} × {art.height} px</dd>
-    <dt>File size</dt><dd>{(art.bytes / 1024).toFixed(1)} KiB</dd>
+    <dt>Sprite sheet size</dt><dd>{(art.bytes / 1024).toFixed(1)} KiB</dd>
     <dt>File</dt><dd><a href={imageURL(art)} target="_blank" rel="noreferrer">{art.id}</a></dd>
   </dl>;
 }

@@ -1,7 +1,6 @@
 package catalog
 
 import (
-	"encoding/json"
 	"errors"
 	"fmt"
 	"io/fs"
@@ -34,19 +33,7 @@ const (
 
 var chromas []Chroma
 
-type skinManifest struct {
-	ID          string `json:"id"`
-	DisplayName string `json:"displayName"`
-	Color       string `json:"color"`
-	HexColor    string `json:"hexColor"`
-	Price       int64  `json:"price"`
-	Currency    string `json:"currency"`
-	Rarity      string `json:"rarity"`
-	RarityRank  int    `json:"rarityRank"`
-}
-
 var (
-	skinPathPart = regexp.MustCompile(`^[a-z0-9]+(?:-[a-z0-9]+)*$`)
 	skinID       = regexp.MustCompile(`^[a-z0-9]+(?:-[a-z0-9]+)*$`)
 	skinHexColor = regexp.MustCompile(`^#[0-9a-fA-F]{6}$`)
 )
@@ -60,53 +47,30 @@ func init() {
 }
 
 func loadSkinChromas(assets fs.FS) ([]Chroma, error) {
-	families, err := fs.ReadDir(assets, "shop")
+	sheets, err := skins.ReadShopSheets(assets)
 	if err != nil {
-		return nil, fmt.Errorf("read shop skin families: %w", err)
+		return nil, fmt.Errorf("read shop skin sheets: %w", err)
 	}
-	result := make([]Chroma, 0)
+	result := make([]Chroma, 0, len(sheets))
 	seenIDs := make(map[string]bool)
-	for _, family := range families {
-		if !family.IsDir() || !skinPathPart.MatchString(family.Name()) {
-			return nil, fmt.Errorf("invalid skin family %q", family.Name())
-		}
-		familyPath := path.Join("shop", family.Name())
-		variants, err := fs.ReadDir(assets, familyPath)
+	for _, sheet := range sheets {
+		chroma, err := readSkinManifest(sheet)
 		if err != nil {
-			return nil, fmt.Errorf("read skin family %q: %w", family.Name(), err)
+			return nil, err
 		}
-		if len(variants) == 0 {
-			return nil, fmt.Errorf("skin family %q has no color variants", family.Name())
+		if seenIDs[chroma.ID] {
+			return nil, fmt.Errorf("duplicate chroma ID %q", chroma.ID)
 		}
-		for _, variant := range variants {
-			if !variant.IsDir() || !skinPathPart.MatchString(variant.Name()) {
-				return nil, fmt.Errorf("invalid skin variant %q in family %q", variant.Name(), family.Name())
-			}
-			skinPath := path.Join(familyPath, variant.Name())
-			chroma, err := readSkinManifest(assets, skinPath, family.Name(), variant.Name())
-			if err != nil {
-				return nil, err
-			}
-			if seenIDs[chroma.ID] {
-				return nil, fmt.Errorf("duplicate chroma ID %q", chroma.ID)
-			}
-			seenIDs[chroma.ID] = true
-			result = append(result, chroma)
-		}
+		seenIDs[chroma.ID] = true
+		result = append(result, chroma)
 	}
 	return result, nil
 }
 
-func readSkinManifest(assets fs.FS, skinPath, family, variant string) (Chroma, error) {
-	manifestPath := path.Join(skinPath, "skin.json")
-	data, err := fs.ReadFile(assets, manifestPath)
-	if err != nil {
-		return Chroma{}, fmt.Errorf("read skin manifest %q: %w", manifestPath, err)
-	}
-	var manifest skinManifest
-	if err := json.Unmarshal(data, &manifest); err != nil {
-		return Chroma{}, fmt.Errorf("decode skin manifest %q: %w", manifestPath, err)
-	}
+func readSkinManifest(sheet skins.SpriteSheet) (Chroma, error) {
+	family, variant := sheet.Family, sheet.Color
+	manifestPath := path.Join("skinshop", family+"_"+variant+".json")
+	manifest := sheet.Meta.SkinData
 	manifest.DisplayName = strings.TrimSpace(manifest.DisplayName)
 	if manifest.DisplayName == "" {
 		return Chroma{}, fmt.Errorf("skin manifest %q has an empty displayName", manifestPath)
@@ -121,18 +85,10 @@ func readSkinManifest(assets fs.FS, skinPath, family, variant string) (Chroma, e
 	if manifest.Currency != string(Marks) && manifest.Currency != string(Crowns) {
 		return Chroma{}, fmt.Errorf("skin manifest %q currency must be marks or crowns", manifestPath)
 	}
-	manifest.Rarity = strings.ToLower(strings.TrimSpace(manifest.Rarity))
-	if manifest.Rarity == "" {
-		manifest.Rarity = "common"
-	}
 	if manifest.RarityRank < 0 || manifest.RarityRank > 4 {
 		return Chroma{}, fmt.Errorf("skin manifest %q rarityRank must be between 0 and 4", manifestPath)
 	}
-	switch manifest.Rarity {
-	case "common", "uncommon", "rare", "epic", "legendary", "seasonal", "super-rare":
-	default:
-		return Chroma{}, fmt.Errorf("skin manifest %q has unsupported rarity %q", manifestPath, manifest.Rarity)
-	}
+	manifest.Rarity = [...]string{"common", "uncommon", "rare", "epic", "seasonal"}[manifest.RarityRank]
 	manifest.ID = strings.TrimSpace(manifest.ID)
 	if manifest.ID == "" {
 		manifest.ID = family + "-" + variant
@@ -144,18 +100,7 @@ func readSkinManifest(assets fs.FS, skinPath, family, variant string) (Chroma, e
 	if color == "" {
 		color = strings.ReplaceAll(variant, "-", " ")
 	}
-	for _, tier := range []string{"small", "med", "large"} {
-		for _, pose := range []string{"idle", "attack", "win", "lose"} {
-			artPath := path.Join(skinPath, tier+"_"+pose+".png")
-			info, err := fs.Stat(assets, artPath)
-			if err != nil {
-				return Chroma{}, fmt.Errorf("skin %q is missing artwork %q: %w", skinPath, artPath, err)
-			}
-			if info.IsDir() {
-				return Chroma{}, fmt.Errorf("skin artwork %q is not a file", artPath)
-			}
-		}
-	}
+	skinPath := path.Join("shop", family, variant)
 	return Chroma{
 		ID: manifest.ID, Name: manifest.DisplayName, Color: color, Skin: skinPath,
 		HexColor: manifest.HexColor, Rarity: manifest.Rarity, RarityRank: manifest.RarityRank, Cost: manifest.Price,

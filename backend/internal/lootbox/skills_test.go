@@ -72,6 +72,54 @@ func TestCampDrawRerollAwardsOnlyTheHigherRankedPrize(t *testing.T) {
 	t.Fatal("none of the deterministic rolls selected a higher-ranked reroll")
 }
 
+func TestCampDrawRerollDefersRewardsUntilPlayerChoice(t *testing.T) {
+	p, err := profile.New(time.Now())
+	if err != nil {
+		t.Fatal(err)
+	}
+	p.DrawsAvailable = 1
+	p.SkillNodes["reroll"] = true
+	rng := rand.New(rand.NewSource(42))
+	session, err := BeginCampDraw(p, rng)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for session.exchangeIndex < 3 {
+		if _, err := session.Play(0, rng); err != nil {
+			t.Fatal(err)
+		}
+	}
+
+	before := *p
+	result, err := session.FinishWithRewardChoice(p, rng)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !result.AwaitingChoice || !result.Rerolled || len(result.RewardOptions) != 2 {
+		t.Fatalf("reroll result = %+v, want two pending reward choices", result)
+	}
+	if p.Marks != before.Marks || p.Crowns != before.Crowns || p.Energy != before.Energy ||
+		p.DrawsAvailable != 0 || len(p.OwnedChromas) != len(before.OwnedChromas) {
+		t.Fatalf("reward was granted before selection: marks=%d crowns=%d energy=%d draws=%d",
+			p.Marks, p.Crowns, p.Energy, p.DrawsAvailable)
+	}
+	if err := SelectCampDrawReward(p, &result, -1); err == nil {
+		t.Fatal("invalid reward selection should fail")
+	}
+	choice := 1
+	selected := result.RewardOptions[choice]
+	if err := SelectCampDrawReward(p, &result, choice); err != nil {
+		t.Fatal(err)
+	}
+	if result.AwaitingChoice || result.Reward != selected {
+		t.Fatalf("selected reward was not recorded: %+v", result)
+	}
+	if p.Marks != before.Marks+selected.Marks || p.Crowns != before.Crowns+selected.Crowns {
+		t.Fatalf("selected reward was not applied exactly once: marks=%d crowns=%d reward=%+v",
+			p.Marks, p.Crowns, selected)
+	}
+}
+
 func TestHigherRankedCampDrawPrizeOrdering(t *testing.T) {
 	tests := []struct {
 		name      string

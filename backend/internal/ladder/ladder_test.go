@@ -79,9 +79,97 @@ func TestNewLadderGameIsDeterministicAndDoesNotMutateDeck(t *testing.T) {
 		t.Fatalf("unexpected ordered-deck setup: hand sizes %d/%d wild %d",
 			len(state.HandA), len(state.HandB), state.WildFaceRaw)
 	}
-	if !state.FallbackNoInitiativeSuit || state.Current != PlayerB || state.ChainValue == nil ||
-		*state.ChainValue != 1 || state.ChainSuit == nil || *state.ChainSuit != game.Shield {
+	if !state.FallbackNoInitiativeSuit || state.Current != PlayerB || state.ChainCard == nil ||
+		*state.ChainCard != (game.Card{Suit: game.Shield, Face: 1}) ||
+		state.ChainValue == nil || *state.ChainValue != 1 ||
+		state.ChainSuit == nil || *state.ChainSuit != game.Shield {
 		t.Fatalf("unexpected fallback opening state: %+v", state)
+	}
+}
+
+func TestNewLadderGameAutoPlaysOnlyInitiativeCard(t *testing.T) {
+	hero, _ := heroes.ByID("recruit")
+	handA := []game.Card{
+		{Suit: game.Blade, Face: 1},
+		{Suit: game.Fang, Face: 1}, {Suit: game.Fang, Face: 2},
+		{Suit: game.Fang, Face: 3}, {Suit: game.Fang, Face: 4},
+		{Suit: game.Shield, Face: 1}, {Suit: game.Shield, Face: 2},
+		{Suit: game.Shield, Face: 3}, {Suit: game.Shield, Face: 4},
+	}
+	handB := []game.Card{
+		{Suit: game.Fang, Face: 5}, {Suit: game.Fang, Face: 6},
+		{Suit: game.Fang, Face: 7}, {Suit: game.Fang, Face: 8},
+		{Suit: game.Fang, Face: 9}, {Suit: game.Shield, Face: 5},
+		{Suit: game.Shield, Face: 6}, {Suit: game.Shield, Face: 7},
+		{Suit: game.Shield, Face: 8},
+	}
+	used := make(map[game.Card]struct{}, len(handA)+len(handB)+1)
+	for _, card := range append(append([]game.Card{}, handA...), handB...) {
+		used[card] = struct{}{}
+	}
+	bounty := game.Card{Suit: game.Blade, Face: 9}
+	used[bounty] = struct{}{}
+	deck := make([]game.Card, 0, len(game.NewDeck()))
+	for _, card := range game.NewDeck() {
+		if _, ok := used[card]; !ok {
+			deck = append(deck, card)
+		}
+	}
+	deck = append(deck, bounty)
+	for index := len(handB) - 1; index >= 0; index-- {
+		deck = append(deck, handB[index])
+	}
+	for index := len(handA) - 1; index >= 0; index-- {
+		deck = append(deck, handA[index])
+	}
+
+	match, err := NewLadderGame(hero, hero, deck, 1)
+	if err != nil {
+		t.Fatal(err)
+	}
+	state := match.State()
+	if state.Current != PlayerB || state.ChainCard == nil ||
+		*state.ChainCard != handA[0] || !reflect.DeepEqual(state.PlayedCards, []game.Card{handA[0]}) {
+		t.Fatalf("single initiative card was not auto-played: %+v", state)
+	}
+}
+
+func TestDeferredOpeningPreservesAndThenPlaysTheAutomaticCard(t *testing.T) {
+	heroA, _ := heroes.ByID("recruit")
+	heroB, _ := heroes.ByID("warden")
+	automatic, err := NewLadderGame(heroA, heroB, nil, 44)
+	if err != nil {
+		t.Fatal(err)
+	}
+	deferred, err := NewLadderGameWithDeferredOpening(heroA, heroB, nil, 44)
+	if err != nil {
+		t.Fatal(err)
+	}
+	before := deferred.State()
+	automaticState := automatic.State()
+	openingHand, otherHand := before.HandA, before.HandB
+	automaticOpeningHand, automaticOtherHand := automaticState.HandA, automaticState.HandB
+	if before.OpeningPlayer == PlayerB {
+		openingHand, otherHand = before.HandB, before.HandA
+		automaticOpeningHand, automaticOtherHand = automaticState.HandB, automaticState.HandA
+	}
+	if !before.OpeningPending || before.OpeningPlayer != otherPlayer(automaticState.Current) ||
+		before.OpeningCard == nil || automaticState.ChainCard == nil ||
+		*before.OpeningCard != *automaticState.ChainCard ||
+		len(before.PlayedCards) != 0 || len(openingHand) != len(automaticOpeningHand)+1 ||
+		len(otherHand) != len(automaticOtherHand) {
+		t.Fatalf("deferred opening did not preserve the original hand: deferred=%+v automatic=%+v",
+			before, automaticState)
+	}
+	if err := deferred.Play(before.OpeningPlayer, *before.OpeningCard); !errors.Is(err, ErrOpeningPending) {
+		t.Fatalf("Play while opening pending returned %v, want ErrOpeningPending", err)
+	}
+	if err := deferred.PlayOpeningCard(); err != nil {
+		t.Fatal(err)
+	}
+	if !reflect.DeepEqual(deferred.State(), automaticState) {
+		t.Fatalf("playing deferred opening changed initial state: got=%+v want=%+v",
+			deferred.State(), automaticState)
 	}
 }
 
@@ -126,13 +214,20 @@ func TestNewLadderGameSwapsDraftCardsBeforeSelectingLeader(t *testing.T) {
 	if len(state.HandA) != 10 || len(state.HandB) != 9 ||
 		containsCard(state.HandA, game.Card{Suit: game.Shield, Face: 1}) ||
 		!containsCard(state.HandA, game.Card{Suit: game.Fang, Face: 1}) ||
-		containsCard(state.HandB, game.Card{Suit: game.Shield, Face: 1}) ||
+		!containsCard(state.HandB, game.Card{Suit: game.Shield, Face: 1}) ||
 		containsCard(state.HandB, game.Card{Suit: game.Fang, Face: 1}) {
 		t.Fatalf("draft did not exchange each player's lowest card: hands=%v/%v", state.HandA, state.HandB)
 	}
-	if state.InitiativeSuit != game.Blade || state.FallbackNoInitiativeSuit ||
-		state.Current != PlayerA || state.ChainSuit == nil || *state.ChainSuit != game.Shield {
+	if state.InitiativeSuit != game.Blade || state.FallbackNoInitiativeSuit {
 		t.Fatalf("leader was not selected from the drafted initiative-suit cards: %+v", state)
+	}
+	if state.ChainCard == nil || state.ChainCard.Suit != state.InitiativeSuit {
+		t.Fatalf("opening card does not match initiative suit: %+v", state)
+	}
+	for _, card := range append(append([]game.Card(nil), state.HandA...), state.HandB...) {
+		if card.Suit == state.InitiativeSuit && card.Face < state.ChainCard.Face {
+			t.Fatalf("opening card %v is not the lowest initiative card", *state.ChainCard)
+		}
 	}
 }
 
@@ -141,16 +236,19 @@ func TestStateReturnsDeepCopies(t *testing.T) {
 	suit := game.Blade
 	winner := PlayerA
 	g := &LadderGame{
-		handA:      []game.Card{{Suit: game.Blade, Face: 1}},
-		handB:      []game.Card{{Suit: game.Fang, Face: 2}},
-		chainValue: &value, chainSuit: &suit, winner: &winner,
+		handA:       []game.Card{{Suit: game.Blade, Face: 1}},
+		handB:       []game.Card{{Suit: game.Fang, Face: 2}},
+		playedCards: []game.Card{{Suit: game.Fang, Face: 2}},
+		chainValue:  &value, chainSuit: &suit, winner: &winner,
 	}
 	state := g.State()
 	state.HandA[0].Face = 9
+	state.PlayedCards[0].Face = 9
 	*state.ChainValue = 1
 	*state.ChainSuit = game.Shield
 	*state.Winner = PlayerB
-	if g.handA[0].Face != 1 || *g.chainValue != 5 || *g.chainSuit != game.Blade ||
+	if g.handA[0].Face != 1 || g.playedCards[0].Face != 2 ||
+		*g.chainValue != 5 || *g.chainSuit != game.Blade ||
 		*g.winner != PlayerA {
 		t.Fatal("State() exposed mutable internal data")
 	}
@@ -192,7 +290,7 @@ func TestLegalPlaysEnforceNumericAndWildChains(t *testing.T) {
 	}
 }
 
-func TestPlayUsesPreviousChainSuitAndEndsOnEmptyHand(t *testing.T) {
+func TestPlayResetsChainValueAfterDominantPlay(t *testing.T) {
 	chainSuit := game.Fang
 	chainValue := 4
 	card := game.Card{Suit: game.Blade, Face: 1}
@@ -207,12 +305,62 @@ func TestPlayUsesPreviousChainSuitAndEndsOnEmptyHand(t *testing.T) {
 	if got := g.Winner(); got == nil || *got != PlayerA {
 		t.Fatalf("winner = %v, want PlayerA", got)
 	}
-	if state := g.State(); state.ChainValue == nil || *state.ChainValue != 5 ||
+	if state := g.State(); state.ChainCard == nil || *state.ChainCard != card ||
+		state.ChainValue == nil || *state.ChainValue != 3 ||
 		state.ChainSuit == nil || *state.ChainSuit != game.Blade {
-		t.Fatalf("played card did not freeze its effective value: %+v", state)
+		t.Fatalf("played card did not reset to its shifted face value: %+v", state)
 	}
 	if err := g.Play(PlayerB, game.Card{Suit: game.Shield, Face: 1}); !errors.Is(err, ErrGameOver) {
 		t.Fatalf("play after game over error = %v, want ErrGameOver", err)
+	}
+}
+
+func TestDominantSuitPlayResetsTargetForNextPlayer(t *testing.T) {
+	chainSuit := game.Blade
+	chainValue := 9
+	rockFive := game.Card{Suit: game.Shield, Face: 5}
+	paperNine := game.Card{Suit: game.Fang, Face: 9}
+	paperFour := game.Card{Suit: game.Fang, Face: 4}
+	g := &LadderGame{
+		handA: []game.Card{rockFive, paperNine}, handB: []game.Card{paperFour},
+		current: PlayerA, chainSuit: &chainSuit, chainValue: &chainValue,
+		wildFaceRaw: 8,
+	}
+	if got, want := g.LegalPlays(PlayerA), []game.Card{rockFive, paperNine}; !reflect.DeepEqual(got, want) {
+		t.Fatalf("legal responses to Scissors 9 = %v, want %v", got, want)
+	}
+	if err := g.Play(PlayerA, rockFive); err != nil {
+		t.Fatal(err)
+	}
+	state := g.State()
+	if state.ChainValue == nil || *state.ChainValue != 5 || state.ChainSuit == nil ||
+		*state.ChainSuit != game.Shield ||
+		!reflect.DeepEqual(state.PlayedCards, []game.Card{rockFive}) {
+		t.Fatalf("dominant play did not reset target to face value: %+v", state)
+	}
+	if got, want := g.LegalPlays(PlayerB), []game.Card{paperFour}; !reflect.DeepEqual(got, want) {
+		t.Fatalf("legal response to Rock 5 = %v, want %v", got, want)
+	}
+	if err := g.Play(PlayerB, paperFour); err != nil {
+		t.Fatal(err)
+	}
+	if got, want := g.State().PlayedCards, []game.Card{rockFive, paperFour}; !reflect.DeepEqual(got, want) {
+		t.Fatalf("played-card history = %v, want %v", got, want)
+	}
+}
+
+func TestRestoreResetsLegacyChainTargetToShiftedFaceValue(t *testing.T) {
+	chainSuit := game.Blade
+	legacyChainValue := 18
+	restored := Restore(LadderState{
+		ChainValue: &legacyChainValue, ChainSuit: &chainSuit,
+	})
+	state := restored.State()
+	if state.ChainCard == nil || *state.ChainCard != (game.Card{Suit: game.Blade, Face: 9}) ||
+		state.ChainValue == nil || *state.ChainValue != 9 ||
+		!reflect.DeepEqual(state.PlayedCards, []game.Card{{Suit: game.Blade, Face: 9}}) {
+		t.Fatalf("restored chain = card %v, target %v; want Scissors 9 with target 9",
+			state.ChainCard, state.ChainValue)
 	}
 }
 
@@ -252,15 +400,69 @@ func TestPassingIsForcedOnlyWhenNoLegalCardAndOpponentLeadsFresh(t *testing.T) {
 		t.Fatal(err)
 	}
 	state := g.State()
+	if !state.OpeningPending || state.OpeningCard != nil || state.Current != PlayerB ||
+		!reflect.DeepEqual(state.HandB, []game.Card{
+			{Suit: game.Blade, Face: 2},
+			{Suit: game.Shield, Face: 3},
+			{Suit: game.Fang, Face: 9},
+		}) {
+		t.Fatalf("pass did not give the opponent a choice to open a new ladder: %+v", state)
+	}
+	if err := g.OpenStack(PlayerB, game.Card{Suit: game.Blade, Face: 2}); err != nil {
+		t.Fatal(err)
+	}
+	state = g.State()
 	if state.Current != PlayerA || !reflect.DeepEqual(state.HandB, []game.Card{{Suit: game.Shield, Face: 3}, {Suit: game.Fang, Face: 9}}) ||
 		state.ChainValue == nil || *state.ChainValue != 3 || state.ChainSuit == nil ||
-		*state.ChainSuit != game.Blade || state.ChainIsWild {
-		t.Fatalf("pass did not establish a fresh chain and return the turn: %+v", state)
+		*state.ChainSuit != game.Blade || state.ChainIsWild ||
+		!reflect.DeepEqual(state.PlayedCards, []game.Card{{Suit: game.Blade, Face: 2}}) {
+		t.Fatalf("chosen opening card did not establish a fresh chain and return the turn: %+v", state)
 	}
 
 	g.chainValue = intPointer(1)
 	if err := g.PassTurn(PlayerA); !errors.Is(err, ErrPassNotAllowed) {
 		t.Fatalf("voluntary pass error = %v, want ErrPassNotAllowed", err)
+	}
+}
+
+func TestPassingAWildStartsFreshLadderAndResetsPlayedCards(t *testing.T) {
+	wild := game.Card{Suit: game.Fang, Face: 8}
+	opening := game.Card{Suit: game.Fang, Face: 1}
+	chainSuit := wild.Suit
+	g := &LadderGame{
+		handA: []game.Card{opening, {Suit: game.Blade, Face: 2}},
+		handB: []game.Card{{Suit: game.Shield, Face: 1}},
+		playedCards: []game.Card{
+			{Suit: game.Blade, Face: 7},
+			wild,
+		},
+		chainCard: &wild, chainSuit: &chainSuit, chainIsWild: true,
+		current: PlayerB, wildFaceRaw: wild.Face,
+	}
+	if legal := g.LegalPlays(PlayerB); len(legal) != 0 {
+		t.Fatalf("non-wild response to wild was legal: %v", legal)
+	}
+	if err := g.PassTurn(PlayerB); err != nil {
+		t.Fatal(err)
+	}
+	state := g.State()
+	if !state.OpeningPending || state.OpeningCard != nil ||
+		state.OpeningPlayer != PlayerA || state.Current != PlayerA ||
+		!reflect.DeepEqual(state.HandA, []game.Card{opening, {Suit: game.Blade, Face: 2}}) ||
+		!reflect.DeepEqual(state.HandB, []game.Card{{Suit: game.Shield, Face: 1}}) {
+		t.Fatalf("passing wild did not give the opponent choice of the next ladder: %+v", state)
+	}
+	g = Restore(state)
+	if err := g.OpenStack(PlayerA, opening); err != nil {
+		t.Fatal(err)
+	}
+	state = g.State()
+	if state.ChainCard == nil || *state.ChainCard != opening ||
+		state.ChainIsWild || state.Current != PlayerB ||
+		!reflect.DeepEqual(state.PlayedCards, []game.Card{opening}) ||
+		!reflect.DeepEqual(state.HandA, []game.Card{{Suit: game.Blade, Face: 2}}) ||
+		!reflect.DeepEqual(state.HandB, []game.Card{{Suit: game.Shield, Face: 1}}) {
+		t.Fatalf("chosen opening card did not start a fresh ladder: %+v", state)
 	}
 }
 
