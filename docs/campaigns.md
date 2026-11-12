@@ -2,16 +2,35 @@
 
 The CLI's **Campaigns** menu contains two sequential training campaigns.
 Basic Training teaches the core rules with The Recruit; Advanced Training
-introduces hero modifiers and three selectable heroes. Both campaigns run
-through the same public game rules and keep their scripted card overrides in
-the `campaigns` package.
+introduces hero modifiers and three selectable heroes. The browser also
+includes the Abandon, Ladder, Poker, Rummy, and Tug War campaigns. Campaigns
+run through their existing game rules and keep scripted overrides in the
+`campaigns` package.
 The browser dashboard's **Campaigns** action and the terminal campaign menu
 both show the same saved unlock and mission-completion progress.
+
+## Campaign rewards
+
+Every campaign uses the same reward tiers by mission index:
+
+| Missions | First-completion reward |
+|---|---|
+| 1–5 | 350 Marks |
+| 6–10 | 300 Marks and 1 Crown |
+| 11 onward | 350 Marks and 2 Crowns |
+
+The final tier also covers Puzzler's missions 16–20. Completing Basic Training
+unlocks its completion achievement; completing Abandon, Ladder, Poker, Rummy,
+or Tug War unlocks that campaign's achievement. Each grants an additional
+500 Marks, 3 Crowns, and one Undo, Restart, Skip Mission, and Swap Card token.
+These achievement rewards are one-time and are also granted to profiles that
+had already completed the corresponding campaign.
 
 The Shop sells Campaign Mission Skip tokens for 1,500 Marks or 75 Crowns.
 Using one on the next playable mission advances progression without mission
 Marks or completion rewards. Skipping the final mission completes the campaign
-but still withholds completion rewards. Completed missions cannot be skipped.
+without mission or standard completion rewards, but still grants the campaign
+completion achievement. Completed missions cannot be skipped.
 
 The in-game token bar shows Restart Mission, Undo Last Move, Replace Any Card,
 and (during campaigns) Campaign Mission Skip inventories. When an inventory is
@@ -44,10 +63,11 @@ single-round tutorials; missions 5-10 are three-round matches.
 | 8 | Favored | Cycle wins receive an additional +2 to their doubled combat value. | Three rounds; Favored +2; other modifiers are 0; weights 1/1/1. |
 | 9 | Shift | Every card receives +2 effective face value. | Three rounds; Shift +2; other modifiers are 0; weights 1/1/1. |
 | 10 | Final Exam | Kess combines the modifiers and challenges the Recruit to become a Warden. | Three rounds; Rock bounty +2, Shift +1, Favored -1, weights 1/1/2. |
-Each mission awards 100 Marks. Completing Basic Training awards 1,000
-additional Marks, unlocks Warden, Hunter, and the Turtle, grants
-`badge_basic_training`, and unlocks Advanced Training. Total campaign Marks:
-2,000.
+Basic Training missions 1–5 award 350 Marks each; missions 6–10 award 300
+Marks and 1 Crown each. Completing Basic Training awards 1,000 additional
+Marks, unlocks Warden, Hunter, and the Turtle, grants `badge_basic_training`,
+and unlocks Advanced Training. Its completion achievement adds another 500
+Marks, 3 Crowns, and the four campaign consumables.
 
 ## Advanced Training
 
@@ -71,59 +91,112 @@ Hunter, or the Turtle. The opponent's hero and AI level are fixed.
 | 9 | Blind Aggression | Recruit, Easy AI | Take the first draft pick and open every round's attack. Draft mode 3; two hole cards each; eight public cards. |
 | 10 | Blind Aggression 2 | Recruit, Easy AI | CPU drafts first, but you attack first at the start of every round. Draft mode 3; two hole cards each; eight public cards. |
 
-Each mission awards 400 Marks. Completing Advanced Training awards 2,000
-additional Marks, one Hero Box, one Skill Tree Point, and
-`badge_advanced_training`. Total campaign Marks: 6,000.
+Advanced Training missions 1–5 award 350 Marks each; missions 6–10 award 300
+Marks and 1 Crown each. Completing Advanced Training awards 2,000 additional
+Marks, one Hero Box, one Skill Tree Point, and `badge_advanced_training`.
+
+## Abandon Campaign
+
+**ID:** `abandon`
+**Missions:** 15
+
+Missions 1–8 are fixed-board solo tutorials for matchup resolution, suit ties,
+prisoner scoring, bounty, abandon penalties, flips, and hidden-card gambles.
+Missions 9–15 use the existing Abandon Duel layout and engine, progressing
+through alternating turns, snake order, seat-swapped rounds, and increasingly
+strategic CPU policies. Mission 3 makes the equal-value tie available with
+Rock 2 against Scissors 4; the tie discards both cards.
+
+The campaign's setup and objectives are isolated from standalone Abandon
+games. The supplied Mission 3 prose contains conflicting earlier examples;
+the playable setup uses the final tie example in the brief.
 
 ## Ladder Campaign
 
 **ID:** `ladder`
+**Missions:** 15
 
-**Status:** Coming Soon
+The campaign uses the existing Ladder rules and layout. Its scenarios teach
+legal climbing, suit doubling, wilds, Favor, Shift, Draft, initiative, passing,
+and denial before moving into asymmetric and open-hand challenges. Missions
+14 and 15 use full-information minimax; the Gauntlet reveals its randomly
+selected CPU hero before the player selects a hero. Campaign setups and CPU
+policies do not change standalone Ladder games.
 
-**Variant:** Ladder
+## Rummy Campaign
 
-The campaign is registered as a disabled placeholder until its missions are
-created. Standalone Ladder matches are available from the multiplayer mode
-selector and do not advance campaign progress.
+**ID:** `rummy`
+**Missions:** 15
+
+Missions progress from scripted runs and sets through discards, turn limits,
+hero modifiers, larger hands, opponent pressure, and a two-hand final match.
+Cards use the existing three-suit Rock/Paper/Scissors deck so campaign hands
+match the multiplayer Rummy engine. Treasurer stands in for the brief's
+unavailable Vulture hero (Favor +1, Bounty −2). Long-game stock recycling is
+campaign-only; standalone multiplayer Rummy retains its existing draw behavior.
+
+## Tug War Campaign
+
+**ID:** `tug-war`
+**Missions:** 15
+
+The campaign reuses the Tug War board, card, push, flip, and scoring rules.
+Its missions teach basic hand play, pushes, bounty denial, board control, fog
+of war, hero modifiers, constrained pushes, and strategic CPU policies before
+three series missions. Scripted presets use distinct physical cards across
+hands, piles, and decks. The campaign-specific setup and AI do not alter
+standalone multiplayer matches.
+
+Each of these five 15-mission campaigns awards 350 Marks for missions 1–5,
+300 Marks and 1 Crown for missions 6–10, then 350 Marks and 2 Crowns for
+missions 11–15. Its completion achievement grants the additional rewards
+listed above.
 
 ## Poker Campaign
 
 **ID:** `poker`
 **Prerequisite:** None
-**Description:** Build and score three five-card hands with one hero.
+**Description:** Learn poker scoring and strategy in 15 single-player missions.
 
-The campaign's 15 missions are solo and campaign-only. Each mission attempt
-chooses one unlocked hero. The game copies the hero's Bounty, Favor, Shift, and
-Draft values into its own state; it never changes the hero object. Every game
-randomly selects a bounty suit, including every game in Mission 12.
+The campaign is player-versus-par, not a conventional CPU match. Missions 6
+and 7 add visible, deterministic teaching ghosts; both player and ghost build
+independent tables, and the player must meet par and outscore the ghost. Ghosts
+use the selected hero's modifiers, draw from a stable deck order, and never
+redraw. All other missions are score-vs-par only. Mission lessons appear at
+the start of play, and suggested heroes are recommendations rather than
+restrictions. Mission 15 intentionally has no lesson or hero suggestions.
 
-Draft sets the minimum card value in the deck: `2 - Draft`. Draft -1 removes
-ones and twos, Draft 0 removes ones, and Draft +1 keeps the full 1-9 deck. The
-player receives six cards. Each turn, place one card into any legal one of
-three five-card slots, or discard one card and draw one. The three hand sizes
-must always differ by at most one; after either action, draw back up to six
-while the draw pile has cards. The game ends when all slots are full, the
-player has no legal placement after the draw pile empties, or 30 turns have
-passed. A slot with fewer than five cards is void and scores zero.
+Suit names are Rock, Paper, and Scissors. A mission may force the bounty suit
+or select it randomly at game start. Missions 1-9 have scripted six-card
+opening hands; later missions use random hands. Draft sets the minimum value
+in the remaining deck to `2 - Draft`, while the scripted opening hand is
+preserved exactly.
 
-| # | Mission | Constraint | Par |
-|---|---|---|---:|
-| 1 | First Hand | — | 160 |
-| 2 | The Crown | — | 175 |
-| 3 | Find Your Suit | — | 185 |
-| 4 | Nine Storm | — | 195 |
-| 5 | The Long Game | — | 200 |
-| 6 | Pure Suit | Straights and flushes score as base zero | 175 |
-| 7 | Gorilla's Game | Every hand must contain a 9; bounty base 2 | 195 |
-| 8 | Silent Nines | No completed hand may contain a 9 | 165 |
-| 9 | The Bounty Hunter | Every hand must contain the bounty suit; bounty base 3 | 200 |
-| 10 | Bodyb's Table | Bounty base 3 | 205 |
-| 11 | Doubled Down | Nine base 8; bounty base 3 | 200 |
-| 12 | The Marathon | Three consecutive games at 180+, same hero |
-| 13 | Hater's Crown | Every hand must contain a 9; bounty base 3 | 210 |
-| 14 | The Wall | Straights and flushes score as base zero | 205 |
-| 15 | The Crown | — | 235 |
+The player receives six cards. Each turn, place one legal card into one of
+three five-card hands or discard and redraw it. Hand sizes must remain within
+one card of each other; after an action, the hand refills to six while cards
+remain in the draw pile. The game ends when all hands are full, there is no
+legal placement after the draw pile empties, or 30 turns have passed. A hand
+with fewer than five cards is void and scores zero. In Silent Nines, 9s cannot
+be placed and may instead be redrawn or held.
+
+| # | Mission | Setup or lesson | Constraint / opponent | Par |
+|---|---|---|---|---:|
+| 1 | The First Hand | Rock bounty; pair of 9s | — | 160 |
+| 2 | Finding the Nine | Paper bounty; one 9 | — | 175 |
+| 3 | Your Suit | Scissors bounty; three Scissors | — | 185 |
+| 4 | The Even Table | Rock bounty; balanced opening hand | — | 185 |
+| 5 | The Bonus Table | Rock bounty; 9 and pair of 3s | — | 195 |
+| 6 | Chase the Scissors | Scissors bounty; 9-focused counter | Bounty ghost; beat its score | 200 |
+| 7 | Chase the Paper | Paper bounty; Paper-focused counter | 9 ghost; beat its score | 200 |
+| 8 | Silent Nines | Rock bounty | No 9s may be placed | 175 |
+| 9 | The Wall | Paper bounty | Straights and flushes score zero base | 195 |
+| 10 | Free Play | Random bounty and hand | — | 205 |
+| 11 | High Bar | Rock bounty; random hand | — | 210 |
+| 12 | Consistency | Random bounty and hand | Three consecutive games at 175+ | 175 |
+| 13 | Doubled Bounty | Nine base 8; bounty base 3; Scissors bounty | — | 210 |
+| 14 | Nine Storm | Nine base 16; Paper bounty | — | 215 |
+| 15 | The Crown | Default scoring; random bounty and hand | No hints or recommendations | 235 |
 
 Hand base scores are: straight flush 100, three of a kind 60, straight 50,
 flush 40, a pair 20, and high card 0. Unlisted pair patterns use the listed
@@ -139,10 +212,15 @@ When all three hands are complete, add 15 points if Hand A's score is strictly
 higher than both other hands, and add 5 points if Hand C's score is strictly
 lower than both other hands. Neither bonus applies if any hand is void.
 
-Mission 12 repeats games within one attempt. A score of at least 180 advances
-the streak; a lower score resets it. Switching heroes also resets the streak.
-The bounty suit is rerolled for every game. Each mission awards 400 Marks on
-first completion; practice replays do not award progression rewards.
+The ghosts in Mission 6 and 7 prioritize bounty-suit cards or 9s, respectively,
+and place those cards in Hand A whenever the distribution rule permits. If no
+priority card is available, they place the highest face card; replacement
+draws are deterministic and visible through their three hands.
+
+Mission 12 repeats games within one attempt. A score of at least 175 advances
+the streak; a lower score resets it to zero. Switching heroes also resets the
+streak. The bounty suit is rerolled for each game. Poker uses the shared
+campaign reward tiers above; practice replays do not award progression rewards.
 
 ## Mission behavior
 
@@ -181,7 +259,7 @@ first completion; practice replays do not award progression rewards.
 1. Define the campaign and its missions in a campaign-specific file such as
    `backend/internal/campaigns/new_campaign.go`.
 2. Set each mission's sequential `Index`, type, briefing and hint, AI level,
-   allowed hero IDs, and mission Marks.
+   allowed hero IDs, and the shared mission reward tier.
 3. For scripted missions, ensure each physical card appears only once across
    the player hand, CPU pool, bounty card, and remaining deck. Scripted CPU
    leads should be members of the CPU pool; the mirror exchange is the sole

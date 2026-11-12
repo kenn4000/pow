@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/go-chi/chi/v5"
+	"prisonersofwar/internal/energy"
 	"prisonersofwar/internal/heroes"
 	"prisonersofwar/internal/puzzlebattle"
 )
@@ -150,6 +151,14 @@ func (s *webServer) startPuzzleBattleCPU(w http.ResponseWriter, r *http.Request,
 		return
 	}
 	now := time.Now().UTC()
+	if err := spendAccountEnergyTx(r.Context(), tx, []string{user.ID}, energy.SingleMatchCost, now); err != nil {
+		if errors.Is(err, errInsufficientEnergy) {
+			writeError(w, http.StatusConflict, err)
+		} else {
+			databaseError(w, err)
+		}
+		return
+	}
 	matchID := randomID()
 	match, err := puzzlebattle.New(
 		matchID, [2]string{user.ID, "easy-cpu:" + matchID},

@@ -2,24 +2,32 @@ package achievements
 
 import (
 	"math"
+	"strings"
 
-	"prisonersofwar/internal/economy"
 	"prisonersofwar/internal/game"
 	"prisonersofwar/internal/profile"
+	"prisonersofwar/internal/skills"
 )
 
 type EvalFunc func(ctx Context) (progress int, unlocked bool, tierAchieved int)
 
 type UnlockEvent struct {
-	AchievementID string
-	Tier          int
-	Marks         int64
-	Crowns        int64
-	SkillPoints   int
-	ChromaPick    int
-	HeroBoxes     int
-	Badge         string
-	SetID         string
+	AchievementID        string
+	Tier                 int
+	Marks                int64
+	Crowns               int64
+	SkillPoints          int
+	ChromaPick           int
+	HeroBoxes            int
+	WoodenBoxes          int
+	SilverBoxes          int
+	GoldBoxes            int
+	UndoMoveTokens       int
+	RestartMissionTokens int
+	CampaignSkipTokens   int
+	ReplaceCardTokens    int
+	Badge                string
+	SetID                string
 }
 
 var registry map[string]EvalFunc
@@ -31,30 +39,61 @@ func init() {
 	register("bounty_hunter", evalBountyHunter)
 	register("bounty_denied", evalBountyDenied)
 	register("bounty_decided", evalBountyDecided)
-	register("aggressor", evalCounterTiersFrom(func(p *profile.Profile) int { return p.WinsAsSeatX }, []int{1, 10, 100}))
-	register("defender", evalCounterTiersFrom(func(p *profile.Profile) int { return p.WinsAsSeatY }, []int{1, 10, 100}))
-	register("streak_easy", evalStreak(economy.ModeIDCPUEasy))
-	register("streak_medium", evalStreak(economy.ModeIDCPUNormal))
-	register("streak_hard", evalStreak(economy.ModeIDCPUHard))
-	register("streak_ranked", evalStreak(economy.ModeIDRanked))
-	register("comeback", evalCounterTiersFrom(func(p *profile.Profile) int { return p.ComebackWins }, []int{1, 10, 50}))
-	register("first_clash", evalCounter(func(p *profile.Profile) int { return p.TotalClashes }, 1))
+	register("comeback", evalComebackFeat)
 	register("clash_master", evalCounter(func(p *profile.Profile) int { return p.MaxClashesInGame }, 3))
 	register("dead_heat", evalCounter(func(p *profile.Profile) int { return p.TotalMatchTies }, 1))
-	register("collector", evalCollector)
-	register("long_march", evalCounter(func(p *profile.Profile) int { return p.TotalGames }, 100))
-	register("hard_way", evalCounter(func(p *profile.Profile) int { return p.HardCPUWins }, 10))
-	register("login_streak", evalCounterTiersFrom(func(p *profile.Profile) int { return p.LoginStreakBest }, []int{1, 7, 30}))
-	register("first_blood", evalFirstBlood)
-	register("both_sides", evalBothSides)
-	register("the_cycle", evalTheCycle)
-	register("master_both", evalMasterBoth)
 	register("photo_finish", evalPhotoFinish)
-	register("no_not_like_that", evalNoNotLikeThat)
-	register("bounty_connoisseur", evalModifierTiers("bounty", map[int]int{-3: 1, -2: 2, -1: 3, 0: 4, 1: 5, 2: 6, 3: 7}))
-	register("favored_aficionado", evalModifierTiers("favored", map[int]int{-1: 1, 0: 2, 1: 3, 2: 4}))
-	register("shift_whisperer", evalModifierTiers("shift", map[int]int{0: 1, 1: 2, 2: 3, 3: 4}))
+	register("chroma_collector", evalChromaCollector)
 	register("hero_variety", evalHeroVariety)
+	register("branch_master", evalBranchMaster)
+	register("mode_tourist", evalModeTourist)
+	for _, achievement := range achievements {
+		switch {
+		case len(achievement.CampaignIDs) > 0:
+			register(achievement.ID, evalCampaignCompletion(achievement.CampaignIDs...))
+		case achievement.ModeID != "":
+			goals := make([]int, len(achievement.Tiers))
+			for i, tier := range achievement.Tiers {
+				goals[i] = tier.Goal
+			}
+			register(achievement.ID, evalStoredCounterTiers(achievement.CounterID, goals))
+		case len(achievement.Tiers) > 0 && registry[achievement.ID] == nil:
+			goals := make([]int, len(achievement.Tiers))
+			for i, tier := range achievement.Tiers {
+				goals[i] = tier.Goal
+			}
+			switch achievement.ID {
+			case "login_streak":
+				register(achievement.ID, evalCounterTiersFrom(func(p *profile.Profile) int { return p.LoginStreakBest }, goals))
+			case "long_march":
+				register(achievement.ID, evalCounterTiersFrom(func(p *profile.Profile) int { return p.TotalWins }, goals))
+			default:
+				register(achievement.ID, evalStoredCounterTiers(achievement.CounterID, goals))
+			}
+		}
+	}
+}
+
+func evalCampaignCompletion(campaignIDs ...string) EvalFunc {
+	return func(ctx Context) (int, bool, int) {
+		if ctx.Profile == nil || (ctx.Event != EventCampaignCompleted && ctx.Event != EventProfileLoad) {
+			return 0, false, 0
+		}
+		triggered := ctx.Event == EventProfileLoad
+		for _, campaignID := range campaignIDs {
+			progress := ctx.Profile.Campaigns[campaignID]
+			if progress == nil || !progress.Completed {
+				return 0, false, 0
+			}
+			if ctx.CampaignID == campaignID {
+				triggered = true
+			}
+		}
+		if triggered {
+			return 1, true, 1
+		}
+		return 0, false, 0
+	}
 }
 
 func register(id string, evaluator EvalFunc) {
@@ -74,9 +113,6 @@ func EvaluateAll(ctx Context) []UnlockEvent {
 		return nil
 	}
 	ensureAchievementMaps(ctx.Profile)
-	if ctx.Event == EventMatchEnd {
-		updateSeatMasterStreaks(ctx)
-	}
 	events := make([]UnlockEvent, 0)
 	for _, achievement := range achievements {
 		evaluator := registry[achievement.ID]
@@ -88,13 +124,21 @@ func EvaluateAll(ctx Context) []UnlockEvent {
 			}
 			ctx.Profile.Achievements[achievement.ID] = true
 			events = append(events, UnlockEvent{
-				AchievementID: achievement.ID,
-				Marks:         achievement.RewardMarks,
-				Crowns:        achievement.RewardCrowns,
-				ChromaPick:    achievement.RewardChromaPick,
-				HeroBoxes:     achievement.RewardHeroBox,
-				Badge:         achievement.RewardBadge,
-				SetID:         achievement.SetID,
+				AchievementID:        achievement.ID,
+				Marks:                achievement.RewardMarks,
+				Crowns:               achievement.RewardCrowns,
+				SkillPoints:          achievement.RewardSkillPoints,
+				ChromaPick:           achievement.RewardChromaPick,
+				HeroBoxes:            achievement.RewardHeroBox,
+				WoodenBoxes:          achievement.RewardWoodenBoxes,
+				SilverBoxes:          achievement.RewardSilverBoxes,
+				GoldBoxes:            achievement.RewardGoldBoxes,
+				UndoMoveTokens:       achievement.RewardUndoTokens,
+				RestartMissionTokens: achievement.RewardRestartTokens,
+				CampaignSkipTokens:   achievement.RewardSkipTokens,
+				ReplaceCardTokens:    achievement.RewardSwapTokens,
+				Badge:                achievement.RewardBadge,
+				SetID:                achievement.SetID,
 			})
 			continue
 		}
@@ -110,14 +154,22 @@ func EvaluateAll(ctx Context) []UnlockEvent {
 			tier := achievement.Tiers[tierAchieved-1]
 			ctx.Profile.AchievementTiers[achievement.ID] = mask | bit
 			events = append(events, UnlockEvent{
-				AchievementID: achievement.ID,
-				Tier:          tierAchieved,
-				Marks:         tier.RewardMarks,
-				Crowns:        tier.RewardCrowns,
-				ChromaPick:    tier.RewardChromaPick,
-				HeroBoxes:     tier.RewardHeroBox,
-				Badge:         tier.RewardBadge,
-				SetID:         achievement.SetID,
+				AchievementID:        achievement.ID,
+				Tier:                 tierAchieved,
+				Marks:                tier.RewardMarks,
+				Crowns:               tier.RewardCrowns,
+				SkillPoints:          tier.RewardSkillPoints,
+				ChromaPick:           tier.RewardChromaPick,
+				HeroBoxes:            tier.RewardHeroBox,
+				WoodenBoxes:          tier.RewardWoodenBoxes,
+				SilverBoxes:          tier.RewardSilverBoxes,
+				GoldBoxes:            tier.RewardGoldBoxes,
+				UndoMoveTokens:       tier.RewardUndoTokens,
+				RestartMissionTokens: tier.RewardRestartTokens,
+				CampaignSkipTokens:   tier.RewardSkipTokens,
+				ReplaceCardTokens:    tier.RewardSwapTokens,
+				Badge:                tier.RewardBadge,
+				SetID:                achievement.SetID,
 			})
 			continue
 		}
@@ -132,21 +184,22 @@ func EvaluateAll(ctx Context) []UnlockEvent {
 			}
 			event.Marks += tier.RewardMarks
 			event.Crowns += tier.RewardCrowns
+			event.SkillPoints += tier.RewardSkillPoints
 			event.ChromaPick += tier.RewardChromaPick
 			event.HeroBoxes += tier.RewardHeroBox
+			event.WoodenBoxes += tier.RewardWoodenBoxes
+			event.SilverBoxes += tier.RewardSilverBoxes
+			event.GoldBoxes += tier.RewardGoldBoxes
+			event.UndoMoveTokens += tier.RewardUndoTokens
+			event.RestartMissionTokens += tier.RewardRestartTokens
+			event.CampaignSkipTokens += tier.RewardSkipTokens
+			event.ReplaceCardTokens += tier.RewardSwapTokens
 			if tier.RewardBadge != "" {
 				event.Badge = tier.RewardBadge
 			}
 		}
 		ctx.Profile.AchievementTiers[achievement.ID] = tierAchieved
 		events = append(events, event)
-	}
-	for _, set := range sets {
-		if ctx.Profile.CompletedSets[set.ID] || !setComplete(ctx.Profile, set) {
-			continue
-		}
-		ctx.Profile.CompletedSets[set.ID] = true
-		events = append(events, UnlockEvent{SetID: set.ID, SkillPoints: 1})
 	}
 	return events
 }
@@ -245,55 +298,96 @@ func updateSeatMasterStreaks(ctx Context) {
 	}
 }
 
-func evalSparse(ctx Context) (int, bool, int) {
-	if ctx.Event != EventMatchEnd || ctx.Result == nil {
+func evalStoredCounterTiers(counterID string, goals []int) EvalFunc {
+	return evalCounterTiersFrom(func(p *profile.Profile) int {
+		return p.AchievementCounters[counterID]
+	}, goals)
+}
+
+func evalChromaCollector(ctx Context) (int, bool, int) {
+	if ctx.Profile == nil {
 		return 0, false, 0
 	}
-	progress, tier := 0, 0
+	count := 0
+	for _, owned := range ctx.Profile.OwnedChromas {
+		if owned {
+			count++
+		}
+	}
+	tier := tierFor(count, []int{5, 20, 50})
+	return count, tier > 0, tier
+}
+
+func evalComebackFeat(ctx Context) (int, bool, int) {
+	if ctx.Profile == nil {
+		return 0, false, 0
+	}
+	progress := ctx.Profile.ComebackWins
+	return progress, progress > 0, 0
+}
+
+func evalBranchMaster(ctx Context) (int, bool, int) {
+	if ctx.Profile == nil {
+		return 0, false, 0
+	}
+	branches := make(map[string]bool)
+	for _, node := range skills.AllNodes() {
+		if _, exists := branches[node.Branch]; !exists {
+			branches[node.Branch] = true
+		}
+		if !ctx.Profile.SkillNodes[node.ID] {
+			branches[node.Branch] = false
+		}
+	}
+	count := 0
+	for _, complete := range branches {
+		if complete {
+			count++
+		}
+	}
+	tier := tierFor(count, []int{1, 3, 6})
+	return count, tier > 0, tier
+}
+
+func evalModeTourist(ctx Context) (int, bool, int) {
+	if ctx.Profile == nil {
+		return 0, false, 0
+	}
+	count := 0
+	for _, mode := range []string{"main", "fog", "abandon", "poker", "rummy", "puzzler", "ladder", "tug-war"} {
+		if ctx.Profile.AchievementCounters["mode_wins_"+mode] > 0 {
+			count++
+		}
+	}
+	tier := tierFor(count, []int{2, 4, 7})
+	return count, tier > 0, tier
+}
+
+func evalSparse(ctx Context) (int, bool, int) {
+	if ctx.Event != EventMatchEnd || ctx.Result == nil || !ctx.MatchWon {
+		return 0, false, 0
+	}
+	progress := 0
 	for _, matchGame := range ctx.Result.Games {
 		if !matchGame.Won {
 			continue
 		}
 		playerSuits := suitCount(matchGame.PlayerJail)
-		combined := suitCount(append(append([]game.Card(nil), matchGame.PlayerJail...), matchGame.OpponentJail...))
-		switch {
-		case playerSuits == 2 && tier < 1:
-			tier = 1
-		case playerSuits == 1 && tier < 3:
-			tier = 3
-		}
-		if combined == 2 && tier < 2 {
-			tier = 2
+		if playerSuits == 2 {
+			return 1, true, 0
 		}
 		if playerSuits > progress {
 			progress = playerSuits
 		}
 	}
-	if ctx.IsBestOfThree && ctx.MatchWon {
-		wonGames := 0
-		allWonGamesSparse := true
-		for _, matchGame := range ctx.Result.Games {
-			if !matchGame.Won {
-				continue
-			}
-			wonGames++
-			if suitCount(matchGame.PlayerJail) > 2 {
-				allWonGamesSparse = false
-			}
-		}
-		if wonGames > 0 && allWonGamesSparse {
-			tier = 4
-			progress = 4
-		}
-	}
-	return progress, tier > 0, tier
+	return 0, false, 0
 }
 
 func evalEfficient(ctx Context) (int, bool, int) {
-	if ctx.Event != EventMatchEnd || ctx.Result == nil {
+	if ctx.Event != EventMatchEnd || ctx.Result == nil || !ctx.MatchWon {
 		return 0, false, 0
 	}
-	maxPrisoners, tier := 0, 0
+	maxPrisoners := 0
 	for _, matchGame := range ctx.Result.Games {
 		if !matchGame.Won {
 			continue
@@ -302,33 +396,33 @@ func evalEfficient(ctx Context) (int, bool, int) {
 		if count > maxPrisoners {
 			maxPrisoners = count
 		}
-		if count >= 7 && tier < 1 {
-			tier = 1
-		}
-		if count >= 8 && tier < 2 {
-			tier = 2
-		}
 		if count == 9 && matchGame.Clashes == 0 {
-			tier = 3
+			return 1, true, 0
 		}
 	}
-	return maxPrisoners, tier > 0, tier
+	return 0, false, 0
 }
 
 func evalBountyHunter(ctx Context) (int, bool, int) {
+	if !ctx.MatchWon {
+		return 0, false, 0
+	}
 	return matchSingle(ctx, func(matchGame game.MatchGame) bool {
 		return matchGame.Won && countBounty(matchGame) >= 3
 	})
 }
 
 func evalBountyDenied(ctx Context) (int, bool, int) {
+	if !ctx.MatchWon {
+		return 0, false, 0
+	}
 	return matchSingle(ctx, func(matchGame game.MatchGame) bool {
 		return matchGame.Won && countBounty(matchGame) == 0
 	})
 }
 
 func evalBountyDecided(ctx Context) (int, bool, int) {
-	if ctx.Event != EventMatchEnd || ctx.Result == nil {
+	if ctx.Event != EventMatchEnd || ctx.Result == nil || !ctx.MatchWon {
 		return 0, false, 0
 	}
 	for _, matchGame := range ctx.Result.Games {
@@ -514,16 +608,28 @@ func evalModifierTiers(modifier string, tierByValue map[int]int) EvalFunc {
 }
 
 func evalHeroVariety(ctx Context) (int, bool, int) {
-	if ctx.Event != EventHeroAcquired || ctx.Profile == nil {
+	if ctx.Profile == nil {
 		return 0, false, 0
 	}
 	unique := make(map[string]struct{}, len(ctx.Profile.UnlockedHeroes))
-	for _, heroID := range ctx.Profile.UnlockedHeroes {
-		if heroID != "" && heroID != "recruit" {
+	for heroID, wins := range ctx.Profile.HeroWinCounts {
+		if wins > 0 && heroID != "" {
 			unique[heroID] = struct{}{}
 		}
 	}
+	for counterID, wins := range ctx.Profile.AchievementCounters {
+		if wins > 0 && strings.HasPrefix(counterID, "hero_match_wins_") {
+			unique[strings.TrimPrefix(counterID, "hero_match_wins_")] = struct{}{}
+		}
+	}
 	count := len(unique)
+	totalWins := ctx.Profile.AchievementCounters["hero_match_wins_total"]
+	if ctx.Profile.TotalWins > totalWins {
+		totalWins = ctx.Profile.TotalWins
+	}
+	if totalWins < 10 {
+		return count, false, 0
+	}
 	tier := 0
 	switch {
 	case count >= 10:

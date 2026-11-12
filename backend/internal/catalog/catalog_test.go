@@ -150,16 +150,19 @@ func TestBuyChromaFamilyDiscountsFullSetPrice(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	var fullPrice int64
 	var familyChromas []Chroma
 	for _, chroma := range AllChromas() {
 		if chromaFamilyKey(chroma) == "alien" {
-			fullPrice += chroma.Cost
 			familyChromas = append(familyChromas, chroma)
 		}
 	}
-	if len(familyChromas) != 3 {
-		t.Fatalf("Alien family has %d chromas, want 3", len(familyChromas))
+	familyChromas = uniqueChromaAppearances(familyChromas)
+	if len(familyChromas) < 2 {
+		t.Fatalf("Alien family has %d purchasable chromas, want at least 2", len(familyChromas))
+	}
+	var fullPrice int64
+	for _, chroma := range familyChromas {
+		fullPrice += chroma.Cost
 	}
 	wantCost := (fullPrice*4 + 2) / 5
 	p.Marks = wantCost - 1
@@ -188,6 +191,42 @@ func TestBuyChromaFamilyDiscountsFullSetPrice(t *testing.T) {
 	if p.TotalChromasPurchased != len(familyChromas) {
 		t.Fatalf("family purchase recorded %d purchases, want %d chromas",
 			p.TotalChromasPurchased, len(familyChromas))
+	}
+}
+
+func TestConquistadorFamilyBuyAllSkipsDuplicateSkyBlue(t *testing.T) {
+	var familyChromas []Chroma
+	for _, chroma := range AllChromas() {
+		if chromaFamilyKey(chroma) == "conq" {
+			familyChromas = append(familyChromas, chroma)
+		}
+	}
+	unique := uniqueChromaAppearances(familyChromas)
+	if len(unique) != 4 {
+		t.Fatalf("Conquistador family has %d unique appearances, want 4", len(unique))
+	}
+	ids := make(map[string]bool, len(unique))
+	var fullPrice int64
+	for _, chroma := range unique {
+		ids[chroma.ID] = true
+		fullPrice += chroma.Cost
+	}
+	if !ids["conq-skyblue"] || ids["conq-blue"] {
+		t.Fatalf("duplicate sky-blue representative IDs = %v", ids)
+	}
+
+	p, err := profile.New(time.Now())
+	if err != nil {
+		t.Fatal(err)
+	}
+	p.Marks = fullPrice
+	if _, _, err := BuyChromaFamily(p, "conq"); err != nil {
+		t.Fatal(err)
+	}
+	if p.OwnedChromas["conq-blue"] || !p.OwnedChromas["conq-skyblue"] ||
+		p.TotalChromasPurchased != len(unique) {
+		t.Fatalf("family purchase did not collapse duplicate appearance: owned=%v purchases=%d",
+			p.OwnedChromas, p.TotalChromasPurchased)
 	}
 }
 
@@ -243,8 +282,9 @@ func TestBuyChromaFamilyRejectsPartiallyOwnedFamily(t *testing.T) {
 			familyChromas = append(familyChromas, chroma)
 		}
 	}
-	if len(familyChromas) != 3 {
-		t.Fatalf("Alien family has %d chromas, want 3", len(familyChromas))
+	familyChromas = uniqueChromaAppearances(familyChromas)
+	if len(familyChromas) < 2 {
+		t.Fatalf("Alien family has %d purchasable chromas, want at least 2", len(familyChromas))
 	}
 
 	for ownedCount := 1; ownedCount < len(familyChromas); ownedCount++ {

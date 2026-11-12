@@ -55,9 +55,11 @@ func (s *webServer) creditWebMatchAchievements(p *profile.Profile, result game.M
 	if !ok {
 		mode = economy.ModeCPUEasy
 	}
-	updateAchievementStats(p, result, mode)
+	now := time.Now()
+	updateAchievementStatsForGameMode(p, result, mode, s.session.variant, now)
 	ctx := achievements.NewMatchContext(p, result, economy.ModeID(mode), result.PlayerSeat.String())
-	ctx.Now = time.Now()
+	ctx.Now = now
+	ctx.GameMode = s.session.variant
 	for _, event := range achievements.EvaluateAll(ctx) {
 		applyUnlockEvent(p, event)
 	}

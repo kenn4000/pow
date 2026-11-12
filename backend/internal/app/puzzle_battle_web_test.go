@@ -42,7 +42,7 @@ func puzzleBattleSignup(t *testing.T, client testAccountClient, email string) ac
 }
 
 func TestPuzzleBattleMatchmakingAndParticipantPrivacy(t *testing.T) {
-	_, newClient := newPuzzleBattleTestServer(t)
+	appServer, newClient := newPuzzleBattleTestServer(t)
 	first, second, spectator := newClient(), newClient(), newClient()
 	firstUser := puzzleBattleSignup(t, first, "first@example.com")
 	secondUser := puzzleBattleSignup(t, second, "second@example.com")
@@ -71,6 +71,17 @@ func TestPuzzleBattleMatchmakingAndParticipantPrivacy(t *testing.T) {
 	if created.Match.View.Player != 1 {
 		t.Fatalf("newly queued player seat = %d, want 1", created.Match.View.Player)
 	}
+	for _, playerID := range []string{firstUser.ID, secondUser.ID} {
+		var remaining int
+		if err := appServer.db.QueryRow(
+			`SELECT (profile->>'energy')::integer FROM player_data WHERE user_id=$1`, playerID,
+		).Scan(&remaining); err != nil {
+			t.Fatal(err)
+		}
+		if remaining != 9 {
+			t.Errorf("online Puzzle Battle player %s has %d Energy, want 9", playerID, remaining)
+		}
+	}
 
 	var opponent puzzleBattleResponse
 	if err := json.Unmarshal(second.request("GET", "/puzzle-battle", nil, http.StatusOK), &opponent); err != nil {
@@ -84,6 +95,30 @@ func TestPuzzleBattleMatchmakingAndParticipantPrivacy(t *testing.T) {
 	spectator.request("POST", "/puzzle-battle/"+matchID+"/action", map[string]any{
 		"action": "ready",
 	}, http.StatusNotFound)
+}
+
+func TestRankedPuzzleBattleChargesTwoEnergyOnMatchCreation(t *testing.T) {
+	appServer, newClient := newPuzzleBattleTestServer(t)
+	first, second := newClient(), newClient()
+	firstUser := puzzleBattleSignup(t, first, "ranked-energy-first@example.com")
+	secondUser := puzzleBattleSignup(t, second, "ranked-energy-second@example.com")
+	first.request("POST", "/puzzle-battle", map[string]string{
+		"action": "queue", "heroId": "recruit", "matchMode": "ranked",
+	}, http.StatusOK)
+	second.request("POST", "/puzzle-battle", map[string]string{
+		"action": "queue", "heroId": "recruit", "matchMode": "ranked",
+	}, http.StatusCreated)
+	for _, playerID := range []string{firstUser.ID, secondUser.ID} {
+		var remaining int
+		if err := appServer.db.QueryRow(
+			`SELECT (profile->>'energy')::integer FROM player_data WHERE user_id=$1`, playerID,
+		).Scan(&remaining); err != nil {
+			t.Fatal(err)
+		}
+		if remaining != 8 {
+			t.Errorf("ranked Puzzle Battle player %s has %d Energy, want 8", playerID, remaining)
+		}
+	}
 }
 
 func TestPuzzleBattlePairingsRemainPrivateUntilCompletion(t *testing.T) {
@@ -202,9 +237,9 @@ func TestPuzzleBattlePairingsRemainPrivateUntilCompletion(t *testing.T) {
 }
 
 func TestPuzzleBattleEasyCPURewardsHalfPayout(t *testing.T) {
-	_, newClient := newPuzzleBattleTestServer(t)
+	appServer, newClient := newPuzzleBattleTestServer(t)
 	client := newClient()
-	puzzleBattleSignup(t, client, "easy-cpu@example.com")
+	user := puzzleBattleSignup(t, client, "easy-cpu@example.com")
 
 	var started puzzleBattleResponse
 	if err := json.Unmarshal(client.request("POST", "/puzzle-battle/cpu", map[string]string{
@@ -215,6 +250,15 @@ func TestPuzzleBattleEasyCPURewardsHalfPayout(t *testing.T) {
 	if !started.CPUPractice || started.Match == nil ||
 		started.Match.View.Status != puzzlebattle.PhaseRoundOne {
 		t.Fatalf("Easy CPU match did not start: %+v", started)
+	}
+	var remaining int
+	if err := appServer.db.QueryRow(
+		`SELECT (profile->>'energy')::integer FROM player_data WHERE user_id=$1`, user.ID,
+	).Scan(&remaining); err != nil {
+		t.Fatal(err)
+	}
+	if remaining != 9 {
+		t.Fatalf("Easy CPU Puzzle Battle has %d Energy, want 9", remaining)
 	}
 	matchID := started.Match.View.MatchID
 	submitPairs := func(pairs [][2]int) []byte {

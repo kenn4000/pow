@@ -492,18 +492,16 @@ func (a *app) chooseCampaignHero(p *profile.Profile, mission campaigns.Mission) 
 }
 
 func (a *app) startCampaignMission(p *profile.Profile, campaign campaigns.Campaign, mission campaigns.Mission, replay bool) error {
-	if !replay {
-		if _, err := refreshEnergy(p, time.Now()); err != nil {
+	if _, err := refreshEnergy(p, time.Now()); err != nil {
+		return err
+	}
+	if energyCost := campaignMissionEnergyCost(mission); energyCost > 0 {
+		if err := energy.Spend(p, energyCost, time.Now()); err != nil {
 			return err
 		}
-		if energyCost := campaignMissionEnergyCost(mission); energyCost > 0 {
-			if err := energy.Spend(p, energyCost, time.Now()); err != nil {
-				return err
-			}
-		}
-		if err := p.Save(); err != nil {
-			return err
-		}
+	}
+	if err := p.Save(); err != nil {
+		return err
 	}
 	ui := &campaignMissionUI{app: a, profile: p}
 	for {
@@ -516,7 +514,7 @@ func (a *app) startCampaignMission(p *profile.Profile, campaign campaigns.Campai
 		now := time.Now()
 		matchResult := result.MatchResult
 		recordHeroProgress(p, matchResult, a.playerHeroID, a.opponentHeroID)
-		updateAchievementStats(p, matchResult, economy.ModeCPUEasy)
+		updateAchievementStatsForGameMode(p, matchResult, economy.ModeCPUEasy, mission.Variant, now)
 		switch {
 		case matchResult.Won:
 			p.TotalWins++
@@ -527,6 +525,7 @@ func (a *app) startCampaignMission(p *profile.Profile, campaign campaigns.Campai
 		}
 		ctx := achievements.NewMatchContext(p, matchResult, economy.ModeID(economy.ModeCPUEasy), matchResult.PlayerSeat.String())
 		ctx.Now = now
+		ctx.GameMode = mission.Variant
 		for _, event := range achievements.EvaluateAll(ctx) {
 			applyUnlockEvent(p, event)
 			showUnlockToast(event)
@@ -569,7 +568,11 @@ func (a *app) completeCampaignProgress(p *profile.Profile, campaign campaigns.Ca
 		return err
 	}
 	outcome.MissionMarks += bonusMarks
-	fmt.Printf("Mission complete! +%d Marks.\n", outcome.MissionMarks)
+	if outcome.MissionCrowns > 0 {
+		fmt.Printf("Mission complete! +%d Marks, +%d Crowns.\n", outcome.MissionMarks, outcome.MissionCrowns)
+	} else {
+		fmt.Printf("Mission complete! +%d Marks.\n", outcome.MissionMarks)
+	}
 	if readinessGranted {
 		fmt.Println("Rations & Readiness: +1 Restart token, +1 Undo token, and +1 Energy.")
 	}
@@ -598,7 +601,7 @@ func (a *app) completeCampaignProgress(p *profile.Profile, campaign campaigns.Ca
 				fmt.Printf("Unlocked campaign: %s.\n", next.Name)
 			}
 		}
-		for _, event := range evaluateAchievementEvent(p, achievements.EventCampaignCompleted, "campaign") {
+		for _, event := range evaluateCampaignCompletionAchievement(p, campaign.ID) {
 			showUnlockToast(event)
 		}
 		for _, event := range evaluateAchievementEvent(p, achievements.EventProfileLoad, "campaign") {
@@ -1087,7 +1090,8 @@ func (a *app) startMatch(p *profile.Profile, selected mode, payoutMode economy.M
 	if _, err := refreshEnergy(p, time.Now()); err != nil {
 		return err
 	}
-	if err := energy.Spend(p, 1, time.Now()); err != nil {
+	energyCost := energy.MatchCost(bestOfThree)
+	if err := energy.Spend(p, energyCost, time.Now()); err != nil {
 		return err
 	}
 	if err := p.Save(); err != nil {
@@ -1114,6 +1118,7 @@ func (a *app) startMatch(p *profile.Profile, selected mode, payoutMode economy.M
 	updateAchievementStats(p, achievementResult, payoutMode)
 	ctx := achievements.NewMatchContext(p, achievementResult, economy.ModeID(payoutMode), achievementResult.PlayerSeat.String())
 	ctx.Now = now
+	ctx.GameMode = "main"
 	unlockEvents := achievements.EvaluateAll(ctx)
 	for _, event := range unlockEvents {
 		applyUnlockEvent(p, event)
@@ -1565,6 +1570,9 @@ func (a *app) openHeroBoxMenu(p *profile.Profile, free bool) error {
 	if err != nil {
 		return err
 	}
+	for _, event := range recordBoxOpened(p) {
+		showUnlockToast(event)
+	}
 	if result.Duplicate {
 		hero, ok := heroes.ByID(result.HeroID)
 		if !ok {
@@ -1655,6 +1663,9 @@ func (a *app) skillMenu(p *profile.Profile) error {
 	id := strings.TrimSpace(answer)
 	if err := skills.UnlockNodeWithSkillPoint(p, id); err != nil {
 		return err
+	}
+	for _, event := range evaluateAchievementEvent(p, achievements.EventSkillUnlocked, id) {
+		showUnlockToast(event)
 	}
 	return p.Save()
 }

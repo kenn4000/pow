@@ -10,6 +10,7 @@ import (
 
 type MissionOutcome struct {
 	MissionMarks       int64
+	MissionCrowns      int64
 	CampaignCompleted  bool
 	AlreadyCompleted   bool
 	CompletionMarks    int64
@@ -155,7 +156,8 @@ func CompleteMission(p *profile.Profile, campaignID string, missionIndex int, ca
 	progress.CompletedMissionIDs = append(progress.CompletedMissionIDs, missionIndex)
 	progress.MissionsCompleted = len(progress.CompletedMissionIDs)
 	p.Marks += missionMarks
-	outcome := MissionOutcome{MissionMarks: missionMarks}
+	p.Crowns += mission.RewardCrowns
+	outcome := MissionOutcome{MissionMarks: missionMarks, MissionCrowns: mission.RewardCrowns}
 	if progress.MissionsCompleted != len(campaign.Missions) {
 		return outcome, nil
 	}

@@ -25,6 +25,8 @@ type webLadderState struct {
 	OpeningPending           bool               `json:"openingPending"`
 	OpeningChoice            bool               `json:"openingChoice"`
 	Hand                     []webCard          `json:"hand"`
+	OpponentCards            []game.Card        `json:"opponentCards,omitempty"`
+	OpenHand                 bool               `json:"openHand,omitempty"`
 	HandCount                int                `json:"handCount"`
 	OpponentHandCount        int                `json:"opponentHandCount"`
 	CanPass                  bool               `json:"canPass"`
@@ -90,6 +92,10 @@ func ladderWebView(session *webSession, viewer int, online bool) *webLadderState
 		OpeningPending: state.OpeningPending,
 		OpeningChoice:  state.OpeningPending && state.OpeningCard == nil,
 		Hand:           []webCard{}, HandCount: len(hand), OpponentHandCount: len(opponentHand),
+	}
+	if session.campaign != nil && session.campaign.OpenHand {
+		view.OpenHand = true
+		view.OpponentCards = append([]game.Card(nil), opponentHand...)
 	}
 	if session.phase == "gameover" {
 		view.FinalHands = [][]game.Card{
@@ -189,7 +195,11 @@ func (s *webServer) finishLadderAction(previous ladder.PlayerID) {
 				session.message = "The opponent wins the Ladder game."
 			}
 		}
-		s.awardLocalMultiplayerPayout(0)
+		if session.campaign != nil {
+			s.finishSpecialCampaignMission(session.winner == 0)
+		} else {
+			s.awardLocalMultiplayerPayout(0)
+		}
 		return
 	}
 	session.actor = int(state.Current)
@@ -326,7 +336,13 @@ func (s *webServer) chooseLadderCPUOpening(state ladder.LadderState) game.Card {
 	if state.Current == ladder.PlayerA {
 		hand, opponentHand = state.HandA, state.HandB
 	}
-	if s.session.mode == "easy" {
+	policy := s.ladderCampaignPolicy()
+	if policy == "hard" {
+		if card, ok := ladder.BestMinimaxOpening(s.session.ladder, state.Current); ok {
+			return card
+		}
+	}
+	if policy == "random" || s.session.mode == "easy" {
 		return hand[s.rng.Intn(len(hand))]
 	}
 	best := hand[0]
@@ -345,10 +361,78 @@ func (s *webServer) chooseLadderCPUOpening(state ladder.LadderState) game.Card {
 }
 
 func (s *webServer) chooseLadderCPUPlay(legal []game.Card) game.Card {
-	if s.session.mode == "easy" {
+	policy := s.ladderCampaignPolicy()
+	if policy == "random" || s.session.mode == "easy" {
 		return legal[s.rng.Intn(len(legal))]
 	}
-	if s.session.mode != "hard" {
+	if policy == "hard" || s.session.mode == "hard" {
+		if card, ok := ladder.BestMinimaxPlay(
+			s.session.ladder, ladder.PlayerID(s.session.actor),
+		); ok {
+			return card
+		}
+	}
+	if policy == "wild-finisher" {
+		state := s.session.ladder.State()
+		hand := state.HandB
+		if state.Current == ladder.PlayerA {
+			hand = state.HandA
+		}
+		if len(hand) > 2 {
+			filtered := make([]game.Card, 0, len(legal))
+			for _, card := range legal {
+				if card.Face != state.WildFaceRaw {
+					filtered = append(filtered, card)
+				}
+			}
+			if len(filtered) > 0 {
+				legal = filtered
+			}
+		}
+		return ladder.GreedyPolicy().ChoosePlay(s.session.ladder, legal)
+	}
+	if policy == "attrition" {
+		state := s.session.ladder.State()
+		hand := state.HandB
+		if state.Current == ladder.PlayerA {
+			hand = state.HandA
+		}
+		if len(hand) > 2 {
+			filtered := make([]game.Card, 0, len(legal))
+			for _, card := range legal {
+				if card.Face != 9 || card.Face == state.WildFaceRaw {
+					filtered = append(filtered, card)
+				}
+			}
+			if len(filtered) > 0 {
+				legal = filtered
+			}
+		}
+	}
+	if policy == "denial" {
+		state := s.session.ladder.State()
+		opponentHand := state.HandA
+		if state.Current == ladder.PlayerA {
+			opponentHand = state.HandB
+		}
+		filtered := make([]game.Card, 0, len(legal))
+		for _, candidate := range legal {
+			denied := true
+			for _, opponentCard := range opponentHand {
+				if opponentCard.Suit.Beats(candidate.Suit) {
+					denied = false
+					break
+				}
+			}
+			if denied {
+				filtered = append(filtered, candidate)
+			}
+		}
+		if len(filtered) > 0 {
+			legal = filtered
+		}
+	}
+	if policy != "hard" && s.session.mode != "hard" {
 		return ladder.GreedyPolicy().ChoosePlay(s.session.ladder, legal)
 	}
 	state := s.session.ladder.State()
@@ -369,6 +453,13 @@ func (s *webServer) chooseLadderCPUPlay(legal []game.Card) game.Card {
 		}
 	}
 	return best
+}
+
+func (s *webServer) ladderCampaignPolicy() string {
+	if mission, ok := s.campaignMission(); ok && mission.Ladder != nil {
+		return mission.Ladder.CPUPolicy
+	}
+	return ""
 }
 
 func ladderOpponentLegalCount(candidate game.Card, state ladder.LadderState, hand []game.Card) int {

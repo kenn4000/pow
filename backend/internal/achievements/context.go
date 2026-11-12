@@ -1,6 +1,7 @@
 package achievements
 
 import (
+	"strings"
 	"time"
 
 	"prisonersofwar/internal/game"
@@ -17,12 +18,16 @@ const (
 	EventLogin
 	EventHeroAcquired
 	EventCampaignCompleted
+	EventBoxOpened
+	EventConsumableUsed
+	EventSkillUnlocked
 )
 
 type Context struct {
 	Profile             *profile.Profile
 	Event               EventKind
 	Now                 time.Time
+	GameMode            string
 	Result              *game.MatchResult
 	Mode                int
 	PlayerSeat          string
@@ -41,6 +46,7 @@ type Context struct {
 	IsBestOfThree       bool
 	UnlockedHeroCount   int
 	AcquisitionSource   string
+	CampaignID          string
 }
 
 func NewMatchContext(p *profile.Profile, result game.MatchResult, mode int, seat string) Context {
@@ -92,6 +98,27 @@ func SuitRoleID(suit game.Suit) string {
 		return "F"
 	case game.Shield:
 		return "S"
+	default:
+		return ""
+	}
+}
+
+func NormalizeGameMode(mode string) string {
+	switch strings.ToLower(strings.TrimSpace(mode)) {
+	case "", "main", "pow", "prisoners-of-war":
+		return "main"
+	case "fog", "fog-of-war":
+		return "fog"
+	case "tug", "tugwar", "tug-war":
+		return "tug-war"
+	case "puzzle", "puzzler":
+		return "puzzler"
+	case "abandon", "abandon-duel":
+		return "abandon"
+	case "poker", "poker-duel":
+		return "poker"
+	case "rummy", "ladder":
+		return strings.ToLower(strings.TrimSpace(mode))
 	default:
 		return ""
 	}

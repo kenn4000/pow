@@ -2,9 +2,11 @@ package app
 
 import (
 	"math/rand"
+	"reflect"
 	"testing"
 	"time"
 
+	"prisonersofwar/internal/campaigns"
 	"prisonersofwar/internal/game"
 	"prisonersofwar/internal/heroes"
 	"prisonersofwar/internal/profile"
@@ -90,7 +92,10 @@ func TestPokerMissionAwardsMarksOnParAndPersistsProgress(t *testing.T) {
 	poker := web.session.poker
 	if web.session.variant != "poker" || web.session.phase != "poker-play" ||
 		len(poker.Hand) != pokerHandSize || len(poker.DrawPile) != 18 ||
-		poker.DeckFloor != 2 {
+		poker.DeckFloor != 2 || poker.BountySuit != game.Shield ||
+		poker.Hand[0] != (game.Card{Suit: game.Shield, Face: 9}) ||
+		poker.Hand[1] != (game.Card{Suit: game.Fang, Face: 9}) ||
+		web.view().Poker.Lesson == "" {
 		t.Fatalf("started Poker mission = %+v", web.view().Poker)
 	}
 	fillPokerStraightFlushes(poker)
@@ -99,7 +104,7 @@ func TestPokerMissionAwardsMarksOnParAndPersistsProgress(t *testing.T) {
 	}
 	if web.session.phase != "gameover" || web.session.winner != 0 ||
 		web.playerProfile.Campaigns["poker"].MissionsCompleted != 1 ||
-		web.playerProfile.Marks != startingMarks+400 {
+		web.playerProfile.Marks != startingMarks+350 {
 		t.Fatalf("campaign completion: phase:%s winner:%d progress:%+v marks:%d",
 			web.session.phase, web.session.winner, web.playerProfile.Campaigns["poker"],
 			web.playerProfile.Marks)
@@ -109,6 +114,87 @@ func TestPokerMissionAwardsMarksOnParAndPersistsProgress(t *testing.T) {
 		restored.poker.LastScore.Total != poker.LastScore.Total ||
 		restored.campaign.Index != 1 {
 		t.Fatalf("restored poker session = %+v", restored)
+	}
+}
+
+func TestPokerGhostsTakeVisibleStrategyTurns(t *testing.T) {
+	tests := []struct {
+		missionIndex int
+		strategy     game.PokerGhostStrategy
+		firstCard    game.Card
+	}{
+		{missionIndex: 6, strategy: game.PokerGhostBounty, firstCard: game.Card{Suit: game.Blade, Face: 6}},
+		{missionIndex: 7, strategy: game.PokerGhostNine, firstCard: game.Card{Suit: game.Shield, Face: 9}},
+	}
+	campaign, _ := campaigns.ByID("poker")
+	hero, _ := heroes.ByID("hunter")
+	for _, test := range tests {
+		t.Run(string(test.strategy), func(t *testing.T) {
+			rules := *campaign.Missions[test.missionIndex-1].PokerRules
+			poker, err := newPokerSession(hero.ID, hero, rules, rand.New(rand.NewSource(int64(test.missionIndex))))
+			if err != nil {
+				t.Fatal(err)
+			}
+			if poker.Ghost == nil || poker.Ghost.Strategy != test.strategy {
+				t.Fatalf("ghost = %+v", poker.Ghost)
+			}
+			if err := poker.place(0, 0); err != nil {
+				t.Fatal(err)
+			}
+			web := &webServer{session: &webSession{variant: "poker", phase: "poker-play", poker: poker}}
+			if err := web.completePokerTurn("Test move."); err != nil {
+				t.Fatal(err)
+			}
+			if poker.Ghost.Turns != 1 || len(poker.Ghost.Slots[0]) != 1 ||
+				poker.Ghost.Slots[0][0] != test.firstCard {
+				t.Fatalf("ghost opening placement = %+v", poker.Ghost.Slots)
+			}
+			view := poker.webView("poker-play")
+			if view.Ghost == nil || view.Ghost.Turns != 1 ||
+				view.Ghost.Slots[0][0] != test.firstCard || view.Ghost.Score != nil {
+				t.Fatalf("ghost was not projected as a visible live table: %+v", view.Ghost)
+			}
+			if err := poker.finishGhost(); err != nil {
+				t.Fatal(err)
+			}
+			replay, err := newPokerSession(hero.ID, hero, rules, rand.New(rand.NewSource(999)))
+			if err != nil {
+				t.Fatal(err)
+			}
+			if err := replay.finishGhost(); err != nil {
+				t.Fatal(err)
+			}
+			if poker.Ghost.Turns != 15 || poker.Ghost.LastScore == nil || replay.Ghost.LastScore == nil {
+				t.Fatalf("ghost did not finish scoring: %+v / %+v", poker.Ghost.LastScore, replay.Ghost.LastScore)
+			}
+			if !reflect.DeepEqual(poker.Ghost.Slots, replay.Ghost.Slots) ||
+				poker.Ghost.LastScore.Total != replay.Ghost.LastScore.Total {
+				t.Fatalf("ghost script was not deterministic: %d / %d points",
+					poker.Ghost.LastScore.Total, replay.Ghost.LastScore.Total)
+			}
+		})
+	}
+}
+
+func TestPokerNoNinesCardsCanOnlyBeRedrawnOrHeld(t *testing.T) {
+	campaign, _ := campaigns.ByID("poker")
+	hero, _ := heroes.ByID("hunter")
+	poker, err := newPokerSession(hero.ID, hero, *campaign.Missions[7].PokerRules,
+		rand.New(rand.NewSource(908)))
+	if err != nil {
+		t.Fatal(err)
+	}
+	nine := game.Card{Suit: game.Blade, Face: 9}
+	poker.Hand[0] = nine
+	view := poker.webView("poker-play")
+	if view.Hand[0].Placeable {
+		t.Fatal("9 was marked placeable in the no-9 mission")
+	}
+	if err := poker.place(0, 0); err == nil {
+		t.Fatal("placing a 9 in the no-9 mission should fail")
+	}
+	if err := poker.redraw(0); err != nil {
+		t.Fatalf("redrawing a 9 should remain available: %v", err)
 	}
 }
 
@@ -155,6 +241,35 @@ func TestPokerMarathonStreakRequiresSameHero(t *testing.T) {
 		t.Fatalf("marathon completion: phase:%s winner:%d streak:%d games:%d progress:%+v",
 			web.session.phase, web.session.winner, web.session.poker.Streak,
 			web.session.poker.GamesPlayed, web.playerProfile.Campaigns["poker"])
+	}
+}
+
+func TestPokerMarathonStreakResetsWhenScoreMissesTarget(t *testing.T) {
+	web := newPokerTestServer(t, 904)
+	completed := make([]int, 11)
+	for index := range completed {
+		completed[index] = index + 1
+	}
+	web.playerProfile.Campaigns["poker"] = &profile.CampaignProgress{
+		CampaignID: "poker", Started: true, MissionsCompleted: 11,
+		TotalMissions: 15, CompletedMissionIDs: completed,
+	}
+	if err := web.prepareWebMission(actionRequest{
+		CampaignID: "poker", MissionIndex: 12, PlayerHeroID: "warden",
+	}); err != nil {
+		t.Fatal(err)
+	}
+	web.session.poker.Streak = 2
+	web.session.poker.Turns = pokerTurnLimit - 1
+	if err := web.completePokerTurn("Test complete."); err != nil {
+		t.Fatal(err)
+	}
+	if web.session.phase != "poker-next-game" || web.session.poker.Streak != 0 ||
+		web.session.poker.Rules.StreakScore != 175 ||
+		web.session.message != "Score 0 was below 175; the streak resets. Game 1/3 — need 175+. Continue with the same hero or switch heroes to reset the streak." {
+		t.Fatalf("low-score streak state: phase:%s streak:%d score:%d message:%q",
+			web.session.phase, web.session.poker.Streak, web.session.poker.Rules.StreakScore,
+			web.session.message)
 	}
 }
 

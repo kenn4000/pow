@@ -8,6 +8,15 @@ import (
 	"prisonersofwar/internal/skills"
 )
 
+func TestMatchCosts(t *testing.T) {
+	if got := MatchCost(false); got != 1 {
+		t.Fatalf("single-game Energy cost = %d, want 1", got)
+	}
+	if got := MatchCost(true); got != 2 {
+		t.Fatalf("best-of-three Energy cost = %d, want 2", got)
+	}
+}
+
 func TestSpendAdsAndDailyReset(t *testing.T) {
 	now := time.Date(2025, time.April, 1, 10, 0, 0, 0, time.Local)
 	p, err := profile.New(now)

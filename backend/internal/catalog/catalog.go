@@ -181,6 +181,7 @@ func BuyChromaFamily(p *profile.Profile, family string) (int64, Currency, error)
 	if !familyFound {
 		return 0, "", fmt.Errorf("unknown chroma family %q", family)
 	}
+	purchasable = uniqueChromaAppearances(purchasable)
 	if len(purchasable) < 2 {
 		return 0, "", errors.New("family does not have multiple purchasable chromas")
 	}
@@ -228,6 +229,28 @@ func BuyChromaFamily(p *profile.Profile, family string) (int64, Currency, error)
 		recordPurchase(p, chroma)
 	}
 	return cost, currency, nil
+}
+
+func uniqueChromaAppearances(items []Chroma) []Chroma {
+	unique := make([]Chroma, 0, len(items))
+	positions := make(map[string]int, len(items))
+	for _, chroma := range items {
+		key := strings.ToLower(strings.TrimSpace(chroma.Color)) + "\x00" +
+			strings.ToLower(strings.TrimSpace(chroma.HexColor))
+		index, exists := positions[key]
+		if !exists {
+			positions[key] = len(unique)
+			unique = append(unique, chroma)
+			continue
+		}
+		colorSuffix := strings.NewReplacer(" ", "", "-", "", "_", "").Replace(strings.ToLower(chroma.Color))
+		existingSuffix := strings.NewReplacer(" ", "", "-", "", "_", "").Replace(strings.ToLower(unique[index].Color))
+		if strings.HasSuffix(chroma.ID, "-"+colorSuffix) &&
+			!strings.HasSuffix(unique[index].ID, "-"+existingSuffix) {
+			unique[index] = chroma
+		}
+	}
+	return unique
 }
 
 func chromaFamilyKey(chroma Chroma) string {

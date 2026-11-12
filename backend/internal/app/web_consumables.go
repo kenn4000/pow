@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 
+	"prisonersofwar/internal/achievements"
 	"prisonersofwar/internal/campaigns"
 	"prisonersofwar/internal/ladder"
 	"prisonersofwar/internal/lootbox"
@@ -121,8 +122,20 @@ func skipCampaignMission(p *profile.Profile, campaignID string, missionIndex int
 	}
 	p.CampaignSkipTokens--
 	message := fmt.Sprintf("Skipped %s · Mission %d. No mission rewards were granted.", campaign.Name, missionIndex)
+	message += achievementUnlockSummary(recordConsumableUsed(p))
 	if outcome.CampaignCompleted {
-		message += " Campaign complete; completion rewards were not granted."
+		message += " Campaign complete; mission and standard completion rewards were not granted."
+		for _, event := range evaluateCampaignCompletionAchievement(p, campaignID) {
+			name := event.AchievementID
+			if definition, ok := achievements.Find(event.AchievementID); ok {
+				name = definition.Name
+			}
+			message += fmt.Sprintf(" %s unlocked: %s.", name, achievementRewardDescription(
+				event.Marks, event.Crowns, event.Badge, event.ChromaPick, event.HeroBoxes,
+				event.WoodenBoxes, event.SilverBoxes, event.GoldBoxes, event.SkillPoints,
+				event.UndoMoveTokens, event.RestartMissionTokens, event.CampaignSkipTokens,
+				event.ReplaceCardTokens))
+		}
 	}
 	return message, nil
 }
@@ -188,6 +201,7 @@ func (s *webServer) useRestartMissionToken() error {
 		restarted.message = "Match restarted."
 	}
 	p.RestartMissionTokens--
+	restarted.message += achievementUnlockSummary(recordConsumableUsed(p))
 	if err := p.Save(); err != nil {
 		p.RestartMissionTokens++
 		return fmt.Errorf("save Restart Mission token use: %w", err)
@@ -215,6 +229,7 @@ func (s *webServer) useUndoMoveToken() error {
 	restored.restartSnapshot = session.restartSnapshot
 	restored.message = "Last move undone."
 	p.UndoMoveTokens--
+	restored.message += achievementUnlockSummary(recordConsumableUsed(p))
 	if err := p.Save(); err != nil {
 		p.UndoMoveTokens++
 		return fmt.Errorf("save Undo Last Move token use: %w", err)

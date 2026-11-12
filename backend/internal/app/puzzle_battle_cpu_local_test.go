@@ -37,6 +37,10 @@ func TestLocalPuzzleBattleCPURewardsHalfPayout(t *testing.T) {
 		started.Match.View.Status != puzzlebattle.PhaseRoundOne {
 		t.Fatalf("local Easy CPU match did not start: %+v", started)
 	}
+	if playerProfile.Energy != playerProfile.MaxEnergy-1 {
+		t.Fatalf("local CPU Puzzle Battle Energy = %d/%d, want one spent",
+			playerProfile.Energy, playerProfile.MaxEnergy)
+	}
 	matchID := started.Match.View.MatchID
 	submitPairs := func(pairs [][2]int) []byte {
 		t.Helper()

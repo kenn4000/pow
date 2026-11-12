@@ -26,9 +26,15 @@ func TestDisplayedBoxOddsCoverAllFirstRollRewards(t *testing.T) {
 
 func TestAchievementProgressUsesActualCountsAndUnits(t *testing.T) {
 	web := campaignTestServer(t)
-	web.playerProfile.TotalGames = 37
-	count, goal, unit := achievementCounter(web.playerProfile, "long_march")
-	if count != 37 || goal != 100 || unit != "matches played" {
-		t.Fatalf("unexpected progress: %d/%d %s", count, goal, unit)
+	web.playerProfile.TotalWins = 37
+	page := buildAchievementsPage(web.playerProfile)
+	for _, item := range page.Items {
+		if item.ID == "long_march" {
+			if item.Progress != 37 || item.Goal != 50 || item.ProgressUnit != "wins" {
+				t.Fatalf("unexpected progress: %d/%d %s", item.Progress, item.Goal, item.ProgressUnit)
+			}
+			return
+		}
 	}
+	t.Fatal("Long March achievement was not included in the gallery")
 }

@@ -7,6 +7,9 @@ import (
 	"testing"
 	"time"
 
+	"prisonersofwar/internal/achievements"
+	"prisonersofwar/internal/economy"
+	"prisonersofwar/internal/game"
 	"prisonersofwar/internal/profile"
 )
 
@@ -91,4 +94,46 @@ func TestScoresAfterRoundUsesLastExchangeOfThatRound(t *testing.T) {
 	if got := web.scoresAfterRound(2); got != [2]int{} {
 		t.Fatalf("scoresAfterRound with no battles = %v, want zeros", got)
 	}
+}
+
+func TestOnlineBattleAchievementResultTracksCanonicalModeAndPlayerView(t *testing.T) {
+	web := &webServer{session: &webSession{
+		variant: "main",
+		state: game.GameState{
+			Bounty:    game.Card{Suit: game.Blade},
+			Modifiers: game.GameModifiers{},
+			P1:        game.Player{Seat: game.SeatX, Jail: []game.Card{{Suit: game.Fang}}},
+			P2:        game.Player{Seat: game.SeatY, Jail: []game.Card{{Suit: game.Blade}}},
+		},
+	}}
+	result := onlineBattleAchievementResult(web, 1, "warden", true, false, [2]int{4, 8})
+	if result.PlayerSeat != game.SeatY || result.PlayerScore != 8 || result.OpponentScore != 4 ||
+		len(result.Games) != 1 || result.Games[0].PlayerHeroID != "warden" ||
+		result.Games[0].PlayerJail[0].Suit != game.Blade || result.Games[0].OpponentJail[0].Suit != game.Fang {
+		t.Fatalf("online match result did not use the player's perspective: %+v", result)
+	}
+
+	p, err := profile.New(time.Now())
+	if err != nil {
+		t.Fatal(err)
+	}
+	p.TotalWins = 1
+	updateAchievementStatsForGameMode(p, result, economy.ModeRanked, "poker-duel", time.Now())
+	ctx := achievements.NewMatchContext(p, result, economy.ModeIDRanked, result.PlayerSeat.String())
+	ctx.GameMode = "poker-duel"
+	events := achievements.EvaluateAll(ctx)
+	if p.AchievementCounters["mode_wins_poker"] != 1 ||
+		p.AchievementCounters["ranked_matches_played"] != 1 ||
+		!hasAppAchievementUnlock(events, "mode_poker") {
+		t.Fatalf("online achievement counters/events = %v / %+v", p.AchievementCounters, events)
+	}
+}
+
+func hasAppAchievementUnlock(events []achievements.UnlockEvent, id string) bool {
+	for _, event := range events {
+		if event.AchievementID == id {
+			return true
+		}
+	}
+	return false
 }

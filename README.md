@@ -30,33 +30,58 @@ use the existing DOM renderer.
 
 ## Rules summary
 
-- The 27-card deck contains faces 1–9 in Scissors (S), Paper (P), and Rock (R).
-- Scissors beats Paper, Paper beats Rock, and Rock beats Scissors. A card that
-  beats its opponent has its face value doubled for that exchange.
-- At setup, one card is removed as the bounty. The draft mode is
-  `clamp(3 + both heroes' Draft attributes, 1, 5)`. Both players receive the
-  same number of hole cards: four, three, two, one, or zero in Draft 1–5.
-  The public pool contains 4, 6, 8, 10, or 12 cards for one through five
-  alternating picks per player, with Y picking first. Both players begin
-  Round 1 with five cards; the two unpicked pool cards are removed from play.
-  Campaign missions keep their scripted hands and skip the draft. See
-  [Opening Draft](README-draft.md).
-- Hero modifiers affect combat and scoring: Shift changes every face, Favored
-  adjusts cycle-winning cards, and Bounty changes the scoring face of cards
-  matching the bounty suit. Each round, both players secretly commit three
-  cards, then resolve three exchanges in X/Y/X attack order. The defender sees
-  the attack card before choosing a response.
-- The player with the higher effective value captures the opposing card; the
-  winner's card is discarded. A tie is a clash, and both cards are discarded.
-  The third battle automatically plays each player's last pile card.
-- After Round 1 the seats swap before hands refill to the new seat targets.
-  Before Round 3, the lower-scoring player is assigned Seat Y. If the score is
-  tied, the player who started in Seat Y takes Seat Y again. There is no refill
-  after Round 3.
-- Each suit scores its captured-card count multiplied by that suit's highest
-  effective scoring face. Reckoning can weight captures by the round in which
-  they were won. Ties are broken by distinct suits, then highest effective
-  scoring face, then coin flip.
+- **Shared combat:** The 27-card deck has Scissors, Paper, and Rock suits,
+  numbered 1–9. Scissors beats Paper, Paper beats Rock, and Rock beats Scissors;
+  a cycle win doubles the card's face before hero modifiers. One card sets the
+  bounty suit. Shift changes combat faces, Favor adjusts cycle-winning cards,
+  and Bounty changes the scoring face of bounty-suit cards.
+- **Prisoners of War:** In CPU or online play, players draft private cards and
+  alternate picks from a shared public pool, starting with Seat Y. Each round,
+  secretly commit three cards; exchanges resolve in X/Y/X attack order. The
+  defender sees the attack before responding. The higher effective value
+  captures the opposing card, while a tie discards both. Each suit scores its
+  weighted prisoner count multiplied by its highest scoring face. Ties are
+  decided by distinct suits, highest scoring face, then a coin flip.
+- **Fog of War:** Uses the same rules as Prisoners of War, but a hidden opposing
+  card shows only a face-value range until it is revealed. Play against a CPU
+  or another player online.
+- **Campaigns:** All campaigns are solo against CPU opponents and use their
+  variant's existing rules and layout with scripted setups and mission goals.
+  Basic and Advanced Training teach combat and hero modifiers.
+- **Abandon:** Flip hidden board cards, then pair two unused cards from the
+  board or your private pile. Standard combat determines captures; ties capture
+  nothing. Captured cards score by suit, while unused private-pile cards can
+  cost points. Abandon Duel supports CPU and online opponents across two
+  rounds, with a shared board, private piles, and reversed starting player in
+  Round 2.
+- **Ladder:** Play legal cards that meet or exceed the current chain value.
+  Wild cards change the chain suit. Pass when no card is playable; the opponent
+  can open a fresh chain. Empty your hand to win. Play solo against a CPU or
+  online against another player.
+- **Rummy:** Build sets of three equal-face cards in different suits and
+  same-suit runs of three or more consecutive cards. Player 1 opens by drawing
+  two, discarding one face-up and burying one. Each player gets six turns total;
+  take a face-up card or draw two, then discard one face-up and bury one. The
+  best melds score points and unmelded cards subtract points. Play against a
+  CPU or online opponent.
+- **Poker:** In the solo campaign or Poker Duel against a CPU or online
+  opponent, build three balanced five-card hands. Place a card in a legal hand
+  or discard it to draw a replacement. Poker Duel gives each player six cards,
+  uses timed turns, and banks unused time for a bonus. Campaign missions add
+  scoring targets and constraints.
+- **Puzzler and Puzzle Battle:** Puzzler is a solo card-pairing challenge:
+  resolve combat pairs, capture cards, and meet the puzzle's score target.
+  Puzzle Battle offers solo practice against the Easy CPU or online head-to-head
+  play. Submit three pairs in Round 1 and four in Round 2 before the shared
+  timer ends; Round 1 scores stay hidden until both players submit.
+- **Tug War:** Play hand cards against the top card of a shared pile, flip the
+  deck onto a pile, or spend a limited push to move a pile. Winning clashes pull
+  piles to your side; owned piles score their cards, with a bounty-suit bonus.
+  Play solo against a CPU or online against another player.
+
+See [Opening Draft](README-draft.md) for the standard opening deal and pick
+sequence. Multiplayer matches are played online by friend invitation or
+matchmaking in supported modes.
 
 ## Run the game with Docker Compose
 
@@ -118,17 +143,24 @@ development environment. When off, both endpoints return 404 and the sign-in
 page hides the panel. Never enable it on a host other people can reach: it
 signs anyone in as any account, including administrators.
 
-Screens have shareable hash routes, such as `#/campaigns`, `#/shop/boxes`,
-`#/skills/energy`, `#/saved-games`, and `#/password`. Refresh and browser
+Screens have shareable hash routes, such as `#/campaigns`,
+`#/shop/items/crowns`, `#/shop/skins/common`,
+`#/shop/heroes-boxes/box-shop`, `#/skills/energy`, `#/saved-games`, and `#/password`. Refresh and browser
 Back/Forward preserve the selected destination. **Cards & rules** is available
 to every signed-in player, and the rules overview is also on the login page.
 Commander Record lets players save a display name.
 
 Campaigns can launch their scripted missions in the browser, including hero
 selection, prerequisites, energy costs, progress and first-completion rewards.
-Completed missions offer free practice replays without repeated progression
-rewards. Missions and their hidden state persist through refresh like ordinary
-matches. **Choose match mode** can replace an active match with another mode;
+Every campaign mission start, including a replay, costs 1 Energy; replays do
+not award progression rewards again. Single matches cost 1 Energy and ranked
+best-of-three matches cost 2 Energy. Energy recharges one point every ten
+minutes unless a Skill Tree modifier changes the rate. Missions and their
+hidden state persist through refresh like ordinary
+matches. The 15-mission Poker campaign teaches scoring and strategy with two
+visible teaching ghosts; the 15-mission Tug War campaign includes scripted
+setups, hidden-information challenges, and mirror/gauntlet series. **Choose
+match mode** can replace an active match with another mode;
 **Restart this mode** restarts its current configuration. The unfinished match
 is archived in Saved games. Battles wait for **Continue** by default, with an
 optional auto-advance setting. Mobile play places the current hand first.
@@ -174,8 +206,8 @@ Each match selects heroes before play. The browser offers hero choices when
 starting a match; Human-vs-AI uses your saved default and lets the AI counter
 your last opponent. The terminal [8] Heroes screen lets you set a default and
 view hero records. The active modifiers and round weights are shown throughout
-the game. See [heroes](docs/heroes.md) for the roster, rules, and
-simulator details, and [hero acquisition](docs/heroes-acquisition.md)
+the game. See [heroes](docs/heroes.md) for the roster and rules, and
+[hero acquisition](docs/heroes-acquisition.md)
 for hero acquisition, campaigns, achievements, and skill tree additions.
 
 The browser dashboard also provides quick access to the Skill Tree, hero
@@ -197,8 +229,9 @@ The terminal starts with a progression menu for CPU games, Ranked best-of-three
 against the Hard AI, profile, heroes, campaigns, shop, skills, Camp Draws, and
 energy actions. Human-vs-human matches are available in the web UI through
 friend invitations or random matchmaking. See [campaigns](docs/campaigns.md) for the full
-mission list, scripted setups, progression rules, and rewards. The Shop offers
-chromas, Hero Boxes, and direct hero purchases.
+mission list, scripted setups, progression rules, and rewards. The Shop offers chromas, Hero Boxes, direct hero purchases, and Crown pack
+price previews. Crown packs are not purchasable until real-money checkout is
+integrated.
 At commit, enter exactly three distinct hand numbers separated by spaces or
 commas. During a battle, enter the number of a pile card. At the start of
 Round 3, seats are assigned automatically from the current score. ANSI suit
@@ -222,7 +255,7 @@ GOWORK=off go -C backend run ./cmd/prisoners-of-war --dump-economy
   uses a sampled worst-case attack choice, and makes greedy defenses. It only
   samples cards that are not known to the AI.
 
-## Tests and simulation
+## Tests
 
 Enforce a maximum cyclomatic complexity of 20 per production Go function:
 
@@ -250,15 +283,3 @@ TEST_DATABASE_URL="postgres://prisonersofwar:${POSTGRES_PASSWORD}@127.0.0.1:5432
 The test creates and removes its own database schema. Connection URLs must
 percent-encode special characters in passwords. See [storage and API](docs/storage.md)
 for the data model, authentication, router groups, and deployment bootstrap.
-
-Run a headless Hard-vs-Hard simulation and print summary statistics with:
-
-```sh
-GOWORK=off go -C backend run ./cmd/prisoners-of-war --sim 10000
-```
-
-Run all 66 hero pairings with greedy-vs-greedy and greedy-vs-random samples:
-
-```sh
-GOWORK=off go -C backend run ./cmd/prisoners-of-war --sim-heroes 100
-```

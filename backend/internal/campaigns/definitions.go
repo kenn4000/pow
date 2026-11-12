@@ -1,6 +1,9 @@
 package campaigns
 
-import "prisonersofwar/internal/game"
+import (
+	"prisonersofwar/internal/game"
+	"prisonersofwar/internal/tugwar"
+)
 
 type MissionType int
 
@@ -46,10 +49,68 @@ type Mission struct {
 	AIHero                string
 	PlayerHeroRestriction []string
 	RewardMarks           int64
+	RewardCrowns          int64
 	Target                int
 	AbandonPairs          int
 	AbandonBoardCards     int
+	Abandon               *AbandonCampaignRules
 	PokerRules            *game.PokerMissionRules
+	TugWar                *tugwar.CampaignMission
+	Rummy                 *RummyCampaignRules
+	Ladder                *LadderCampaignRules
+}
+
+type AbandonCampaignRules struct {
+	Board        []game.Card
+	PlayerHand   []game.Card
+	CPUHand      []game.Card
+	BoardSize    int
+	HandSize     int
+	PairCount    int
+	Rounds       int
+	BountySuits  [2]int
+	MirrorHands  bool
+	Snake        bool
+	Goal         string
+	Target       int
+	TargetCard   *game.Card
+	MinCaptured  int
+	MaxAbandoned int
+	OpponentAlgo string
+}
+
+type LadderCampaignRules struct {
+	WildFace    int
+	BountySuit  game.Suit
+	PlayerHand  []game.Card
+	CPUHand     []game.Card
+	PlayerSize  int
+	CPUSize     int
+	SharedStats *LadderSharedStats
+	CPUPolicy   string
+	OpenHand    bool
+	RandomHands bool
+}
+
+type LadderSharedStats struct {
+	Bounty int
+	Draft  int
+	Shift  int
+	Favor  int
+}
+
+type RummyCampaignRules struct {
+	Parameters      game.RummyParameters
+	PlayerHand      []game.Card
+	CPUHand         []game.Card
+	DrawPileTop     []game.Card
+	InitialFaceUp   []game.Card
+	TurnLimit       int
+	Goal            string
+	Target          int
+	CPUPolicy       string
+	MatchHands      int
+	ScriptedDiscard *game.Card
 }
 
 type CampaignRewards struct {
@@ -73,15 +134,32 @@ type Campaign struct {
 }
 
 const (
-	BasicMissionMarks     int64 = 100
+	BasicMissionMarks     int64 = 350
 	BasicCompleteMarks    int64 = 1000
-	AdvancedMissionMarks  int64 = 400
+	AdvancedMissionMarks  int64 = 350
 	AdvancedCompleteMarks int64 = 2000
 )
 
 var definitions = func() []Campaign {
-	result := []Campaign{basicCampaign(), advancedCampaign(), abandonCampaign(), puzzlerCampaign(), pokerCampaign(), ladderCampaign()}
-	return append(result, heroCampaigns()...)
+	result := []Campaign{
+		basicCampaign(), advancedCampaign(), abandonCampaign(), puzzlerCampaign(),
+		pokerCampaign(), tugWarCampaign(), ladderCampaign(), rummyCampaign(),
+	}
+	// All campaigns use the same reward tiers, keyed by mission number.
+	for campaignIndex := range result {
+		for missionIndex := range result[campaignIndex].Missions {
+			mission := &result[campaignIndex].Missions[missionIndex]
+			switch {
+			case mission.Index <= 5:
+				mission.RewardMarks, mission.RewardCrowns = 350, 0
+			case mission.Index <= 10:
+				mission.RewardMarks, mission.RewardCrowns = 300, 1
+			default:
+				mission.RewardMarks, mission.RewardCrowns = 350, 2
+			}
+		}
+	}
+	return result
 }()
 
 func All() []Campaign {
@@ -114,8 +192,55 @@ func cloneCampaign(campaign Campaign) Campaign {
 		mission.CPULeads = append([]game.Card(nil), mission.CPULeads...)
 		mission.CPUPool = append([]game.Card(nil), mission.CPUPool...)
 		mission.PlayerHeroRestriction = append([]string(nil), mission.PlayerHeroRestriction...)
+		if mission.Abandon != nil {
+			rules := *mission.Abandon
+			rules.Board = append([]game.Card(nil), rules.Board...)
+			rules.PlayerHand = append([]game.Card(nil), rules.PlayerHand...)
+			rules.CPUHand = append([]game.Card(nil), rules.CPUHand...)
+			if rules.TargetCard != nil {
+				card := *rules.TargetCard
+				rules.TargetCard = &card
+			}
+			mission.Abandon = &rules
+		}
+		if mission.TugWar != nil {
+			mission.TugWar = tugwar.CloneCampaignMission(*mission.TugWar)
+		}
+		if mission.Rummy != nil {
+			rules := *mission.Rummy
+			rules.PlayerHand = append([]game.Card(nil), rules.PlayerHand...)
+			rules.CPUHand = append([]game.Card(nil), rules.CPUHand...)
+			rules.DrawPileTop = append([]game.Card(nil), rules.DrawPileTop...)
+			rules.InitialFaceUp = append([]game.Card(nil), rules.InitialFaceUp...)
+			if rules.ScriptedDiscard != nil {
+				card := *rules.ScriptedDiscard
+				rules.ScriptedDiscard = &card
+			}
+			mission.Rummy = &rules
+		}
+		if mission.Ladder != nil {
+			rules := *mission.Ladder
+			rules.PlayerHand = append([]game.Card(nil), rules.PlayerHand...)
+			rules.CPUHand = append([]game.Card(nil), rules.CPUHand...)
+			if rules.SharedStats != nil {
+				stats := *rules.SharedStats
+				rules.SharedStats = &stats
+			}
+			mission.Ladder = &rules
+		}
 		if mission.PokerRules != nil {
 			rules := *mission.PokerRules
+			rules.StartingHand = append([]game.Card(nil), rules.StartingHand...)
+			rules.RecommendedHeroes = append([]string(nil), rules.RecommendedHeroes...)
+			if rules.ForcedBountySuit != nil {
+				suit := *rules.ForcedBountySuit
+				rules.ForcedBountySuit = &suit
+			}
+			if rules.Ghost != nil {
+				ghost := *rules.Ghost
+				ghost.StartingHand = append([]game.Card(nil), ghost.StartingHand...)
+				rules.Ghost = &ghost
+			}
 			mission.PokerRules = &rules
 		}
 		if mission.PlayerSeat != nil {

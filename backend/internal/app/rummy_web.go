@@ -6,6 +6,7 @@ import (
 	"math/rand"
 	"sort"
 
+	"prisonersofwar/internal/campaigns"
 	"prisonersofwar/internal/game"
 	"prisonersofwar/internal/heroes"
 )
@@ -21,6 +22,10 @@ type rummySession struct {
 	LastMoves      [2]rummyLastMove `json:"LastMoves,omitempty"`
 	Turns          int
 	Results        [2]game.RummyPartition
+	Rules          *campaigns.RummyCampaignRules
+	TurnLimit      int
+	HandNumber     int
+	HandScores     [2]int
 }
 
 type rummyLastMove struct {
@@ -39,6 +44,9 @@ type webRummyState struct {
 	CanDrawTwo       bool                 `json:"canDrawTwo"`
 	TurnsCompleted   int                  `json:"turnsCompleted"`
 	TurnLimit        int                  `json:"turnLimit"`
+	MatchHand        int                  `json:"matchHand,omitempty"`
+	MatchHands       int                  `json:"matchHands,omitempty"`
+	MatchScores      [2]int               `json:"matchScores,omitempty"`
 	Results          []webRummyResult     `json:"results,omitempty"`
 }
 
@@ -62,7 +70,7 @@ func newRummySession(firstHero, secondHero heroes.Hero, rng *rand.Rand) *rummySe
 	)
 	deck := game.NewDeck()
 	rng.Shuffle(len(deck), func(i, j int) { deck[i], deck[j] = deck[j], deck[i] })
-	session := &rummySession{Parameters: params}
+	session := &rummySession{Parameters: params, TurnLimit: rummyTurnLimit, HandNumber: 1}
 	for player := range session.Hands {
 		session.Hands[player] = make([]game.Card, 0, params.HandSize)
 		for cardIndex := 0; cardIndex < params.HandSize; cardIndex++ {
@@ -72,6 +80,93 @@ func newRummySession(firstHero, secondHero heroes.Hero, rng *rand.Rand) *rummySe
 	}
 	session.DrawPile = deck
 	return session
+}
+
+func newRummyCampaignSession(firstHero, secondHero heroes.Hero, rules *campaigns.RummyCampaignRules,
+	rng *rand.Rand,
+) (*rummySession, error) {
+	if rules == nil || rng == nil {
+		return nil, errors.New("Rummy campaign setup is unavailable")
+	}
+	params := rules.Parameters
+	if params.J == 0 {
+		params = game.NewRummyParameters(
+			firstHero.Favored+secondHero.Favored, firstHero.Shift+secondHero.Shift,
+			firstHero.Bounty+secondHero.Bounty, firstHero.Draft+secondHero.Draft,
+		)
+	}
+	turnLimit := rules.TurnLimit
+	if turnLimit <= 0 {
+		turnLimit = rummyTurnLimit
+	}
+	if params.HandSize < 1 || turnLimit < 1 {
+		return nil, errors.New("Rummy campaign has invalid hand size or turn limit")
+	}
+
+	deck := game.NewDeck()
+	rng.Shuffle(len(deck), func(i, j int) { deck[i], deck[j] = deck[j], deck[i] })
+	remove := func(card game.Card) error {
+		for index, candidate := range deck {
+			if candidate == card {
+				deck = append(deck[:index], deck[index+1:]...)
+				return nil
+			}
+		}
+		return fmt.Errorf("Rummy campaign card %s is duplicated or invalid", card)
+	}
+	used := make(map[game.Card]bool)
+	removeScript := func(cards []game.Card) error {
+		for _, card := range cards {
+			if !card.Valid() || used[card] {
+				return fmt.Errorf("Rummy campaign has a duplicate or invalid card %s", card)
+			}
+			used[card] = true
+			if err := remove(card); err != nil {
+				return err
+			}
+		}
+		return nil
+	}
+	if err := removeScript(rules.PlayerHand); err != nil {
+		return nil, err
+	}
+	if err := removeScript(rules.CPUHand); err != nil {
+		return nil, err
+	}
+	if err := removeScript(rules.InitialFaceUp); err != nil {
+		return nil, err
+	}
+	if err := removeScript(rules.DrawPileTop); err != nil {
+		return nil, err
+	}
+
+	session := &rummySession{
+		Parameters: params, Rules: rules, TurnLimit: turnLimit, HandNumber: 1,
+		FaceUp: append([]game.Card(nil), rules.InitialFaceUp...),
+	}
+	handSizes := [2]int{params.HandSize, params.HandSize}
+	scripted := [2][]game.Card{rules.PlayerHand, rules.CPUHand}
+	for player := range session.Hands {
+		hand := append([]game.Card(nil), scripted[player]...)
+		if len(hand) == 0 {
+			hand = make([]game.Card, 0, handSizes[player])
+			for len(hand) < handSizes[player] {
+				if len(deck) == 0 {
+					return nil, errors.New("not enough cards to deal the Rummy campaign hand")
+				}
+				index := rng.Intn(len(deck))
+				hand = append(hand, deck[index])
+				deck = append(deck[:index], deck[index+1:]...)
+			}
+		}
+		session.Hands[player] = hand
+	}
+	top := append([]game.Card(nil), rules.DrawPileTop...)
+	for left, right := 0, len(top)-1; left < right; left, right = left+1, right-1 {
+		top[left], top[right] = top[right], top[left]
+	}
+	session.DrawPile = append(deck, top...)
+	return session, nil
 }
 
 func (s *webServer) startWebRummy(mode, playerHeroID, opponentHeroID string, firstHero, secondHero heroes.Hero) {
@@ -101,7 +196,15 @@ func (r *rummySession) webView(session *webSession, viewer int, online bool) *we
 		DrawPileCount:  len(r.DrawPile),
 		FaceUpPile:     append([]game.Card(nil), r.FaceUp...),
 		TurnsCompleted: r.Turns,
-		TurnLimit:      rummyTurnLimit,
+		TurnLimit:      r.TurnLimit,
+		MatchHand:      r.HandNumber,
+		MatchScores:    r.HandScores,
+	}
+	if result.TurnLimit <= 0 {
+		result.TurnLimit = rummyTurnLimit
+	}
+	if r.Rules != nil && r.Rules.MatchHands > 1 {
+		result.MatchHands = r.Rules.MatchHands
 	}
 	lastMove := r.LastMoves[1-viewerPlayer]
 	if lastMove.Action != "" {
@@ -164,6 +267,9 @@ func (s *webServer) applyRummyAction(request actionRequest) error {
 	case "rummy-draw-face-up":
 		if session.phase != "rummy-turn" || len(rummy.FaceUp) == 0 {
 			return errors.New("there is no face-up card to take")
+		}
+		if !s.ensureRummyStock(rummy, 1) {
+			return errors.New("not enough cards remain to replace the face-up draw")
 		}
 		if err := rummy.drawFaceUp(session.actor); err != nil {
 			return err
@@ -263,15 +369,42 @@ func (s *webServer) completeRummyTurn() error {
 	session := s.session
 	rummy := session.rummy
 	rummy.Turns++
-	if rummy.Turns >= rummyTurnLimit {
+	turnLimit := rummy.TurnLimit
+	if turnLimit <= 0 {
+		turnLimit = rummyTurnLimit
+	}
+	if rummy.Turns >= turnLimit {
 		for player := range rummy.Hands {
 			rummy.Results[player] = game.BestRummyPartition(rummy.Hands[player], rummy.Parameters)
+			rummy.HandScores[player] += rummy.Results[player].Total
+		}
+		if rummy.Rules != nil && rummy.Rules.MatchHands > rummy.HandNumber {
+			playerHero, ok := heroes.ByID(session.playerHeroID)
+			if !ok {
+				return fmt.Errorf("unknown player hero %q", session.playerHeroID)
+			}
+			cpuHero, ok := heroes.ByID(session.opponentHeroID)
+			if !ok {
+				return fmt.Errorf("unknown Rummy CPU hero %q", session.opponentHeroID)
+			}
+			playerHero = applyWebHeroTuning(playerHero, session.conductorTunings[0])
+			next, err := newRummyCampaignSession(playerHero, cpuHero, rummy.Rules, s.rng)
+			if err != nil {
+				return fmt.Errorf("start next Rummy campaign hand: %w", err)
+			}
+			next.HandNumber = rummy.HandNumber + 1
+			next.HandScores = rummy.HandScores
+			session.rummy = next
+			session.actor, session.phase, session.winner = 0, "rummy-opening", -1
+			session.message = fmt.Sprintf("Hand %d of %d. Draw two cards to begin.",
+				next.HandNumber, next.Rules.MatchHands)
+			return nil
 		}
 		switch {
-		case rummy.Results[0].Total > rummy.Results[1].Total:
+		case rummy.HandScores[0] > rummy.HandScores[1]:
 			session.winner = 0
 			session.message = "Player 1 wins the Rummy game."
-		case rummy.Results[1].Total > rummy.Results[0].Total:
+		case rummy.HandScores[1] > rummy.HandScores[0]:
 			session.winner = 1
 			session.message = "Player 2 wins the Rummy game."
 		default:
@@ -279,11 +412,27 @@ func (s *webServer) completeRummyTurn() error {
 			session.message = "The Rummy game is a draw."
 		}
 		session.phase = "gameover"
-		s.awardLocalMultiplayerPayout(rummy.Results[0].Total)
+		if session.campaign != nil && rummy.Rules != nil {
+			won := false
+			switch rummy.Rules.Goal {
+			case "score":
+				won = rummy.Results[0].Total >= rummy.Rules.Target
+			case "match":
+				won = rummy.HandScores[0] > rummy.HandScores[1]
+			default:
+				won = session.winner == 0
+			}
+			s.finishSpecialCampaignMission(won)
+		} else {
+			s.awardLocalMultiplayerPayout(rummy.Results[0].Total)
+		}
 		return nil
 	}
 
 	session.actor = 1 - session.actor
+	if !s.ensureRummyStock(rummy, 1) {
+		return errors.New("Rummy stock cannot be replenished from the discard pile")
+	}
 	if session.mode == "hvh" {
 		session.phase = "handoff"
 		session.handoffTarget = session.actor
@@ -306,10 +455,12 @@ func (s *webServer) advanceRummyAI() error {
 		switch session.phase {
 		case "rummy-opening", "rummy-turn":
 			rummy := session.rummy
+			forcedFaceUp := rummy.deckCount() < 2
 			if session.phase == "rummy-turn" && len(rummy.FaceUp) > 0 &&
-				rummy.deckCount() > 0 &&
-				game.ShouldTakeRummyDiscard(rummy.Hands[session.actor],
-					rummy.FaceUp[len(rummy.FaceUp)-1], rummy.Parameters) {
+				(forcedFaceUp || s.shouldTakeRummyDiscard(rummy, session.actor)) {
+				if !s.ensureRummyStock(rummy, 1) {
+					return errors.New("Rummy stock cannot be replenished from the discard pile")
+				}
 				if err := rummy.drawFaceUp(session.actor); err != nil {
 					return err
 				}
@@ -334,12 +485,47 @@ func (s *webServer) advanceRummyAI() error {
 	return nil
 }
 
+func (s *webServer) ensureRummyStock(rummy *rummySession, minimum int) bool {
+	if rummy == nil || minimum < 0 {
+		return false
+	}
+	if rummy.Rules == nil || len(rummy.DrawPile) >= minimum {
+		return true
+	}
+	if len(rummy.FaceUp) < 2 {
+		return false
+	}
+	topDiscard := rummy.FaceUp[len(rummy.FaceUp)-1]
+	rummy.DrawPile = append(rummy.DrawPile, rummy.FaceUp[:len(rummy.FaceUp)-1]...)
+	rummy.FaceUp = []game.Card{topDiscard}
+	s.rng.Shuffle(len(rummy.DrawPile), func(i, j int) {
+		rummy.DrawPile[i], rummy.DrawPile[j] = rummy.DrawPile[j], rummy.DrawPile[i]
+	})
+	return len(rummy.DrawPile) >= minimum
+}
+
 func (s *webServer) aiRummyDiscard() error {
 	rummy := s.session.rummy
 	player := s.session.actor
 	hand := rummy.Hands[player]
 	if len(hand) < 2 {
 		return errors.New("CPU has fewer than two cards to discard")
+	}
+	policy := "standard"
+	if rummy.Rules != nil {
+		policy = rummy.Rules.CPUPolicy
+	}
+	if policy == "random" {
+		first := s.rng.Intn(len(hand))
+		second := s.rng.Intn(len(hand) - 1)
+		if second >= first {
+			second++
+		}
+		return rummy.discard(player, first, second)
+	}
+	if policy == "hard" {
+		faceUpIndex, buriedIndex, _ := bestRummyDiscard(hand, rummy.Parameters)
+		return rummy.discard(player, faceUpIndex, buriedIndex)
 	}
 	indices := make([]int, len(hand))
 	for index := range indices {
@@ -355,4 +541,61 @@ func (s *webServer) aiRummyDiscard() error {
 		faceUpIndex, buriedIndex = buriedIndex, faceUpIndex
 	}
 	return rummy.discard(player, faceUpIndex, buriedIndex)
+}
+
+func (s *webServer) shouldTakeRummyDiscard(rummy *rummySession, player int) bool {
+	if rummy == nil || player < 0 || player >= len(rummy.Hands) || len(rummy.FaceUp) == 0 {
+		return false
+	}
+	policy := "standard"
+	if rummy.Rules != nil {
+		policy = rummy.Rules.CPUPolicy
+	}
+	if policy == "random" || policy == "passive" {
+		return false
+	}
+	hand := rummy.Hands[player]
+	discard := rummy.FaceUp[len(rummy.FaceUp)-1]
+	if policy == "hard" {
+		if len(rummy.DrawPile) < 2 {
+			return false
+		}
+		faceUpQuality := game.RummyHandQuality(
+			append(append([]game.Card(nil), hand...), discard), rummy.Parameters)
+		expectedDrawQuality := 0.0
+		for sample := 0; sample < 10; sample++ {
+			first := s.rng.Intn(len(rummy.DrawPile))
+			second := s.rng.Intn(len(rummy.DrawPile) - 1)
+			if second >= first {
+				second++
+			}
+			candidate := append(append([]game.Card(nil), hand...),
+				rummy.DrawPile[first], rummy.DrawPile[second])
+			_, _, quality := bestRummyDiscard(candidate, rummy.Parameters)
+			expectedDrawQuality += quality
+		}
+		return faceUpQuality > expectedDrawQuality/10
+	}
+	return game.ShouldTakeRummyDiscard(hand, discard, rummy.Parameters)
+}
+
+func bestRummyDiscard(hand []game.Card, params game.RummyParameters) (int, int, float64) {
+	bestQuality := -1.0e9
+	faceUpIndex, buriedIndex := 0, 1
+	for first := range hand {
+		for second := first + 1; second < len(hand); second++ {
+			remaining := make([]game.Card, 0, len(hand)-2)
+			for index, card := range hand {
+				if index != first && index != second {
+					remaining = append(remaining, card)
+				}
+			}
+			quality := game.RummyHandQuality(remaining, params)
+			if quality > bestQuality {
+				bestQuality = quality
+				faceUpIndex, buriedIndex = first, second
+			}
+		}
+	}
+	return faceUpIndex, buriedIndex, bestQuality
 }

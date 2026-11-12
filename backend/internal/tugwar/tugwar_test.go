@@ -77,6 +77,52 @@ func TestNewGameStartsAtBaseBountyWithoutHeroModifiers(t *testing.T) {
 	}
 }
 
+func TestNewCampaignGameUsesScriptedSetupAndCampaignStatFormula(t *testing.T) {
+	recruit, _ := heroes.ByID("recruit")
+	turtle, _ := heroes.ByID("anchor")
+	mission := CampaignMission{
+		PlayerHand: []game.Card{{Suit: game.Shield, Face: 2}},
+		CPUHand:    []game.Card{{Suit: game.Fang, Face: 3}},
+		Piles: [NumPiles]Pile{
+			{Cards: []game.Card{{Suit: game.Blade, Face: 1}}},
+			{Cards: []game.Card{{Suit: game.Fang, Face: 2}}},
+			{Cards: []game.Card{{Suit: game.Shield, Face: 3}}},
+		},
+		Deck:       []game.Card{{Suit: game.Shield, Face: 1}, {Suit: game.Blade, Face: 2}},
+		BountySuit: game.Blade, Pushes: [2]int{3, 0}, WinCondition: WinByScore,
+	}
+	match, err := NewCampaignGame(recruit, turtle, rand.New(rand.NewSource(21)), mission)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if match.State.B != -1 || match.State.Pushes != [2]int{3, 0} ||
+		match.State.Deck[len(match.State.Deck)-1] != mission.Deck[0] {
+		t.Fatalf("scripted campaign stats/deck = B:%d pushes:%v deck:%v",
+			match.State.B, match.State.Pushes, match.State.Deck)
+	}
+	if err := match.Apply(Action{Kind: ActionFlipDeck, PileIndex: 0}); err != nil {
+		t.Fatal(err)
+	}
+	if match.State.Piles[0].Cards[len(match.State.Piles[0].Cards)-1] != mission.Deck[0] ||
+		!match.State.BountyRevealed {
+		t.Fatalf("first scripted deck flip = %+v", match.State)
+	}
+}
+
+func TestCampaignSeriesUsesStandardDealWithCampaignStatFormula(t *testing.T) {
+	recruit, _ := heroes.ByID("recruit")
+	mission := CampaignMission{RefillHands: true, SeriesGames: 3, SeriesWinsNeeded: 2}
+	match, err := NewCampaignGame(recruit, recruit, rand.New(rand.NewSource(22)), mission)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(match.State.Hands[0]) != HandSize || len(match.State.Hands[1]) != HandSize ||
+		len(match.State.Deck) != 11 || match.State.B != 0 ||
+		match.State.Pushes[0] != match.State.Pushes[1] {
+		t.Fatalf("campaign series standard setup = %+v", match.State)
+	}
+}
+
 func TestNewGameClampsHeroStats(t *testing.T) {
 	gorilla, _ := heroes.ByID("ascendant")
 	treasurer, _ := heroes.ByID("treasurer")

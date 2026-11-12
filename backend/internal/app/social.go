@@ -16,11 +16,14 @@ import (
 var socialHandlePattern = regexp.MustCompile(`^[A-Za-z][A-Za-z0-9_]{2,19}$`)
 
 type socialPlayer struct {
-	ID        string    `json:"id"`
-	Handle    string    `json:"handle"`
-	ELO       int       `json:"elo"`
-	Rank      int       `json:"rank,omitempty"`
-	CreatedAt time.Time `json:"createdAt"`
+	ID            string                  `json:"id"`
+	Handle        string                  `json:"handle"`
+	ELO           int                     `json:"elo"`
+	Rank          int                     `json:"rank,omitempty"`
+	CreatedAt     time.Time               `json:"createdAt"`
+	Ratings       map[string]socialRating `json:"ratings,omitempty"`
+	Record        socialRecord            `json:"record,omitempty"`
+	NetWagerMarks int64                   `json:"netWagerMarks,omitempty"`
 }
 
 type socialFriendRequest struct {
@@ -60,30 +63,8 @@ func (s *webServer) handleSocialOverview(w http.ResponseWriter, r *http.Request)
 	}
 	response["user"].(map[string]any)["elo"] = elo
 	response["user"].(map[string]any)["rank"] = rank
-	ratingRows, err := s.db.QueryContext(r.Context(), `
-		SELECT variant,rating FROM user_variant_ratings
-		WHERE user_id=$1 ORDER BY variant`, user.ID)
+	ratings, err := s.rankedRatings(r.Context(), user.ID)
 	if err != nil {
-		databaseError(w, err)
-		return
-	}
-	ratings := make(map[string]int, 8)
-	for ratingRows.Next() {
-		var variant string
-		var rating int
-		if err := ratingRows.Scan(&variant, &rating); err != nil {
-			ratingRows.Close()
-			databaseError(w, err)
-			return
-		}
-		ratings[variant] = rating
-	}
-	if err := ratingRows.Err(); err != nil {
-		ratingRows.Close()
-		databaseError(w, err)
-		return
-	}
-	if err := ratingRows.Close(); err != nil {
 		databaseError(w, err)
 		return
 	}
@@ -98,6 +79,19 @@ func (s *webServer) handleSocialOverview(w http.ResponseWriter, r *http.Request)
 	if err != nil {
 		databaseError(w, err)
 		return
+	}
+	for index := range friends {
+		friends[index].Ratings, err = s.rankedRatings(r.Context(), friends[index].ID)
+		if err != nil {
+			databaseError(w, err)
+			return
+		}
+		friends[index].Record, friends[index].NetWagerMarks, err =
+			s.friendRecord(r.Context(), user.ID, friends[index].ID)
+		if err != nil {
+			databaseError(w, err)
+			return
+		}
 	}
 	incoming, err := s.querySocialRequests(r, `
 		SELECT fr.id,u.public_handle,fr.message,fr.created_at
@@ -131,7 +125,12 @@ func (s *webServer) handleSocialOverview(w http.ResponseWriter, r *http.Request)
 		FROM social_messages m
 		JOIN users s ON s.id=m.sender_id
 		JOIN users d ON d.id=m.recipient_id
-		WHERE m.sender_id=$1 OR m.recipient_id=$1
+		WHERE (m.sender_id=$1 OR m.recipient_id=$1)
+			AND m.created_at > COALESCE((
+				SELECT deleted_at FROM social_conversation_deletions
+				WHERE owner_id=$1
+					AND other_id=CASE WHEN m.sender_id=$1 THEN m.recipient_id ELSE m.sender_id END
+			),'-infinity'::timestamptz)
 		ORDER BY m.created_at DESC LIMIT 50`, user.ID)
 	if err != nil {
 		databaseError(w, err)
@@ -152,6 +151,19 @@ func (s *webServer) handleSocialOverview(w http.ResponseWriter, r *http.Request)
 		return
 	}
 	if err := rows.Close(); err != nil {
+		databaseError(w, err)
+		return
+	}
+	conversations, err := s.socialConversations(r.Context(), user.ID)
+	if err != nil {
+		databaseError(w, err)
+		return
+	}
+	var wageredMarks int64
+	if err := s.db.QueryRowContext(r.Context(), `
+		SELECT COALESCE(SUM(stake_marks),0) FROM friend_wagers
+		WHERE (player_a_id=$1 OR player_b_id=$1) AND created_at>=now()-interval '24 hours'`,
+		user.ID).Scan(&wageredMarks); err != nil {
 		databaseError(w, err)
 		return
 	}
@@ -188,8 +200,9 @@ func (s *webServer) handleSocialOverview(w http.ResponseWriter, r *http.Request)
 
 	writeJSON(w, http.StatusOK, map[string]any{
 		"user": response["user"], "friends": friends, "incomingRequests": incoming,
-		"outgoingRequests": outgoing, "blocks": blocks, "messages": messages, "leaderboard": leaderboard,
-		"wagerLimits": map[string]int{"perGame": 1000, "per24Hours": 5000},
+		"outgoingRequests": outgoing, "blocks": blocks, "messages": messages,
+		"conversations": conversations, "leaderboard": leaderboard,
+		"wagerLimits": map[string]int64{"perGame": 1000, "per24Hours": 5000, "used24Hours": wageredMarks},
 	})
 }
 
@@ -544,6 +557,12 @@ func (s *webServer) handleSocialMessage(w http.ResponseWriter, r *http.Request) 
 	}
 	_, err = tx.ExecContext(r.Context(), "INSERT INTO social_messages(id,sender_id,recipient_id,body) VALUES($1,$2,$3,$4)", randomID(), user.ID, targetID, input.Body)
 	if err != nil {
+		databaseError(w, err)
+		return
+	}
+	if _, err := tx.ExecContext(r.Context(), `
+		DELETE FROM social_conversation_deletions WHERE owner_id=$1 AND other_id=$2`,
+		user.ID, targetID); err != nil {
 		databaseError(w, err)
 		return
 	}

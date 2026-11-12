@@ -27,13 +27,35 @@ const (
 	PokerSameBountySuitEvery  PokerMissionConstraint = "same_bounty_suit_every_hand"
 )
 
+type PokerGhostStrategy string
+
+const (
+	PokerGhostBounty PokerGhostStrategy = "bounty"
+	PokerGhostNine   PokerGhostStrategy = "nine"
+	PokerGhostPairs  PokerGhostStrategy = "pairs"
+	PokerGhostMedium PokerGhostStrategy = "balanced"
+)
+
+type PokerGhostRules struct {
+	Strategy     PokerGhostStrategy
+	StartingHand []Card
+	HandSize     int
+	TeachingNote string
+}
+
 type PokerMissionRules struct {
-	NineBase    int
-	BountyBase  int
-	Par         int
-	Constraint  PokerMissionConstraint
-	StreakCount int
-	StreakScore int
+	NineBase          int
+	BountyBase        int
+	Par               int
+	Constraint        PokerMissionConstraint
+	StreakCount       int
+	StreakScore       int
+	ForcedBountySuit  *Suit
+	StartingHand      []Card
+	HandSize          int
+	Lesson            string
+	RecommendedHeroes []string
+	Ghost             *PokerGhostRules
 }
 
 type PokerHeroParameters struct {

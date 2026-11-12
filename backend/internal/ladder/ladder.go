@@ -86,6 +86,16 @@ type Policy interface {
 	ChoosePlay(g *LadderGame, legal []game.Card) game.Card
 }
 
+type CampaignSetup struct {
+	PlayerHand  []game.Card
+	CPUHand     []game.Card
+	PlayerSize  int
+	CPUSize     int
+	WildFace    int
+	BountySuit  game.Suit
+	SharedStats *SharedStats
+}
+
 type greedyPolicy struct{}
 
 func SharedStatsFor(a, b heroes.Hero) SharedStats {
@@ -105,6 +115,137 @@ func NewLadderGame(heroA, heroB heroes.Hero, deck []game.Card, seed int64) (*Lad
 
 func NewLadderGameWithDeferredOpening(heroA, heroB heroes.Hero, deck []game.Card, seed int64) (*LadderGame, error) {
 	return newLadderGame(heroA, heroB, deck, seed, true)
+}
+
+func NewCampaignGame(heroA, heroB heroes.Hero, setup CampaignSetup, rng *rand.Rand) (*LadderGame, error) {
+	if rng == nil {
+		return nil, errors.New("Ladder campaign requires a random source")
+	}
+	stats := SharedStatsFor(heroA, heroB)
+	if setup.SharedStats != nil {
+		stats = *setup.SharedStats
+	}
+	deck := game.NewDeck()
+	rng.Shuffle(len(deck), func(i, j int) { deck[i], deck[j] = deck[j], deck[i] })
+	remove := func(card game.Card) error {
+		for index, candidate := range deck {
+			if candidate == card {
+				deck = append(deck[:index], deck[index+1:]...)
+				return nil
+			}
+		}
+		return fmt.Errorf("Ladder campaign card %s is duplicated or invalid", card)
+	}
+	used := make(map[game.Card]bool)
+	removeHand := func(cards []game.Card) error {
+		for _, card := range cards {
+			if !card.Valid() || used[card] {
+				return fmt.Errorf("Ladder campaign has a duplicate or invalid card %s", card)
+			}
+			used[card] = true
+			if err := remove(card); err != nil {
+				return err
+			}
+		}
+		return nil
+	}
+	handA, handB := append([]game.Card(nil), setup.PlayerHand...), append([]game.Card(nil), setup.CPUHand...)
+	if err := removeHand(handA); err != nil {
+		return nil, err
+	}
+	if err := removeHand(handB); err != nil {
+		return nil, err
+	}
+
+	bountySuit := setup.BountySuit
+	if bountySuit < game.Shield || bountySuit > game.Blade {
+		bountySuit = game.Suit(-1)
+	}
+	bountyIndex := -1
+	if bountySuit >= 0 {
+		for index, card := range deck {
+			if card.Suit == bountySuit && (setup.WildFace == 0 || card.Face == setup.WildFace) {
+				bountyIndex = index
+				break
+			}
+		}
+		if bountyIndex < 0 && setup.WildFace > 0 {
+			for index, card := range deck {
+				if card.Suit == bountySuit {
+					bountyIndex = index
+					break
+				}
+			}
+		}
+	} else if len(deck) > 0 {
+		bountyIndex = rng.Intn(len(deck))
+	}
+	if bountyIndex < 0 {
+		return nil, errors.New("Ladder campaign has no available bounty card")
+	}
+	bountyCard := deck[bountyIndex]
+	deck = append(deck[:bountyIndex], deck[bountyIndex+1:]...)
+	if bountySuit < 0 {
+		bountySuit = bountyCard.Suit
+	}
+	wildFace := setup.WildFace
+	if wildFace < 1 || wildFace > 9 {
+		wildFace = bountyCard.Face
+	}
+
+	playerSize, cpuSize := setup.PlayerSize, setup.CPUSize
+	if playerSize <= 0 {
+		playerSize = 9 + stats.Bounty
+	}
+	if cpuSize <= 0 {
+		cpuSize = 9 + stats.Bounty
+	}
+	deal := func(hand []game.Card, size int) ([]game.Card, error) {
+		for len(hand) < size {
+			if len(deck) == 0 {
+				return nil, errors.New("not enough cards for Ladder campaign hands")
+			}
+			index := rng.Intn(len(deck))
+			hand = append(hand, deck[index])
+			deck = append(deck[:index], deck[index+1:]...)
+		}
+		if len(hand) > size {
+			return nil, fmt.Errorf("scripted Ladder hand has %d cards, expected %d", len(hand), size)
+		}
+		return hand, nil
+	}
+	var err error
+	if handA, err = deal(handA, playerSize); err != nil {
+		return nil, err
+	}
+	if handB, err = deal(handB, cpuSize); err != nil {
+		return nil, err
+	}
+	if stats.Draft > 0 {
+		passA, passB := lowestCards(handA, stats.Draft), lowestCards(handB, stats.Draft)
+		handA, handB = append(removeCards(handA, passA), passB...), append(removeCards(handB, passB), passA...)
+	}
+	initiativeSuit := bountySuit
+	fallbackNoInitiativeSuit := !anyoneHolds(handA, handB, initiativeSuit)
+	leader := chooseLeader(handA, handB, initiativeSuit, fallbackNoInitiativeSuit)
+	result := &LadderGame{
+		handA: handA, handB: handB, deck: deck,
+		sharedStats: stats, wildFaceRaw: wildFace, bountyCard: bountyCard,
+		initiativeSuit: initiativeSuit, fallbackNoInitiativeSuit: fallbackNoInitiativeSuit,
+		current: leader, openingPending: true, openingPlayer: leader,
+	}
+	var opening game.Card
+	if fallbackNoInitiativeSuit {
+		opening = chooseOpening(result.handFor(leader), wildFace)
+	} else {
+		var found bool
+		opening, found = lowestCardOfSuit(result.handFor(leader), initiativeSuit)
+		if !found {
+			return nil, errors.New("Ladder campaign leader has no initiative-suit card")
+		}
+	}
+	result.openingCard = cloneCard(&opening)
+	return result, nil
 }
 
 func newLadderGame(heroA, heroB heroes.Hero, deck []game.Card, seed int64, deferOpening bool) (*LadderGame, error) {

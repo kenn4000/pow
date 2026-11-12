@@ -110,6 +110,8 @@ type abandonSession struct {
 	DrawPile       []game.Card
 	Discard        []game.Card
 	Target         int
+	Goal           string
+	TargetCard     *game.Card
 	PairCount      int
 	Bounty         game.Card
 	Revealed       []bool
@@ -125,6 +127,8 @@ type abandonSession struct {
 	Evaluated      bool
 	Won            bool
 	Penalties      []int
+	MinCaptured    int
+	MaxAbandoned   int
 }
 
 type abandonPairing struct {
@@ -162,7 +166,7 @@ type webAbandonPairResult struct {
 	Tie      bool       `json:"tie"`
 }
 
-const abandonRulesVersion = 2
+const abandonRulesVersion = 3
 const abandonBoardSource = "board"
 const abandonPileSource = "personal-pile"
 
@@ -342,6 +346,78 @@ func newAbandonSessionForMission(hero heroes.Hero, rng *rand.Rand, pairCount, bo
 	}, nil
 }
 
+func newAbandonSessionForCampaign(
+	hero heroes.Hero,
+	rng *rand.Rand,
+	board, hand []game.Card,
+	bountySuit game.Suit,
+	pairCount, target, minCaptured, maxAbandoned int,
+	goal string,
+	targetCard *game.Card,
+) (*abandonSession, error) {
+	if rng == nil || !bountySuit.Valid() || len(board) == 0 || len(hand) == 0 ||
+		pairCount < 1 || pairCount*2 > len(board)+len(hand) || target < 1 ||
+		minCaptured < 0 || maxAbandoned < 0 {
+		return nil, errors.New("invalid Abandon campaign setup")
+	}
+	deck := game.NewDeck()
+	available := make(map[game.Card]bool, len(deck))
+	for _, card := range deck {
+		available[card] = true
+	}
+	used := make(map[game.Card]bool, len(board)+len(hand)+1)
+	for _, cards := range [][]game.Card{board, hand} {
+		for _, card := range cards {
+			if !card.Valid() || !available[card] || used[card] {
+				return nil, fmt.Errorf("invalid or duplicate Abandon campaign card %v", card)
+			}
+			used[card] = true
+		}
+	}
+	bountyIndex := -1
+	for index := len(deck) - 1; index >= 0; index-- {
+		card := deck[index]
+		if card.Suit == bountySuit && !used[card] {
+			bountyIndex = index
+			break
+		}
+	}
+	if bountyIndex < 0 {
+		return nil, errors.New("Abandon campaign has no available bounty card")
+	}
+	bounty := deck[bountyIndex]
+	used[bounty] = true
+	revealed := make([]bool, len(board))
+	highestBountyIndex := -1
+	for index, card := range board {
+		if card.Suit == bountySuit &&
+			(highestBountyIndex < 0 || card.Face > board[highestBountyIndex].Face) {
+			highestBountyIndex = index
+		}
+	}
+	for index, card := range board {
+		revealed[index] = card.Suit == bountySuit && index != highestBountyIndex
+	}
+	pileRevealed := make([]bool, len(hand))
+	for index := 0; index < clampInt(3+hero.Draft, 0, len(pileRevealed)); index++ {
+		pileRevealed[index] = true
+	}
+	removed := make([]game.Card, 0, len(used))
+	for card := range used {
+		removed = append(removed, card)
+	}
+	return &abandonSession{
+		RulesVersion: abandonRulesVersion, Board: append([]game.Card(nil), board...),
+		PersonalPile: append([]game.Card(nil), hand...), Target: target, Goal: goal,
+		TargetCard: targetCard, PairCount: pairCount,
+		Bounty: bounty, DrawPile: replacementDeck(removed, rng), Revealed: revealed,
+		PileRevealed: pileRevealed, Used: make([]bool, len(board)),
+		PileUsed: make([]bool, len(hand)), SelectedIndex: -1,
+		Pairings: make([]abandonPairing, 0, pairCount), Captured: []game.Card{},
+		Penalties: make([]int, len(hand)), MinCaptured: minCaptured, MaxAbandoned: maxAbandoned,
+	}, nil
+}
+
 func (a *abandonSession) flipBoardCard(index int) error {
 	if a == nil || a.Finished || len(a.Pairings) >= a.PairCount {
 		return errors.New("Abandon game is complete")
@@ -461,7 +537,20 @@ func (a *abandonSession) finishIfReady(hero heroes.Hero) {
 	}
 	a.Finished = true
 	a.Evaluated = true
-	a.Won = a.Score >= a.Target
+	abandoned := 0
+	for _, used := range a.PileUsed {
+		if !used {
+			abandoned++
+		}
+	}
+	reachedScore := a.Score >= a.Target
+	if a.Goal == "capture_or_score" && a.TargetCard != nil {
+		for _, captured := range a.Captured {
+			reachedScore = reachedScore || captured == *a.TargetCard
+		}
+	}
+	a.Won = reachedScore && len(a.Captured) >= a.MinCaptured &&
+		(a.MaxAbandoned == 0 || abandoned <= a.MaxAbandoned)
 }
 
 func abandonCapturedScore(captured []game.Card, bounty game.Suit, hero heroes.Hero) int {

@@ -37,6 +37,7 @@ type sessionSnapshot struct {
 	Poker               *pokerSession
 	PokerDuel           *pokerDuelGame
 	TugWar              *tugwar.Game
+	TugWarSeries        *tugWarSeriesProgress
 	PokerDuelCPUReadyAt time.Time
 	LadderReadyAt       time.Time
 	WhitePlayer         int
@@ -77,10 +78,15 @@ func snapshotSession(s *webSession) *sessionSnapshot {
 		state := s.ladder.State()
 		ladderState = &state
 	}
+	var tugWarSeries *tugWarSeriesProgress
+	if s.tugWarSeries != nil {
+		copy := *s.tugWarSeries
+		tugWarSeries = &copy
+	}
 	return &sessionSnapshot{
 		State: s.state, Mode: s.mode, Variant: s.variant, Puzzle: s.puzzle, Abandon: s.abandon,
 		AbandonDuel: s.abandonDuel, Rummy: s.rummy, Ladder: ladderState,
-		Poker: s.poker, PokerDuel: s.pokerDuel, TugWar: s.tugWar,
+		Poker: s.poker, PokerDuel: s.pokerDuel, TugWar: s.tugWar, TugWarSeries: tugWarSeries,
 		PokerDuelCPUReadyAt: s.pokerDuelCPUReadyAt,
 		LadderReadyAt:       s.ladderReadyAt,
 		WhitePlayer:         s.whitePlayer, Phase: s.phase, Actor: s.actor, HandoffTarget: s.handoffTarget,
@@ -117,6 +123,15 @@ func (s *sessionSnapshot) restore() *webSession {
 		variant = "main"
 	}
 	abandon := s.Abandon
+	abandonDuel := s.AbandonDuel
+	if abandonDuel != nil && abandonDuel.Setup.BoardSize == 0 {
+		copy := *abandonDuel
+		copy.Setup = abandonDuelSetup{
+			BoardSize: abandonDuelBoardSize, HandSize: 5, PairCount: abandonDuelPairsPerPlayer,
+			Rounds: 2, BountySuits: [2]int{-1, -1}, MirrorHands: true, Snake: true,
+		}
+		abandonDuel = &copy
+	}
 	phase, message := s.Phase, s.Message
 	campaignContext := s.Campaign
 	if campaignContext != nil {
@@ -125,13 +140,17 @@ func (s *sessionSnapshot) restore() *webSession {
 	}
 	if abandon != nil && abandon.RulesVersion != abandonRulesVersion {
 		pairCount, boardCardCount, target := 4, 11, 35
+		var campaignRules *campaigns.AbandonCampaignRules
 		if campaignContext != nil && campaignContext.ID == "abandon" {
 			campaign, ok := campaigns.ByID("abandon")
 			missionFound := false
 			if ok {
 				for _, mission := range campaign.Missions {
-					if mission.Index == campaignContext.Index && !mission.Disabled {
+					if mission.Index == campaignContext.Index && !mission.Disabled &&
+						mission.Abandon != nil && mission.Abandon.Rounds == 1 &&
+						mission.Abandon.OpponentAlgo == "" {
 						pairCount, boardCardCount, target = mission.AbandonPairs, mission.AbandonBoardCards, mission.Target
+						campaignRules = mission.Abandon
 						missionFound = true
 						break
 					}
@@ -145,7 +164,19 @@ func (s *sessionSnapshot) restore() *webSession {
 		if !ok {
 			hero, _ = heroes.ByID("recruit")
 		}
-		restarted, err := newAbandonSessionForMission(hero, rand.New(rand.NewSource(time.Now().UnixNano())), pairCount, boardCardCount, target)
+		rng := rand.New(rand.NewSource(time.Now().UnixNano()))
+		var restarted *abandonSession
+		var err error
+		if campaignRules != nil {
+			restarted, err = newAbandonSessionForCampaign(
+				hero, rng, campaignRules.Board, campaignRules.PlayerHand,
+				game.Suit(campaignRules.BountySuits[0]), campaignRules.PairCount,
+				campaignRules.Target, campaignRules.MinCaptured, campaignRules.MaxAbandoned,
+				campaignRules.Goal, campaignRules.TargetCard,
+			)
+		} else {
+			restarted, err = newAbandonSessionForMission(hero, rng, pairCount, boardCardCount, target)
+		}
 		if err != nil {
 			abandon, phase, message = nil, "gameover", "This saved Abandon mission could not be restarted."
 		} else {
@@ -156,8 +187,13 @@ func (s *sessionSnapshot) restore() *webSession {
 	if s.Ladder != nil {
 		ladderGame = ladder.Restore(*s.Ladder)
 	}
+	var tugWarSeries *tugWarSeriesProgress
+	if s.TugWarSeries != nil {
+		copy := *s.TugWarSeries
+		tugWarSeries = &copy
+	}
 	return &webSession{
-		state: s.State, mode: s.Mode, variant: variant, puzzle: s.Puzzle, abandon: abandon, abandonDuel: s.AbandonDuel, rummy: rummy, ladder: ladderGame, poker: s.Poker, pokerDuel: s.PokerDuel, tugWar: s.TugWar,
+		state: s.State, mode: s.Mode, variant: variant, puzzle: s.Puzzle, abandon: abandon, abandonDuel: abandonDuel, rummy: rummy, ladder: ladderGame, poker: s.Poker, pokerDuel: s.PokerDuel, tugWar: s.TugWar, tugWarSeries: tugWarSeries,
 		pokerDuelCPUReadyAt: s.PokerDuelCPUReadyAt,
 		ladderReadyAt:       s.LadderReadyAt,
 		whitePlayer:         s.WhitePlayer, phase: phase, actor: s.Actor, handoffTarget: s.HandoffTarget,

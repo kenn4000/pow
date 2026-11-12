@@ -228,6 +228,7 @@ func (s *webServer) useReplaceCardToken(source string, index int) error {
 	session = s.session
 	session.message = "Replaced a card with a random draw."
 	p.ReplaceCardTokens--
+	session.message += achievementUnlockSummary(recordConsumableUsed(p))
 	if err := p.Save(); err != nil {
 		p.ReplaceCardTokens++
 		s.session = previous

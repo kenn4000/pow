@@ -50,7 +50,7 @@ func TestLandingPageRendersNewAndProgressedPlayerStates(t *testing.T) {
 	p.WinsSinceCampDraw = 4
 	p.SkillPoints = 3
 	p.Achievements["first_blood"] = true
-	p.AchievementTiers["aggressor"] = 1
+	p.AchievementTiers["mode_main"] = 1
 	p.SeenAchievementIDs = []string{"first_blood"}
 	output.Reset()
 	if err := renderLandingPage(&output, p, now); err != nil {
@@ -66,8 +66,8 @@ func TestLandingPageRendersNewAndProgressedPlayerStates(t *testing.T) {
 			t.Errorf("progressed landing page missing %q:\n%s", expected, rendered)
 		}
 	}
-	if got := unseenAchievementIDs(p); len(got) != 1 || got[0] != "aggressor" {
-		t.Fatalf("unseen achievements = %v, want [aggressor]", got)
+	if got := unseenAchievementIDs(p); len(got) != 1 || got[0] != "mode_main" {
+		t.Fatalf("unseen achievements = %v, want [mode_main]", got)
 	}
 	markAchievementsSeen(p)
 	if got := unseenAchievementIDs(p); len(got) != 0 {

@@ -54,12 +54,14 @@ func TestHeroAcquisitionEventAwardsVarietyTier(t *testing.T) {
 		t.Fatal(err)
 	}
 	p.UnlockedHeroes = append(p.UnlockedHeroes, "warden", "hunter", "anchor")
+	p.TotalWins = 10
+	p.HeroWinCounts = map[string]int{"recruit": 4, "warden": 1, "hunter": 1, "anchor": 1}
 	events := evaluateAchievementEvent(p, achievements.EventHeroAcquired, "campaign")
 	tierFound := false
 	for _, event := range events {
 		tierFound = tierFound || (event.AchievementID == "hero_variety" && event.Tier == 1)
 	}
-	if !tierFound || p.Marks != 500 {
+	if !tierFound || p.Marks != 400 {
 		t.Fatalf("campaign acquisition events = %+v; marks=%d", events, p.Marks)
 	}
 }

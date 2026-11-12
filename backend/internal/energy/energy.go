@@ -13,6 +13,8 @@ const (
 	DailyAdLimit        = 5
 	EnergyPerAd         = 3
 	CrownsPerFullRefill = 100
+	SingleMatchCost     = 1
+	BestOfThreeCost     = 2
 	OneEnergyRecharge   = 1
 	TenEnergyRecharge   = 10
 	MarksPerEnergy      = 500
@@ -35,6 +37,13 @@ func Current(p *profile.Profile, now time.Time) int {
 	resetDailyLimits(p, now)
 	p.ApplyEnergyTick(now)
 	return p.Energy
+}
+
+func MatchCost(bestOfThree bool) int {
+	if bestOfThree {
+		return BestOfThreeCost
+	}
+	return SingleMatchCost
 }
 
 func Spend(p *profile.Profile, amount int, now time.Time) error {

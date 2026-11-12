@@ -14,15 +14,57 @@ func TestApplyUnlockEventAppliesRewardsAndDeduplicatesBadges(t *testing.T) {
 	p := &profile.Profile{}
 	event := achievements.UnlockEvent{
 		Marks: 100, Crowns: 5, SkillPoints: 1, ChromaPick: 1, HeroBoxes: 2, Badge: "badge_test",
+		WoodenBoxes: 1, SilverBoxes: 2, GoldBoxes: 3,
+		UndoMoveTokens: 1, RestartMissionTokens: 1, CampaignSkipTokens: 1, ReplaceCardTokens: 1,
 	}
 	applyUnlockEvent(p, event)
 	applyUnlockEvent(p, event)
 	if p.Marks != 200 || p.Crowns != 10 || p.SkillPoints != 2 ||
-		p.ChromaPickTokens != 2 || p.HeroBoxesAvailable != 4 {
+		p.ChromaPickTokens != 2 || p.HeroBoxesAvailable != 4 ||
+		p.PendingBoxes["wooden"] != 2 || p.PendingBoxes["silver"] != 4 || p.PendingBoxes["gold"] != 6 ||
+		p.UndoMoveTokens != 2 || p.RestartMissionTokens != 2 ||
+		p.CampaignSkipTokens != 2 || p.ReplaceCardTokens != 2 {
 		t.Fatalf("rewards were not applied per event: %+v", p)
 	}
 	if len(p.Badges) != 1 || p.Badges[0] != "badge_test" {
 		t.Fatalf("badge duplication: %v", p.Badges)
+	}
+}
+
+func TestCampaignCompletionAchievementGrantsRewardsOnce(t *testing.T) {
+	p := &profile.Profile{
+		Marks: 20, Crowns: 4, UndoMoveTokens: 2, RestartMissionTokens: 3,
+		CampaignSkipTokens: 4, ReplaceCardTokens: 5,
+		Campaigns: map[string]*profile.CampaignProgress{
+			"poker": {CampaignID: "poker", Completed: true},
+		},
+	}
+	events := evaluateCampaignCompletionAchievement(p, "poker")
+	if len(events) != 1 || events[0].AchievementID != "camp_poker" ||
+		events[0].Marks != 3000 || events[0].Crowns != 10 {
+		t.Fatalf("Poker completion achievement = %+v", events)
+	}
+	if p.Marks != 3020 || p.Crowns != 14 || p.UndoMoveTokens != 2 ||
+		p.RestartMissionTokens != 3 || p.CampaignSkipTokens != 4 || p.ReplaceCardTokens != 5 {
+		t.Fatalf("completion rewards were not applied: %+v", p)
+	}
+	if events = evaluateCampaignCompletionAchievement(p, "poker"); len(events) != 0 {
+		t.Fatalf("replayed completion re-awarded achievement: %+v", events)
+	}
+	p.Campaigns["rummy"] = &profile.CampaignProgress{CampaignID: "rummy", Completed: true}
+	if len(evaluateCampaignCompletionAchievement(p, "rummy")) != 1 {
+		t.Fatal("completion for one variant incorrectly blocked another variant achievement")
+	}
+	legacyProfile := &profile.Profile{
+		Campaigns: map[string]*profile.CampaignProgress{
+			"abandon": {CampaignID: "abandon", Completed: true},
+		},
+	}
+	legacyEvents := evaluateAchievementEvent(legacyProfile, achievements.EventProfileLoad, "load")
+	if !legacyProfile.Achievements["camp_abandon"] ||
+		len(legacyEvents) != 1 || legacyEvents[0].AchievementID != "camp_abandon" ||
+		legacyProfile.Marks != 3000 || legacyProfile.Crowns != 10 {
+		t.Fatalf("previously completed campaign did not unlock its achievement: %+v", legacyEvents)
 	}
 }
 

@@ -7,10 +7,144 @@ import (
 	"testing"
 	"time"
 
+	"prisonersofwar/internal/campaigns"
 	"prisonersofwar/internal/game"
 	"prisonersofwar/internal/heroes"
 	"prisonersofwar/internal/profile"
 )
+
+func TestRummyCampaignRecyclesDiscardPileButMultiplayerDoesNot(t *testing.T) {
+	server := &webServer{rng: rand.New(rand.NewSource(17))}
+	rules := &campaigns.RummyCampaignRules{}
+	top := game.Card{Suit: game.Blade, Face: 9}
+	discards := []game.Card{
+		{Suit: game.Shield, Face: 1},
+		{Suit: game.Fang, Face: 2},
+		top,
+	}
+	campaignSession := &rummySession{
+		Rules: rules, DrawPile: []game.Card{{Suit: game.Shield, Face: 3}},
+		FaceUp: append([]game.Card(nil), discards...),
+	}
+	if !server.ensureRummyStock(campaignSession, 2) ||
+		len(campaignSession.DrawPile) != 3 ||
+		len(campaignSession.FaceUp) != 1 || campaignSession.FaceUp[0] != top {
+		t.Fatalf("campaign stock was not recycled: stock=%v faceUp=%v",
+			campaignSession.DrawPile, campaignSession.FaceUp)
+	}
+
+	multiplayerSession := &rummySession{
+		DrawPile: []game.Card{{Suit: game.Shield, Face: 3}},
+		FaceUp:   append([]game.Card(nil), discards...),
+	}
+	if !server.ensureRummyStock(multiplayerSession, 2) ||
+		len(multiplayerSession.DrawPile) != 1 ||
+		len(multiplayerSession.FaceUp) != len(discards) {
+		t.Fatalf("multiplayer stock behavior changed: stock=%v faceUp=%v",
+			multiplayerSession.DrawPile, multiplayerSession.FaceUp)
+	}
+}
+
+func TestRummyLongCampaignMissionCompletesAfterStockRecycling(t *testing.T) {
+	web := campaignTestServer(t)
+	campaign, _ := campaigns.ByID("rummy")
+	for index := 1; index < 14; index++ {
+		if _, err := campaigns.CompleteMission(web.playerProfile, "rummy", index, 0); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if err := web.prepareWebMission(actionRequest{
+		CampaignID: "rummy", MissionIndex: 14, PlayerHeroID: "recruit",
+	}); err != nil {
+		t.Fatal(err)
+	}
+	for actions := 0; actions < 40 && web.session.phase != "gameover"; actions++ {
+		rummy := web.session.rummy
+		if web.session.actor == 1 {
+			if err := web.advanceRummyAI(); err != nil {
+				t.Fatal(err)
+			}
+			continue
+		}
+		switch web.session.phase {
+		case "rummy-opening", "rummy-turn":
+			action := "rummy-draw-two"
+			if rummy.deckCount() < 2 {
+				action = "rummy-draw-face-up"
+			}
+			if err := web.applyRummyAction(actionRequest{Action: action}); err != nil {
+				t.Fatal(err)
+			}
+		case "rummy-discard":
+			if err := web.applyRummyAction(actionRequest{
+				Action: "rummy-discard", FaceUpIndex: 0, BuriedIndex: 1,
+			}); err != nil {
+				t.Fatal(err)
+			}
+		default:
+			t.Fatalf("unexpected long-game Rummy phase %q", web.session.phase)
+		}
+		assertRummyCardAccounting(t, web.session.rummy)
+	}
+	if web.session.phase != "gameover" || web.session.rummy.Turns != campaign.Missions[13].Rummy.TurnLimit {
+		t.Fatalf("long-game mission ended in phase %q after %d turns",
+			web.session.phase, web.session.rummy.Turns)
+	}
+}
+
+func TestRummyFinalCampaignMissionCompletesTwoHandMatch(t *testing.T) {
+	web := campaignTestServer(t)
+	for index := 1; index < 15; index++ {
+		if _, err := campaigns.CompleteMission(web.playerProfile, "rummy", index, 0); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if err := web.prepareWebMission(actionRequest{
+		CampaignID: "rummy", MissionIndex: 15, PlayerHeroID: "recruit",
+	}); err != nil {
+		t.Fatal(err)
+	}
+	if web.session.rummy.HandNumber != 1 || web.session.rummy.Rules.MatchHands != 2 {
+		t.Fatalf("final mission initial hand = %d of %d",
+			web.session.rummy.HandNumber, web.session.rummy.Rules.MatchHands)
+	}
+
+	for actions := 0; actions < 80 && web.session.phase != "gameover"; actions++ {
+		rummy := web.session.rummy
+		if web.session.actor == 1 {
+			if err := web.advanceRummyAI(); err != nil {
+				t.Fatal(err)
+			}
+			continue
+		}
+		switch web.session.phase {
+		case "rummy-opening", "rummy-turn":
+			action := "rummy-draw-two"
+			if rummy.deckCount() < 2 {
+				action = "rummy-draw-face-up"
+			}
+			if err := web.applyRummyAction(actionRequest{Action: action}); err != nil {
+				t.Fatal(err)
+			}
+		case "rummy-discard":
+			if err := web.applyRummyAction(actionRequest{
+				Action: "rummy-discard", FaceUpIndex: 0, BuriedIndex: 1,
+			}); err != nil {
+				t.Fatal(err)
+			}
+		default:
+			t.Fatalf("unexpected final-mission Rummy phase %q", web.session.phase)
+		}
+		assertRummyCardAccounting(t, web.session.rummy)
+	}
+	rummy := web.session.rummy
+	if web.session.phase != "gameover" || rummy.HandNumber != 2 ||
+		rummy.Turns != rummy.TurnLimit || web.session.campaign.Result == "" {
+		t.Fatalf("final mission ended in phase %q, hand %d, turn %d/%d, result %q",
+			web.session.phase, rummy.HandNumber, rummy.Turns, rummy.TurnLimit,
+			web.session.campaign.Result)
+	}
+}
 
 func TestRummyTwoPlayerEngineAlternatesAndScoresAfterTwelveTurns(t *testing.T) {
 	playerProfile, err := profile.New(time.Now())

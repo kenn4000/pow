@@ -194,6 +194,9 @@ func (a *app) pendingBoxesMenu(p *profile.Profile) error {
 			return err
 		}
 		printBoxReward(reward)
+		for _, event := range recordBoxOpened(p) {
+			showUnlockToast(event)
+		}
 		if err := p.Save(); err != nil {
 			return err
 		}

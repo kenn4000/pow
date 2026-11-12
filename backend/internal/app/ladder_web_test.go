@@ -2,6 +2,7 @@ package app
 
 import (
 	"encoding/json"
+	"fmt"
 	"math/rand"
 	"net/http"
 	"net/http/httptest"
@@ -9,6 +10,7 @@ import (
 	"testing"
 	"time"
 
+	"prisonersofwar/internal/campaigns"
 	"prisonersofwar/internal/game"
 	"prisonersofwar/internal/heroes"
 	"prisonersofwar/internal/ladder"
@@ -24,6 +26,49 @@ func TestLadderOpponentLegalCountUsesResetTargetValue(t *testing.T) {
 	opponentHand := []game.Card{{Suit: game.Fang, Face: 4}}
 	if got := ladderOpponentLegalCount(candidate, state, opponentHand); got != 1 {
 		t.Fatalf("opponent legal count = %d, want 1", got)
+	}
+}
+
+func TestLadderHardMissionsUsePerfectInformationMinimax(t *testing.T) {
+	campaign, _ := campaigns.ByID("ladder")
+	for _, index := range []int{13, 14} {
+		t.Run(fmt.Sprintf("mission-%d", index+1), func(t *testing.T) {
+			mission := campaign.Missions[index]
+			playerHero, _ := heroes.ByID("warden")
+			opponentHero := playerHero
+			var stats *ladder.SharedStats
+			if mission.Ladder.SharedStats != nil {
+				stats = &ladder.SharedStats{
+					Bounty: mission.Ladder.SharedStats.Bounty, Draft: mission.Ladder.SharedStats.Draft,
+					Shift: mission.Ladder.SharedStats.Shift, Favor: mission.Ladder.SharedStats.Favor,
+				}
+			}
+			match, err := ladder.NewCampaignGame(playerHero, opponentHero, ladder.CampaignSetup{
+				PlayerHand: mission.Ladder.PlayerHand, CPUHand: mission.Ladder.CPUHand,
+				PlayerSize: mission.Ladder.PlayerSize, CPUSize: mission.Ladder.CPUSize,
+				WildFace: mission.Ladder.WildFace, BountySuit: mission.Ladder.BountySuit,
+				SharedStats: stats,
+			}, rand.New(rand.NewSource(74)))
+			if err != nil {
+				t.Fatal(err)
+			}
+			if state := match.State(); state.OpeningPending && state.OpeningCard != nil {
+				if err := match.PlayOpeningCard(); err != nil {
+					t.Fatal(err)
+				}
+			}
+			state := match.State()
+			card, ok := ladder.BestMinimaxPlay(match, state.Current)
+			if !ok {
+				t.Fatal("minimax did not find a legal play in the open-hand mission")
+			}
+			for _, legal := range match.LegalPlays(state.Current) {
+				if card == legal {
+					return
+				}
+			}
+			t.Fatalf("minimax selected illegal card %s", card)
+		})
 	}
 }
 

@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/go-chi/chi/v5"
+	"prisonersofwar/internal/energy"
 	"prisonersofwar/internal/heroes"
 	"prisonersofwar/internal/puzzlebattle"
 )
@@ -107,6 +108,20 @@ func (s *webServer) startLocalPuzzleBattleCPU(w http.ResponseWriter, request puz
 	response, err := buildPuzzleBattleCPUResponse(match, now)
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, err)
+		return
+	}
+	if _, err := refreshEnergy(s.playerProfile, now); err != nil {
+		writeError(w, http.StatusInternalServerError, err)
+		return
+	}
+	energyBefore, energyUpdatedAtBefore := s.playerProfile.Energy, s.playerProfile.EnergyUpdatedAt
+	if err := energy.Spend(s.playerProfile, energy.SingleMatchCost, now); err != nil {
+		writeError(w, http.StatusConflict, err)
+		return
+	}
+	if err := s.playerProfile.Save(); err != nil {
+		s.playerProfile.Energy, s.playerProfile.EnergyUpdatedAt = energyBefore, energyUpdatedAtBefore
+		writeError(w, http.StatusInternalServerError, fmt.Errorf("save Energy charge for CPU Puzzle Battle: %w", err))
 		return
 	}
 	s.cpuPuzzleBattle = match

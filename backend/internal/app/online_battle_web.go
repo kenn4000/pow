@@ -45,14 +45,16 @@ type onlineBattleRequest struct {
 	Cards             []int  `json:"cards"`
 	FaceUp            int    `json:"faceUpIndex"`
 	Buried            int    `json:"buriedIndex"`
+	WagerMarks        int64  `json:"wagerMarks"`
 }
 
 type onlineBattleInvite struct {
-	ID        string    `json:"id"`
-	Variant   string    `json:"variant"`
-	Handle    string    `json:"handle"`
-	HeroID    string    `json:"heroId,omitempty"`
-	CreatedAt time.Time `json:"createdAt"`
+	ID         string    `json:"id"`
+	Variant    string    `json:"variant"`
+	Handle     string    `json:"handle"`
+	HeroID     string    `json:"heroId,omitempty"`
+	WagerMarks int64     `json:"wagerMarks"`
+	CreatedAt  time.Time `json:"createdAt"`
 }
 
 type onlineBattlePlayer struct {
@@ -62,13 +64,14 @@ type onlineBattlePlayer struct {
 }
 
 type onlineBattlePublicMatch struct {
-	ID        string                `json:"id"`
-	Variant   string                `json:"variant"`
-	MatchMode string                `json:"matchMode"`
-	Status    string                `json:"status"`
-	Player    int                   `json:"player"`
-	Players   [2]onlineBattlePlayer `json:"players"`
-	View      webView               `json:"view"`
+	ID         string                `json:"id"`
+	Variant    string                `json:"variant"`
+	MatchMode  string                `json:"matchMode"`
+	Status     string                `json:"status"`
+	WagerMarks int64                 `json:"wagerMarks,omitempty"`
+	Player     int                   `json:"player"`
+	Players    [2]onlineBattlePlayer `json:"players"`
+	View       webView               `json:"view"`
 }
 
 type onlineBattleResponse struct {
@@ -227,6 +230,14 @@ func (s *webServer) handleOnlineBattleAction(w http.ResponseWriter, r *http.Requ
 				databaseError(w, err)
 				return
 			}
+			if match.WagerMarks > 0 {
+				if err := settleFriendWagerTx(
+					r.Context(), tx, match.ID, "online", engine.session.winner, time.Now().UTC(),
+				); err != nil {
+					databaseError(w, err)
+					return
+				}
+			}
 		}
 	}
 	state, err = encodeOnlineBattleState(engine.session)
@@ -253,16 +264,17 @@ func (s *webServer) handleOnlineBattleAction(w http.ResponseWriter, r *http.Requ
 }
 
 type onlineBattleStoredMatch struct {
-	ID        string
-	Variant   string
-	MatchMode string
-	PlayerA   string
-	PlayerB   string
-	HeroA     string
-	HeroB     string
-	Status    string
-	State     []byte
-	Created   time.Time
+	ID         string
+	Variant    string
+	MatchMode  string
+	PlayerA    string
+	PlayerB    string
+	HeroA      string
+	HeroB      string
+	Status     string
+	State      []byte
+	Created    time.Time
+	WagerMarks int64
 }
 
 func (s *webServer) getOnlineBattle(w http.ResponseWriter, r *http.Request, user account) {
@@ -349,6 +361,10 @@ func (s *webServer) getOnlineBattle(w http.ResponseWriter, r *http.Request, user
 func (s *webServer) queueOnlineBattle(w http.ResponseWriter, r *http.Request, user account, request onlineBattleRequest) {
 	if !onlineBattleVariants[request.Variant] {
 		writeError(w, http.StatusBadRequest, errors.New("choose a supported online battle variant"))
+		return
+	}
+	if request.WagerMarks < 0 || request.WagerMarks > 1000 {
+		writeError(w, http.StatusBadRequest, errors.New("friend wagers must be between 0 and 1,000 Marks per player"))
 		return
 	}
 	if request.MatchMode == "" {
@@ -479,7 +495,7 @@ func (s *webServer) queueOnlineBattle(w http.ResponseWriter, r *http.Request, us
 		r.Context(), tx, request.Variant, request.MatchMode, ids, heroIDs, tunings, 1, now,
 	)
 	if err != nil {
-		if strings.Contains(err.Error(), "already has an active match") {
+		if errors.Is(err, errInsufficientEnergy) || strings.Contains(err.Error(), "already has an active match") {
 			writeError(w, http.StatusConflict, err)
 		} else {
 			databaseError(w, err)
@@ -583,10 +599,10 @@ func (s *webServer) inviteOnlineBattleFriend(w http.ResponseWriter, r *http.Requ
 	inviteID := randomID()
 	if _, err := tx.ExecContext(r.Context(), `
 		INSERT INTO online_battle_invites(
-			id,variant,sender_id,recipient_id,sender_hero_id,sender_conductor_modifier,sender_conductor_amount
-		) VALUES($1,$2,$3,$4,$5,$6,$7)`,
+			id,variant,sender_id,recipient_id,sender_hero_id,sender_conductor_modifier,sender_conductor_amount,wager_marks
+		) VALUES($1,$2,$3,$4,$5,$6,$7,$8)`,
 		inviteID, request.Variant, user.ID, recipientID, hero.ID,
-		request.ConductorModifier, request.ConductorAmount); err != nil {
+		request.ConductorModifier, request.ConductorAmount, request.WagerMarks); err != nil {
 		var pgErr *pgconn.PgError
 		if errors.As(err, &pgErr) && pgErr.Code == "23505" {
 			writeError(w, http.StatusConflict, errors.New("a pending invitation already exists for this friend and variant"))
@@ -623,12 +639,13 @@ func (s *webServer) respondOnlineBattleInvite(w http.ResponseWriter, r *http.Req
 	}
 	var senderID, variant, senderHeroID, senderModifier string
 	var senderAmount int
+	var wagerMarks int64
 	err = tx.QueryRowContext(r.Context(), fmt.Sprintf(`
-		SELECT sender_id,variant,sender_hero_id,sender_conductor_modifier,sender_conductor_amount
+		SELECT sender_id,variant,sender_hero_id,sender_conductor_modifier,sender_conductor_amount,wager_marks
 		FROM online_battle_invites
 		WHERE id=$1 AND %s=$2 AND status='pending' AND created_at>$3 FOR UPDATE`, ownerColumn),
 		request.InviteID, user.ID, time.Now().UTC().Add(-onlineBattleInviteLifetime)).
-		Scan(&senderID, &variant, &senderHeroID, &senderModifier, &senderAmount)
+		Scan(&senderID, &variant, &senderHeroID, &senderModifier, &senderAmount, &wagerMarks)
 	if err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
 			writeError(w, http.StatusNotFound, errors.New("pending invitation not found"))
@@ -655,6 +672,11 @@ func (s *webServer) respondOnlineBattleInvite(w http.ResponseWriter, r *http.Req
 			writeError(w, http.StatusConflict, errors.New("one of these players already has an active match"))
 			return
 		}
+		ids := [2]string{senderID, user.ID}
+		if err := reserveFriendWagerTx(r.Context(), tx, ids, wagerMarks); err != nil {
+			writeError(w, http.StatusConflict, err)
+			return
+		}
 		hero, tuning, err := onlineBattleHeroWithConductor(
 			r.Context(), tx, user.ID, request.HeroID, request.ConductorModifier, request.ConductorAmount,
 		)
@@ -675,6 +697,18 @@ func (s *webServer) respondOnlineBattleInvite(w http.ResponseWriter, r *http.Req
 		if err != nil {
 			writeError(w, http.StatusConflict, err)
 			return
+		}
+		if wagerMarks > 0 {
+			if _, err := tx.ExecContext(r.Context(),
+				"UPDATE online_battle_matches SET wager_marks=$1 WHERE id=$2", wagerMarks, public.ID); err != nil {
+				databaseError(w, err)
+				return
+			}
+			if err := createFriendWagerTx(r.Context(), tx, "online", public.ID, ids, wagerMarks); err != nil {
+				databaseError(w, err)
+				return
+			}
+			public.WagerMarks = wagerMarks
 		}
 		if _, err := tx.ExecContext(r.Context(), `
 			UPDATE online_battle_invites SET status='accepted',recipient_hero_id=$1,responded_at=$2
@@ -765,6 +799,9 @@ func (s *webServer) createOnlineBattleTx(
 	}
 	if active {
 		return onlineBattlePublicMatch{}, errors.New("one of these players already has an active match")
+	}
+	if err := spendAccountEnergyTx(ctx, tx, ids[:], matchEnergyCost(matchMode), now); err != nil {
+		return onlineBattlePublicMatch{}, err
 	}
 	engine, err := s.newOnlineBattleEngine(ctx, tx, variant, ids, heroIDs, tunings, now)
 	if err != nil {
@@ -1016,12 +1053,12 @@ func loadOnlineBattleMatch(ctx context.Context, tx *sql.Tx, matchID, userID stri
 func loadOnlineBattleByID(ctx context.Context, tx *sql.Tx, matchID, userID string) (onlineBattleStoredMatch, int, error) {
 	var match onlineBattleStoredMatch
 	err := tx.QueryRowContext(ctx, `
-		SELECT id,variant,match_mode,player_a_id,player_b_id,player_a_hero_id,player_b_hero_id,status,state,created_at
+		SELECT id,variant,match_mode,player_a_id,player_b_id,player_a_hero_id,player_b_hero_id,status,state,created_at,wager_marks
 		FROM online_battle_matches
 		WHERE id=$1 AND (player_a_id=$2 OR player_b_id=$2)
 		FOR UPDATE`, matchID, userID).Scan(
 		&match.ID, &match.Variant, &match.MatchMode, &match.PlayerA, &match.PlayerB, &match.HeroA, &match.HeroB,
-		&match.Status, &match.State, &match.Created)
+		&match.Status, &match.State, &match.Created, &match.WagerMarks)
 	if err != nil {
 		return onlineBattleStoredMatch{}, 0, err
 	}
@@ -1091,7 +1128,8 @@ func (s *webServer) onlineBattlePublicMatch(
 	}
 	publicView := onlineBattleView(engine, player)
 	result := onlineBattlePublicMatch{
-		ID: match.ID, Variant: variant, MatchMode: match.MatchMode, Status: match.Status, Player: 0, View: publicView,
+		ID: match.ID, Variant: variant, MatchMode: match.MatchMode, Status: match.Status,
+		WagerMarks: match.WagerMarks, Player: 0, View: publicView,
 	}
 	ids, heroIDs := [2]string{match.PlayerA, match.PlayerB}, [2]string{match.HeroA, match.HeroB}
 	for index := range result.Players {
@@ -1261,7 +1299,7 @@ func queryOnlineBattleInvites(ctx context.Context, queryer interface {
 		ownerColumn, otherColumn = otherColumn, ownerColumn
 	}
 	rows, err := queryer.QueryContext(ctx, fmt.Sprintf(`
-		SELECT i.id,i.variant,u.public_handle,i.sender_hero_id,i.created_at
+		SELECT i.id,i.variant,u.public_handle,i.sender_hero_id,i.created_at,i.wager_marks
 		FROM online_battle_invites i JOIN users u ON u.id=i.%s
 		WHERE i.%s=$1 AND i.status='pending' AND i.created_at>$2
 		ORDER BY i.created_at DESC`, otherColumn, ownerColumn), userID, time.Now().UTC().Add(-onlineBattleInviteLifetime))
@@ -1272,7 +1310,7 @@ func queryOnlineBattleInvites(ctx context.Context, queryer interface {
 	invites := []onlineBattleInvite{}
 	for rows.Next() {
 		var invite onlineBattleInvite
-		if err := rows.Scan(&invite.ID, &invite.Variant, &invite.Handle, &invite.HeroID, &invite.CreatedAt); err != nil {
+		if err := rows.Scan(&invite.ID, &invite.Variant, &invite.Handle, &invite.HeroID, &invite.CreatedAt, &invite.WagerMarks); err != nil {
 			return nil, err
 		}
 		invites = append(invites, invite)

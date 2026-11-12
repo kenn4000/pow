@@ -10,6 +10,7 @@ import (
 	"sort"
 	"time"
 
+	"prisonersofwar/internal/achievements"
 	"prisonersofwar/internal/economy"
 	"prisonersofwar/internal/game"
 	"prisonersofwar/internal/lootbox"
@@ -147,16 +148,6 @@ func (s *webServer) creditOnlineBattleProfiles(ctx context.Context, tx *sql.Tx, 
 			p.TotalLosses++
 			p.CurrentStreak = 0
 		}
-		p.TotalGames++
-		seat := game.SeatX
-		if player == 1 {
-			seat = game.SeatY
-		}
-		p.RecordMatch(profile.MatchRecord{
-			GameID: match.ID, At: now, Mode: economy.ModeID(payoutMode),
-			PlayerSeat: seat.String(), PlayerScore: scores[player],
-			OppScore: scores[1-player], Won: won, MarksEarned: payout.TotalMarks,
-		})
 		if p.HeroPlayCounts == nil {
 			p.HeroPlayCounts = make(map[string]int)
 		}
@@ -168,11 +159,25 @@ func (s *webServer) creditOnlineBattleProfiles(ctx context.Context, tx *sql.Tx, 
 		if won {
 			p.HeroWinCounts[heroID]++
 		}
+		result := onlineBattleAchievementResult(engine, player, heroID, won, draw || seriesTie, scores)
+		updateAchievementStatsForGameMode(p, result, payoutMode, match.Variant, now)
+		achievementContext := achievements.NewMatchContext(p, result, economy.ModeID(payoutMode), result.PlayerSeat.String())
+		achievementContext.Now = now
+		achievementContext.GameMode = match.Variant
+		for _, event := range achievements.EvaluateAll(achievementContext) {
+			applyUnlockEvent(p, event)
+		}
+		p.RecordMatch(profile.MatchRecord{
+			GameID: match.ID, At: now, Mode: economy.ModeID(payoutMode),
+			PlayerSeat: result.PlayerSeat.String(), PlayerScore: scores[player],
+			OppScore: scores[1-player], Won: won, MarksEarned: payout.TotalMarks,
+		})
 		p.UpdatedAt = now
 		data, err := json.Marshal(p)
 		if err != nil {
 			return fmt.Errorf("encode online battle rewards: %w", err)
 		}
+
 		if _, err := tx.ExecContext(ctx, `
 			UPDATE player_data SET profile=$1,updated_at=$2,version=version+1
 			WHERE user_id=$3`, data, now, ids[player]); err != nil {
@@ -185,4 +190,37 @@ func (s *webServer) creditOnlineBattleProfiles(ctx context.Context, tx *sql.Tx, 
 		}
 	}
 	return nil
+}
+
+func onlineBattleAchievementResult(engine *webServer, player int, heroID string, won, tied bool, scores [2]int) game.MatchResult {
+	playerState, opponentState := &engine.session.state.P1, &engine.session.state.P2
+	if player == 1 {
+		playerState, opponentState = opponentState, playerState
+	}
+	seat := playerState.Seat
+	result := game.MatchResult{
+		Won: won, Tied: tied, PlayerSeat: seat, PlayerScore: scores[player],
+		OpponentScore: scores[1-player],
+	}
+	matchGame := game.MatchGame{
+		Won: won, PlayerSeat: seat, PlayerScore: scores[player], OpponentScore: scores[1-player],
+		PlayerHeroID: heroID,
+	}
+	if engine.session.variant == "main" || engine.session.variant == "fog" {
+		matchGame.PlayerJail = playerState.Jail
+		matchGame.OpponentJail = opponentState.Jail
+		matchGame.PlayerCapturedByRound = playerState.CapturedByRound
+		matchGame.OpponentCapturedByRound = opponentState.CapturedByRound
+		matchGame.Modifiers = engine.session.state.Modifiers
+		matchGame.BountySuit = engine.session.state.Bounty.Suit
+		matchGame.Clashes = engine.session.state.Clashes
+		roundTwoScores := engine.scoresAfterRound(2)
+		if player == 0 {
+			matchGame.ScoreAfterR2, matchGame.OpponentAfterR2 = roundTwoScores[0], roundTwoScores[1]
+		} else {
+			matchGame.ScoreAfterR2, matchGame.OpponentAfterR2 = roundTwoScores[1], roundTwoScores[0]
+		}
+	}
+	result.Games = []game.MatchGame{matchGame}
+	return result
 }

@@ -187,6 +187,8 @@
     .tug-war-pile-center { display: grid; justify-items: center; min-width: 0; }
     .tug-war-pile-cards { display: flex; flex-wrap: wrap; justify-content: center; gap: 4px; width: 100%; min-height: 62px; padding: 3px 0; }
     .tug-war-pile-cards .card { width: 38px; height: 54px; }
+    .tug-war-hidden-card { display: grid; width: 38px; height: 54px; place-items: center; border: 1px solid #71819a; border-radius: 6px; background: repeating-linear-gradient(45deg, #1d2b42, #1d2b42 5px, #293a55 5px, #293a55 10px); color: #e8c86b; font-weight: 900; }
+    .tug-war-campaign-status { margin-bottom: 4px; text-align: center; }
     .tug-war-stack-bracket { box-sizing: border-box; width: min(80%, 112px); height: 8px; margin-top: 3px; border-right: 2px solid #f6d46f; border-bottom: 2px solid #f6d46f; border-left: 2px solid #f6d46f; }
     .tug-war-stack-value { margin-top: 2px; color: #f6d46f; font-size: 12px; font-weight: 800; }
     .tug-war-pile-actions { display: flex; justify-content: center; width: 100%; margin-top: 7px; }
@@ -297,6 +299,16 @@
     .player-heading { display: flex; justify-content: space-between; align-items: baseline; gap: 8px; margin-bottom: 10px; }
     .player-heading h2 { margin: 0; font-size: 15px; letter-spacing: .09em; text-transform: uppercase; }
     .player-heading span { color: #e1e5e1; font-size: 12px; }
+    .poker-slots { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 6px; }
+    .poker-slot { min-width: 0; padding: 5px; border: 1px solid #39465e; border-radius: 8px; background: #0e1420; }
+    .poker-slot h3 { display: flex; justify-content: space-between; gap: 4px; margin: 0; font-size: 11px; }
+    .poker-slot h3 span { color: #aeb9cb; font-size: 10px; }
+    .poker-ghost-panel { margin-top: 12px; }
+    .poker-lesson { margin: 0 0 12px; padding: 12px; border: 1px solid #806c36; border-radius: 10px; background: #262113; }
+    .poker-lesson h3 { margin: 0 0 6px; color: #f0d47b; font-size: 14px; }
+    .poker-lesson p { margin: 6px 0; font-size: 12px; line-height: 1.5; }
+    .poker-lesson button { margin-top: 6px; }
+    .poker-unplaceable { opacity: .48; filter: grayscale(.65); }
     .row-label { margin: 11px 0 6px; color: #e1e5e1; font-size: 10px; font-weight: 700; letter-spacing: .14em; text-align: center; text-transform: uppercase; }
     .player-card-rows { display: block; }
     .card-group { min-width: 0; }
@@ -529,7 +541,8 @@
       text-align: left; font-size: 11px; font-weight: 700; cursor: pointer;
       transition: border-color .15s ease, transform .12s ease, filter .15s ease;
     }
-    .dashboard-action-icon { width: 27px; height: 27px; flex: 0 0 auto; object-fit: contain; }
+    .dashboard-action-icon { width: 27px; height: 27px; flex: 0 0 auto; }
+    .sprite-icon { display: inline-block; flex: 0 0 auto; background-repeat: no-repeat; background-size: 500% 400%; }
     .dashboard-action:hover { transform: translateY(-1px); border-color: #68758b; filter: brightness(1.12); }
     .dashboard-action:focus-visible, .dashboard-footer button:focus-visible { outline: 2px solid #facc15; outline-offset: 2px; }
     .dashboard-action.play, .dashboard-action.wide { grid-column: 1 / -1; }
@@ -542,7 +555,7 @@
     .dashboard-action.play small { display: block; margin-top: 3px; color: #fee2e2; font-size: 9px; font-weight: 600; letter-spacing: .12em; text-transform: uppercase; }
     .dashboard-action.play .battle-icon {
       display: block; width: 49px; height: 49px; flex: 0 0 auto; padding: 4px;
-      border: 1px solid #fecaca80; border-radius: 50%; background: #450a0a66; object-fit: contain;
+      border: 1px solid #fecaca80; border-radius: 50%; background-color: #450a0a66;
     }
     .dashboard-action.half { min-height: 48px; }
     .shop-preview {
@@ -575,7 +588,7 @@
       cursor: pointer;
     }
     .dashboard-footer button > span[aria-hidden="true"] { font-size: 16px; line-height: 1.1; }
-    .dashboard-footer .dashboard-nav-icon { width: 21px; height: 21px; object-fit: contain; }
+    .dashboard-footer .dashboard-nav-icon { width: 21px; height: 21px; }
     .dashboard-footer button:hover { background: #ffffff0c; color: #f3d46f; }
     .dashboard-footer button[aria-current="page"] { color: #f3d46f; }
     .dashboard-footer button.nav-battle {
@@ -605,6 +618,10 @@
       display: grid; flex: 0 0 auto; grid-template-columns: repeat(3, minmax(0, 1fr));
       gap: 6px; padding: 8px 12px; border-bottom: 1px solid #263047; background: #101624f2;
     }
+    #featureTabs[aria-label="Shop categories"] {
+      grid-template-columns: minmax(0, .8fr) minmax(0, .8fr) minmax(0, 1.8fr);
+    }
+    #featureTabs[aria-label="Shop categories"] .feature-tab { white-space: nowrap; }
     .feature-tab {
       width: 100%; min-width: 0; min-height: 34px; padding: 6px 4px; border: 1px solid #303c53;
       border-radius: 8px; background: #1a2231; color: #c8d0de; font-size: 9px; font-weight: 700;
@@ -692,7 +709,7 @@
       <div class="dashboard-resources" role="group" aria-label="Player resources">
         <div class="dashboard-resource" role="group" aria-label="Marks"><span id="dashboardMarksIcon" class="dashboard-resource-icon" aria-hidden="true"></span><div class="dashboard-resource-copy"><strong id="dashboardMarks">—</strong></div></div>
         <div class="dashboard-resource" role="group" aria-label="Crowns"><span id="dashboardCrownsIcon" class="dashboard-resource-icon" aria-hidden="true"></span><div class="dashboard-resource-copy"><strong id="dashboardCrowns">—</strong></div></div>
-        <div class="dashboard-resource" role="group" aria-label="Energy"><span id="dashboardEnergyIcon" class="dashboard-resource-icon" aria-hidden="true"></span><div class="dashboard-resource-copy"><strong id="dashboardEnergy">—</strong><small id="dashboardEnergyNext" hidden></small></div></div>
+        <div class="dashboard-resource" role="group" aria-label="Energy"><span id="dashboardEnergyIcon" class="dashboard-resource-icon" aria-hidden="true"></span><div class="dashboard-resource-copy"><strong id="dashboardEnergy">—</strong><small id="dashboardEnergyNext" class="energy-countdown" data-energy-countdown hidden></small></div></div>
       </div>
     </header>
     <p id="routeNotice" class="route-notice" role="status" hidden></p>
@@ -706,10 +723,10 @@
            </button>
            <button id="dashboardChooseMode" class="dashboard-action wide" type="button">Choose another match mode</button>
           <button id="dashboardCampaigns" class="dashboard-action half" type="button"><img class="dashboard-icon dashboard-action-icon" alt="" aria-hidden="true"><span>Campaigns</span></button>
-          <button id="dashboardSkills" class="dashboard-action half" type="button"><img class="dashboard-icon dashboard-action-icon" alt="" aria-hidden="true"><span>Skill Tree</span></button>
-          <button id="dashboardCampDraw" class="dashboard-action half" type="button"><img class="dashboard-icon dashboard-action-icon" alt="" aria-hidden="true"><span>Camp Draw</span></button>
-          <button id="dashboardAchievements" class="dashboard-action half" type="button"><img class="dashboard-icon dashboard-action-icon" alt="" aria-hidden="true"><span>Achievements</span></button>
-          <button id="dashboardHistory" class="dashboard-action half" type="button"><img class="dashboard-icon dashboard-action-icon" alt="" aria-hidden="true"><span>Match History</span></button>
+          <button id="dashboardSkills" class="dashboard-action half" type="button"><img class="dashboard-icon dashboard-action-icon" alt="" aria-hidden="true"><span class="dashboard-action-label">Skill Tree</span></button>
+          <button id="dashboardCampDraw" class="dashboard-action half" type="button"><img class="dashboard-icon dashboard-action-icon" alt="" aria-hidden="true"><span class="dashboard-action-label">Camp Draw</span></button>
+          <button id="dashboardAchievements" class="dashboard-action half" type="button"><img class="dashboard-icon dashboard-action-icon" alt="" aria-hidden="true"><span class="dashboard-action-label">Achievements</span></button>
+          <button id="dashboardHistory" class="dashboard-action half" type="button"><img class="dashboard-icon dashboard-action-icon" alt="" aria-hidden="true"><span class="dashboard-action-label">Match History</span></button>
         </div>
       </section>
       <button id="dashboardShop" class="shop-preview" type="button" aria-label="Today's featured item">
@@ -731,6 +748,7 @@
     <p id="featureMessage" class="feature-message" aria-live="polite"></p>
     <div id="featureBalances" class="feature-balances" aria-label="Available resources"></div>
     <nav id="featureTabs" class="feature-tabs hidden" role="tablist"></nav>
+    <nav id="featureSubTabs" class="feature-tabs feature-subtabs hidden" role="tablist"></nav>
     <div id="featureContent" class="feature-content"></div>
   </main>
   <nav id="dashboardFooter" class="dashboard-footer" aria-label="Quick navigation" hidden>
@@ -820,6 +838,7 @@
     let pendingTokenDialog = null;
     let setupMode = 'easy';
     let setupVariant = 'main';
+    let pokerLessonDismissedKey = '';
     let pokerDuelTimer = null;
     let pokerDuelDeadline = 0;
     let pokerDuelTimerKey = "";
@@ -849,7 +868,17 @@
     let showDashboard = true;
     let showFeature = false;
     let currentFeature = "";
+    let socialPage = "profile";
+    let selectedSocialFriend = "";
+    let selectedSocialConversation = "";
+    let socialConversationData = null;
+    const ladderBossReveals = new Map();
     let currentShopTab = "skins";
+    let currentShopSubTab = "common";
+    let energyCountdownTarget = 0;
+    let energyCountdownSnapshot = "";
+    let energyCountdownTimer = null;
+    let energyCountdownRefreshPending = false;
     let shopPreviewChromaID = "";
     let shopPreviewPoseIndex = 0;
     let shopPreviewTimer = null;
@@ -912,6 +941,39 @@
       return String(value).replace(/[&<>"']/g, ch => ({
         "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;"
       })[ch]);
+    }
+
+    const iconAtlasFrames = {
+      "abandon.png": [0, 0],
+      "acheivements.png": [1, 0],
+      "battle.png": [2, 0],
+      "branch_chest.png": [3, 0],
+      "branch_daily.png": [4, 0],
+      "branch_deck.png": [0, 1],
+      "branch_energy.png": [1, 1],
+      "branch_general.png": [2, 1],
+      "branch_multi.png": [3, 1],
+      "campaigns.png": [4, 1],
+      "campdraw.png": [0, 2],
+      "heroselect.png": [1, 2],
+      "home.png": [2, 2],
+      "ladder.png": [3, 2],
+      "matchhistory.png": [4, 2],
+      "poker.png": [0, 3],
+      "rummy.png": [1, 3],
+      "shop.png": [2, 3],
+      "skilltree.png": [3, 3],
+      "social.png": [4, 3]
+    };
+
+    function spriteIconMarkup(filename, className = "") {
+      const frame = iconAtlasFrames[filename];
+      if (!frame) throw new Error(`Unknown icon atlas frame: ${filename}`);
+      const [column, row] = frame;
+      const x = column * 25;
+      const y = row * 100 / 3;
+      const url = `${import.meta.env.BASE_URL}skins/icons/animations/icons1.png`;
+      return `<span class="sprite-icon ${className}" aria-hidden="true" style="background-image:url('${url}');background-position:${x}% ${y}%"></span>`;
     }
 
     async function api(path, body) {
@@ -1305,14 +1367,14 @@
           ${response.status === "queued" ? `<section class="variant-panel"><h2>Matchmaking</h2><p>Waiting for another player. You can leave the queue at any time.</p><button class="action secondary" data-pb-action="cancel-queue">Cancel search</button></section>` : ""}
           ${incoming.length ? `<section class="variant-panel puzzle-battle-lobby-list"><h2>Incoming invites</h2>
             ${incoming.map(invite => `<div class="puzzle-battle-lobby-item">
-              <span>${esc(invite.handle)} invited you</span>
+              <span>${esc(invite.handle)} invited you${invite.wagerMarks ? ` · ${formatNumber(invite.wagerMarks)} Marks per player` : " · no wager"}</span>
               <label class="hero-select">Your hero<select data-pb-hero-for="${esc(invite.id)}">${acceptHeroOptions}</select></label>
               <div><button class="action primary" data-pb-action="accept" data-invite-id="${esc(invite.id)}">Accept</button>
                 <button class="action secondary" data-pb-action="decline" data-invite-id="${esc(invite.id)}">Decline</button></div>
             </div>`).join("")}</section>` : ""}
           ${outgoing.length ? `<section class="variant-panel puzzle-battle-lobby-list"><h2>Sent invites</h2>
             ${outgoing.map(invite => `<div class="puzzle-battle-lobby-item">
-              <span>Waiting for ${esc(invite.handle)}</span>
+              <span>Waiting for ${esc(invite.handle)}${invite.wagerMarks ? ` · ${formatNumber(invite.wagerMarks)} Marks per player` : " · no wager"}</span>
               <button class="action secondary" data-pb-action="cancel-invite" data-invite-id="${esc(invite.id)}">Cancel invite</button>
             </div>`).join("")}</section>` : ""}
           <section class="variant-panel puzzle-battle-lobby-list">
@@ -1492,7 +1554,7 @@
         </section>` : ""}
         ${incoming.length ? `<section class="variant-panel puzzle-battle-lobby-list"><h2>Incoming friend invites</h2>
           ${incoming.map(invite => `<div class="puzzle-battle-lobby-item">
-            <span>${esc(invite.handle)} · ${esc(variantNames[invite.variant] || invite.variant)}</span>
+            <span>${esc(invite.handle)} · ${esc(variantNames[invite.variant] || invite.variant)}${invite.wagerMarks ? ` · ${formatNumber(invite.wagerMarks)} Marks per player` : " · no wager"}</span>
             <label class="hero-select">Your hero<select data-online-hero-for="${esc(invite.id)}">${heroOptions}</select></label>
             ${conductorTuningMarkup(state?.dashboard?.conductorLevel, `onlineInviteConductor-${invite.id}`)}
             <div><button class="action primary" data-online-action="accept" data-invite-id="${esc(invite.id)}">Accept</button>
@@ -1500,7 +1562,7 @@
           </div>`).join("")}</section>` : ""}
         ${outgoing.length ? `<section class="variant-panel puzzle-battle-lobby-list"><h2>Sent invitations</h2>
           ${outgoing.map(invite => `<div class="puzzle-battle-lobby-item">
-            <span>${esc(variantNames[invite.variant] || invite.variant)} · waiting for ${esc(invite.handle)}</span>
+            <span>${esc(variantNames[invite.variant] || invite.variant)} · waiting for ${esc(invite.handle)}${invite.wagerMarks ? ` · ${formatNumber(invite.wagerMarks)} Marks per player` : " · no wager"}</span>
             <button class="action secondary" data-online-action="cancel-invite" data-invite-id="${esc(invite.id)}">Cancel invitation</button>
           </div>`).join("")}</section>` : ""}
         <div class="puzzle-actions">
@@ -1568,9 +1630,12 @@
           : state.phase === "rummy-turn"
             ? "Take the top face-up card or draw two cards."
             : state.message;
+      const matchProgress = rummy.matchHands > 1
+        ? `<p>Hand ${esc(rummy.matchHand)} of ${esc(rummy.matchHands)} · Match totals: You ${esc(rummy.matchScores?.[0] ?? 0)} — CPU ${esc(rummy.matchScores?.[1] ?? 0)}</p>`
+        : "";
       document.getElementById("variantContent").innerHTML = `<div class="rummy-overview">
         <div class="rummy-heading">
-          <div><p>${esc(currentPlayer)} · Move ${Math.min(rummy.turnsCompleted + 1, rummy.turnLimit)} of ${rummy.turnLimit}</p></div>
+            <div><p>${esc(currentPlayer)} · Move ${Math.min(rummy.turnsCompleted + 1, rummy.turnLimit)} of ${rummy.turnLimit}</p>${matchProgress}</div>
           <p class="rummy-status">${esc(status || "")}</p>
         </div>
         <div class="rummy-piles">
@@ -1639,16 +1704,46 @@
           document.querySelector(`#variantContent .card[data-index="${index}"]`)?.focus({ preventScroll: true });
         });
       });
+      if (state.phase === "gameover") {
+        const results = rummy.results || [];
+        const resultSection = document.createElement("section");
+        resultSection.className = "variant-panel variant-status";
+        resultSection.setAttribute("role", "status");
+        resultSection.innerHTML = `<h3>${state.winner === 0 ? "You win" : state.winner === 1 ? "CPU wins" : "Rummy draw"}</h3>
+          <p>Final totals: You ${esc(rummy.matchScores?.[0] ?? results[0]?.partition?.total ?? 0)} — CPU ${esc(rummy.matchScores?.[1] ?? results[1]?.partition?.total ?? 0)}</p>
+          ${state.campaign?.result ? `<p>${esc(state.campaign.result)}</p>` : ""}`;
+        container.append(resultSection);
+        const actions = document.createElement("div");
+        actions.className = "variant-actions";
+        appendMissionActions(actions, () => state.campaign
+          ? startMission(state.campaign.id, state.campaign.index)
+          : openDashboard());
+        container.append(actions);
+      }
     }
 
     function renderPokerBattle() {
       const poker = state.poker || {};
       const score = poker.score;
+      const ghost = poker.ghost;
       const bountyValue = Math.max(0, Number(poker.bountyBase || 0) + Number(poker.hero?.bounty || 0));
       const target = poker.streakCount
-        ? `${poker.streakScore} points in ${poker.streakCount} consecutive games`
+        ? `${poker.streakScore} points per game × ${poker.streakCount} consecutive games`
         : `${poker.par} points`;
       const completed = state.phase === "gameover";
+      const lessonKey = `${state.campaign?.id || "poker"}:${state.campaign?.index || 0}`;
+      const showLesson = state.phase === "poker-play" && poker.turns === 0 &&
+        (poker.lesson || poker.ghostTeachingNote) && pokerLessonDismissedKey !== lessonKey;
+      const lessonMarkup = showLesson ? `<aside class="poker-lesson" role="note">
+        <h3>Mission lesson</h3>
+        ${poker.lesson ? `<p>${esc(poker.lesson)}</p>` : ""}
+        ${poker.ghostTeachingNote ? `<p><strong>Ghost strategy:</strong> ${esc(poker.ghostTeachingNote)}</p>` : ""}
+        <button type="button" class="secondary" id="dismissPokerLesson">Got it</button>
+      </aside>` : "";
+      const recommendedMarkup = (poker.recommendedHeroes || []).length
+        ? `<p>Suggested heroes: <strong>${poker.recommendedHeroes.map(esc).join(", ")}</strong></p>` : "";
+      const ghostResultMarkup = score && ghost?.score
+        ? `<p>Teaching ghost score: <strong>${esc(ghost.score.total)}</strong> · You must beat the ghost and reach par.</p>` : "";
       const resultMarkup = score
         ? score.constraintPassed
           ? `<section class="poker-score">
@@ -1667,6 +1762,7 @@
               ${score.tableBonus ? `<p>Full table bonus ${formatModifier(Number(score.tableBonus))}</p>` : ""}
               ${score.handAHighBonus ? `<p>Hand A highest bonus ${formatModifier(Number(score.handAHighBonus))}</p>` : ""}
               ${score.handCLowBonus ? `<p>Hand C lowest bonus ${formatModifier(Number(score.handCLowBonus))}</p>` : ""}
+              ${ghostResultMarkup}
             </section>`
           : `<p class="poker-constraint-failure">${esc(score.constraintFailure || "Mission constraint failed. Score not reported.")}</p>`
         : "";
@@ -1674,25 +1770,33 @@
       const nextGameHero = state.phase === "poker-next-game"
         ? `<label class="poker-next-hero">Next-game hero
             <select id="pokerNextHero">${heroes.map(hero => `<option value="${esc(hero.id)}"${hero.id === poker.heroId ? " selected" : ""}>${esc(hero.name)}</option>`).join("")}</select>
-            <small>Changing heroes resets the streak.</small>
+            <small>Changing heroes resets the streak. ${esc(state.message || "")}</small>
           </label>`
         : "";
       document.getElementById("variantContent").innerHTML = `<div class="variant-overview poker-overview">
         <div>
+          ${lessonMarkup}
           <h2>Poker Campaign · ${esc(state.campaign?.name || "Poker")}</h2>
-          <p>${esc(poker.heroName)} · Game ${esc(poker.gameNumber || 1)}${poker.streakCount ? ` · Streak ${esc(poker.streak)} / ${esc(poker.streakCount)}` : ""}</p>
+          <p>${esc(poker.heroName)} · ${poker.streakCount
+            ? `Game ${Math.min(poker.streakCount, Math.max(1, Number(poker.streak || 0) + (completed && state.winner === 0 ? 0 : 1)))}/${esc(poker.streakCount)} · Streak ${esc(poker.streak)} / ${esc(poker.streakCount)}`
+            : `Game ${esc(poker.gameNumber || 1)}`}</p>
           <p class="poker-bounty" style="color:${suitColorValue(Number(poker.bountySuit))}">Bounty ${formatModifier(bountyValue)}</p>
           <p>Target score: <strong>${esc(target)}</strong></p>
           <p>Deck floor ${esc(poker.deckFloor)} · Draw pile ${esc(poker.drawPileCount)} · Discards ${esc(poker.discardPileCount)}</p>
           ${poker.constraint ? `<p>Mission constraint: ${esc(poker.constraint.replaceAll("_", " "))}</p>` : ""}
+          ${poker.constraint === "no_nines" ? "<p>9s cannot be placed; redraw them or leave them in your hand.</p>" : ""}
+          ${recommendedMarkup}
           ${state.phase === "poker-play" ? `<p>Turn ${esc(poker.turns + 1)} / ${esc(poker.turnLimit)} · Place a selected card or redraw it. Keep all three hand sizes within one card of each other.</p>` : ""}
-          ${state.phase === "poker-next-game" ? `<p>${esc(state.message || "")}</p>` : ""}
           ${nextGameHero}
           ${resultMarkup}
           ${completed ? `<p class="variant-status" role="status">${esc(state.campaign?.result || state.message || "")}</p>` : ""}
           <div id="pokerSuitCycle" class="suit-cycle poker-suit-cycle" role="group" aria-label="Suit relationships and color selectors"></div>
         </div>
       </div>`;
+      document.getElementById("dismissPokerLesson")?.addEventListener("click", () => {
+        pokerLessonDismissedKey = lessonKey;
+        render();
+      });
     }
 
     function renderPokerDuelBattle() {
@@ -1852,6 +1956,9 @@
           <div class="ladder-final-hand">${cards.map(card => cardMarkup(card)).join("")}</div>
         </section>`;
       }).join("");
+      const revealedOpponentHand = ladder.openHand && ladder.opponentCards?.length
+        ? `<div class="ladder-final-hand">${ladder.opponentCards.map(card => cardMarkup(card)).join("")}</div>`
+        : "";
       document.getElementById("variantContent").innerHTML = `<div class="variant-overview ladder-overview">
         <section class="ladder-played-stack-panel" aria-label="Played cards">
           <div class="ladder-stack-rows">${stack || `<span class="empty-row">${emptyStackMessage}</span>`}</div>
@@ -1863,6 +1970,7 @@
             <h2>${state.phase === "handoff" ? "Private hand hidden" : `${esc(activeName)}’s hand`}</h2>
             <span>Opponent’s hand size: ${opponentHandCount}</span>
           </div>
+          ${revealedOpponentHand ? `<section class="ladder-open-hand"><h3>Opponent’s open hand</h3>${revealedOpponentHand}</section>` : ""}
           <div class="ladder-hand-cards">${hand || '<span class="empty-row">Your hand is hidden until you are ready.</span>'}</div>
         </section>` : ""}
       </div>`;
@@ -1874,6 +1982,19 @@
           });
         });
       });
+      if (state.phase === "gameover") {
+        const status = document.createElement("p");
+        status.className = "variant-panel variant-status";
+        status.setAttribute("role", "status");
+        status.textContent = state.campaign?.result || state.message || "";
+        document.getElementById("variantContent").append(status);
+        const actions = document.createElement("div");
+        actions.className = "variant-actions";
+        appendMissionActions(actions, () => state.campaign
+          ? startMission(state.campaign.id, state.campaign.index)
+          : openDashboard());
+        document.getElementById("variantContent").append(actions);
+      }
     }
 
     function renderTugWarBattle() {
@@ -1888,33 +2009,50 @@
       const handColumns = Math.max(1, hand.length <= 4 ? hand.length : Math.ceil(hand.length / 2));
       const pullsRemaining = Number(players[Number(tug.viewer || 0)]?.pushes ?? 0);
       const selectedIndex = selected.size ? [...selected][0] : undefined;
-      const pileValue = pile => (pile.cards || []).reduce((total, card) =>
-        total + 1 + (Number(card.suit) === Number(tug.bountySuit) ? Number(tug.b || 0) : 0), 0);
+      const pileValue = (pile, index) => {
+        if (!tug.valuesRevealed) return "?";
+        const value = Number(tug.pileValues?.[index]);
+        return Number.isFinite(value) ? formatModifier(value) : "0";
+      };
       const piles = (tug.piles || []).map((pile, index) => {
         const position = pile.zone === -1 ? `${playerName(0)} side` : pile.zone === 1 ? `${playerName(1)} side` : "neutral";
         const column = pile.zone === -1 ? 1 : pile.zone === 1 ? 3 : 2;
         const alignment = column === 1 ? "start" : column === 3 ? "end" : "center";
-        const cards = pile.cards?.length
+        const cards = pile.hidden
+          ? '<span class="tug-war-hidden-card" aria-label="Hidden top card">?</span>'
+          : pile.cards?.length
           ? cardMarkup(pile.cards[pile.cards.length - 1])
           : "";
         const play = tug.canPlay && selectedIndex !== undefined
           ? `<button class="action primary" data-tug-action="tug-war-play" data-pile="${index}" data-index="${selectedIndex}">Play here</button>` : "";
         const pull = `<button class="action secondary" data-tug-action="tug-war-push" data-pile="${index}"${tug.canPush?.[index] && pullsRemaining > 0 ? "" : " disabled"}>Pull (${pullsRemaining})</button>`;
         const draw = `<button class="action secondary" data-tug-action="tug-war-flip" data-pile="${index}"${tug.canFlip ? "" : " disabled"}>Draw</button>`;
-        return `<section class="tug-war-pile" style="grid-column:1 / -1;grid-row:${index + 1};justify-self:${alignment}" aria-label="Pile ${index + 1}, ${esc(position)}, value ${pileValue(pile)}">
+        return `<section class="tug-war-pile" style="grid-column:1 / -1;grid-row:${index + 1};justify-self:${alignment}" aria-label="Pile ${index + 1}, ${esc(position)}, value ${pileValue(pile, index)}">
           <div class="tug-war-pile-line">
             <div class="tug-war-pile-controls">${pull}</div>
             <div class="tug-war-pile-center">
               <div class="tug-war-pile-cards">${cards || '<span class="empty-row">No cards</span>'}</div>
               <div class="tug-war-stack-bracket" aria-hidden="true"></div>
-              <span class="tug-war-stack-value">${pileValue(pile)}</span>
+              <span class="tug-war-stack-value">${pileValue(pile, index)}</span>
             </div>
             <div class="tug-war-pile-controls">${draw}</div>
           </div>
           <div class="tug-war-pile-actions">${play}</div>
         </section>`;
       }).join("");
+      const campaign = state.campaign;
+      const bountyLabel = tug.bountyRevealed && tug.bountySuit !== undefined
+        ? `Bounty: ${suits[Number(tug.bountySuit)] || "Unknown"} ${formatModifier(Number(tug.b || 0))}`
+        : "Bounty suit: hidden until first flip";
+      const campaignStatus = campaign
+        ? `<section class="variant-panel tug-war-campaign-status">
+            <h2>${esc(campaign.name)}</h2><p>${esc(campaign.hint || "")}</p>
+            ${tug.seriesGames ? `<p>Game ${tug.seriesGame}/${tug.seriesGames} · Series ${tug.playerWins}–${tug.cpuWins} · first to ${tug.winsNeeded}</p>` : ""}
+            <p>Round ${tug.round} · Shift ${formatModifier(Number(tug.s || 0))} · Favor ${formatModifier(Number(tug.f || 0))} · ${esc(bountyLabel)}</p>
+          </section>`
+        : "";
       document.getElementById("variantContent").innerHTML = `<div class="tug-war-overview">
+        ${campaignStatus}
         <div class="tug-war-board">${piles}</div>
         <section class="player-panel">
           <div class="player-heading"><h2>${esc(playerName(Number(tug.viewer || 0)))}’s hand</h2><span>${hand.length} cards${tug.canAct ? " · select a card" : ""}</span></div>
@@ -2476,6 +2614,18 @@
         const poker = state.poker || {};
         const hand = poker.hand || [];
         const slots = poker.slots || [[], [], []];
+        const ghost = poker.ghost;
+        const ghostName = {
+          bounty: "Bounty-focused", nine: "9-focused", pairs: "Pair-focused", balanced: "Balanced"
+        }[ghost?.strategy] || "Teaching";
+        const ghostMarkup = ghost ? `<article class="player-panel poker-ghost-panel">
+            <div class="player-heading"><h2>${esc(ghostName)} teaching ghost</h2><span>Visible plays · ${esc(ghost.turns)} turns</span></div>
+            <div class="poker-slots">${(ghost.slots || [[], [], []]).map((slot, index) => `
+              <section class="poker-slot">
+                <h3>Hand ${String.fromCharCode(65 + index)} <span>${slot.length} / 5</span></h3>
+                <div class="card-row pile-row">${slot.map(card => cardMarkup(card)).join("") || '<span class="empty-row">Empty</span>'}</div>
+              </section>`).join("")}</div>
+          </article>` : "";
         container.innerHTML = `<article class="player-panel poker-player-panel">
             <div class="player-heading"><h2>Played hands</h2></div>
             <div class="poker-slots">${slots.map((slot, index) => `
@@ -2484,10 +2634,18 @@
                 <div class="card-row pile-row">${slot.map(card => cardMarkup(card)).join("") || '<span class="empty-row">Place cards here</span>'}</div>
               </section>`).join("")}</div>
           </article>
+          ${ghostMarkup}
           <article class="player-panel poker-hand-panel">
             <div class="player-heading"><h2>Your hand</h2><span>${hand.length} cards · select one</span></div>
             <div class="card-row hand-row poker-held-hand">${hand.map(card => cardMarkup(card, { commit: true })).join("") || '<span class="empty-row">No cards held</span>'}</div>
           </article>`;
+        container.querySelectorAll(".poker-held-hand .card[data-index]").forEach(button => {
+          const index = Number(button.dataset.index);
+          if (hand[index]?.placeable === false) {
+            button.classList.add("poker-unplaceable");
+            button.title = "9s cannot be placed in this mission; redraw or keep it in your hand.";
+          }
+        });
         container.querySelectorAll(".poker-held-hand .card[data-index]").forEach(button => {
           button.addEventListener("click", () => {
             const index = Number(button.dataset.index);
@@ -2889,10 +3047,12 @@
         if (state.phase === "poker-play") {
           const [index] = selected;
           if (index === undefined) return;
-          (poker.canPlace || []).forEach((canPlace, slot) => {
-            if (canPlace) actions.append(makeButton(`Place in Hand ${String.fromCharCode(65 + slot)}`,
-              () => act("poker-place", { index, slot }), "primary"));
-          });
+          if (poker.hand?.[index]?.placeable !== false) {
+            (poker.canPlace || []).forEach((canPlace, slot) => {
+              if (canPlace) actions.append(makeButton(`Place in Hand ${String.fromCharCode(65 + slot)}`,
+                () => act("poker-place", { index, slot }), "primary"));
+            });
+          }
           const redraw = makeButton("Redraw selected card", () => act("poker-redraw", { index }), "secondary");
           redraw.disabled = actionInProgress || !poker.canRedraw;
           actions.append(redraw);
@@ -3002,17 +3162,17 @@
       const matchMode = modal.querySelector("#matchMode");
       if (matchMode.dataset.variant !== setupVariant) {
         const networkOptions = [
-          ["friend", "Challenge a Friend"],
-          ["online", "Online Matchmaking"],
-          ["ranked", "Ranked Matchmaking (best of 3)"]
+          ["friend", "Challenge a Friend · 1 Energy"],
+          ["online", "Online Matchmaking · 1 Energy"],
+          ["ranked", "Ranked Matchmaking · best of 3 · 2 Energy"]
         ];
         const options = puzzleBattle
-          ? [["easy", "Human vs CPU · Easy"], ...networkOptions]
+          ? [["easy", "Human vs CPU · Easy · 1 Energy"], ...networkOptions]
           : tugWarMatch || abandonDuel
-            ? [["normal", "Human vs CPU"], ...networkOptions]
+            ? [["normal", "Human vs CPU · 1 Energy"], ...networkOptions]
             : cpuMatch
-              ? [["easy", "Human vs CPU · Easy"], ["normal", "Human vs CPU · Medium"], ["hard", "Human vs CPU · Hard"], ...networkOptions]
-              : [["easy", "Human vs AI · Easy"], ["normal", "Human vs AI · Normal"], ["hard", "Human vs AI · Hard"], ...networkOptions];
+              ? [["easy", "Human vs CPU · Easy · 1 Energy"], ["normal", "Human vs CPU · Medium · 1 Energy"], ["hard", "Human vs CPU · Hard · 1 Energy"], ...networkOptions]
+              : [["easy", "Human vs AI · Easy · 1 Energy"], ["normal", "Human vs AI · Normal · 1 Energy"], ["hard", "Human vs AI · Hard · 1 Energy"], ...networkOptions];
         matchMode.innerHTML = options.map(([id, label]) => `<option value="${id}">${label}</option>`).join("");
         matchMode.dataset.variant = setupVariant;
       }
@@ -3265,7 +3425,9 @@
       } else if (state.phase === "gameover" && state.variant === "tug-war") {
         const tug = state.tugWar || {};
         const result = tug.result || {};
-        const winner = Number(result.winner ?? -1);
+        const winner = tug.seriesComplete
+          ? Number(tug.seriesWon ? tug.viewer : 1 - tug.viewer)
+          : Number(result.winner ?? -1);
         const outcomeMarkup = winner < 0
           ? "<h2>Tug War draw</h2>"
           : resultBannerMarkup(winner === Number(tug.viewer || 0));
@@ -3287,21 +3449,33 @@
         const scoreLines = (result.scores || []).map((score, index) =>
           `<p><strong>${esc(playerName(index))}:</strong> ${formatModifier(Number(score))} points · ${Number(result.zoneCards?.[index] || 0)} cards in owned piles</p>`
         ).join("");
-        const tiebreak = result.tiebreak === "zone-cards" ? "Tied points were broken by cards in owned piles."
+        const tiebreak = tug.seriesComplete
+          ? `Series result: ${Number(tug.playerWins || 0)}–${Number(tug.cpuWins || 0)}.`
+          : result.tiebreak === "zone-cards" ? "Tied points were broken by cards in owned piles."
           : result.tiebreak === "draw" ? "Both points and owned-card counts were tied." : "Points";
+        const campaignResult = state.campaign?.result
+          ? `<p class="variant-status" role="status">${esc(state.campaign.result)}</p>` : "";
         modal.classList.remove("hidden");
         modal.innerHTML = `<section class="modal result-modal ${winner === tug.viewer ? "won" : winner < 0 ? "" : "lost"}">
           ${outcomeMarkup}
           ${payoutDetails}
+          ${campaignResult}
           <p>Tiebreak: ${esc(tiebreak)}</p>
           <div class="tug-war-players">${scoreLines}</div>
           <div class="tug-war-board">${pileMarkup}</div>
           <div class="confirmation-actions" id="resultActions"></div>
         </section>`;
         const resultActions = modal.querySelector("#resultActions");
-        resultActions.append(makeButton("Home", openDashboard, "secondary"));
-        resultActions.append(makeButton("Rematch", () => startNewGame(), "primary"));
-        resultActions.append(makeButton("Choose mode", chooseMatchMode, "secondary"));
+        if (state.campaign?.id && state.campaign?.result?.includes("Continue to the next game")) {
+          resultActions.append(makeButton("Next Game", () => act("next-tug-war-game"), "primary"));
+          resultActions.append(makeButton("Home", openDashboard, "secondary"));
+        } else if (state.campaign?.id) {
+          appendMissionActions(resultActions, () => startMission(state.campaign.id, state.campaign.index));
+        } else {
+          resultActions.append(makeButton("Home", openDashboard, "secondary"));
+          resultActions.append(makeButton("Rematch", () => startNewGame(), "primary"));
+          resultActions.append(makeButton("Choose mode", chooseMatchMode, "secondary"));
+        }
       } else if (state.phase === "gameover" && state.variant === "rummy") {
         const results = state.rummy?.results || [];
         const outcomeMarkup = state.winner === -1
@@ -3666,21 +3840,26 @@
       if (!dashboard) return;
       const dashboardIcons = {
         dashboardPlay: "battle.png",
-        dashboardNavHome: "assets/icons/home.png",
+        dashboardNavHome: "home.png",
         dashboardCampDraw: "campdraw.png",
-        dashboardAchievements: "achievements.png",
+        dashboardAchievements: "acheivements.png",
         dashboardCampaigns: "campaigns.png",
         dashboardHistory: "matchhistory.png",
         dashboardNavShop: "shop.png",
         dashboardNavHeroes: "heroselect.png",
-        dashboardNavSocial: "assets/icons/social.png",
+        dashboardNavSocial: "social.png",
         dashboardSkills: "skilltree.png",
       };
       for (const [elementID, file] of Object.entries(dashboardIcons)) {
         const icon = document.querySelector(`#${elementID} .dashboard-icon`);
         if (icon) {
-          const iconPath = file.startsWith("assets/") ? file : `skins/icons/${file}`;
-          icon.src = `${import.meta.env.BASE_URL}${iconPath}`;
+          const sprite = document.createElement("span");
+          sprite.className = `${icon.className} sprite-icon`;
+          sprite.setAttribute("aria-hidden", "true");
+          const [column, row] = iconAtlasFrames[file];
+          sprite.style.backgroundImage = `url('${import.meta.env.BASE_URL}skins/icons/animations/icons1.png')`;
+          sprite.style.backgroundPosition = `${column * 25}% ${row * 100 / 3}%`;
+          icon.replaceWith(sprite);
         }
       }
       const drawsAvailable = dashboard.drawsAvailable;
@@ -3695,13 +3874,11 @@
       document.getElementById("dashboardMarks").textContent = formatNumber(dashboard.marks);
       document.getElementById("dashboardCrowns").textContent = formatNumber(dashboard.crowns);
       const energy = `${dashboard.energy}/${dashboard.maxEnergy}`;
-      const next = dashboard.energyNextSeconds > 0
-        ? ` · next in ${Math.floor(dashboard.energyNextSeconds / 60)}:${String(dashboard.energyNextSeconds % 60).padStart(2, "0")}`
-        : "";
       document.getElementById("dashboardEnergy").textContent = energy;
       const energyNext = document.getElementById('dashboardEnergyNext');
-      energyNext.hidden = !next;
-      energyNext.textContent = next.replace(/^ · /,'');
+      energyNext.hidden = true;
+      energyNext.textContent = "";
+      syncEnergyCountdown(dashboard);
       const featuredItem = dashboard.dailyFeaturedItem;
       document.getElementById("dashboardShopItem").textContent =
         featuredItem ? featuredItem.name : "No featured item available";
@@ -3719,13 +3896,13 @@
       }
       const campDraw = document.getElementById("dashboardCampDraw");
       const campDrawLabel = `Camp Draw (${dashboard.winsSinceCampDraw}/${dashboard.winsPerCampDraw})`;
-      campDraw.querySelector("span").textContent = drawsAvailable > 0
+      campDraw.querySelector(".dashboard-action-label").textContent = drawsAvailable > 0
         ? `${campDrawLabel} · ${drawsAvailable} Draw${drawsAvailable === 1 ? "" : "s"}`
         : campDrawLabel;
       const skillTreeLabel = Number(dashboard.skillPoints || 0);
-      document.querySelector("#dashboardSkills span").textContent =
+      document.querySelector("#dashboardSkills .dashboard-action-label").textContent =
         skillTreeLabel > 0 ? `Skill Tree (${skillTreeLabel} point${skillTreeLabel === 1 ? "" : "s"})` : "Skill Tree";
-      document.querySelector("#dashboardAchievements span").textContent =
+      document.querySelector("#dashboardAchievements .dashboard-action-label").textContent =
         dashboard.unseenAchievements > 0
           ? `Achievements (${dashboard.unseenAchievements} new)`
           : "Achievements";
@@ -3734,6 +3911,52 @@
       document.getElementById('dashboardPlay').querySelector('strong').textContent = active ? 'Resume battle' : 'Battle';
       document.getElementById('dashboardPlay').querySelector('small').textContent = active ? `${modeName(state.mode)} · Round ${state.round}` : 'Choose your match mode';
       document.getElementById('dashboardChooseMode').hidden = !active;
+    }
+
+    function syncEnergyCountdown(dashboard) {
+      if (!dashboard) return;
+      const energy = Number(dashboard.energy || 0);
+      const maxEnergy = Number(dashboard.maxEnergy || 0);
+      const nextSeconds = Math.max(0, Number(dashboard.energyNextSeconds || 0));
+      const rechargeSeconds = Math.max(1, Number(dashboard.energyRechargeSeconds || 600));
+      const snapshot = `${energy}/${maxEnergy}/${nextSeconds}/${rechargeSeconds}`;
+      if (snapshot !== energyCountdownSnapshot) {
+        energyCountdownSnapshot = snapshot;
+        energyCountdownTarget = energy < maxEnergy && nextSeconds > 0
+          ? Date.now() + nextSeconds * 1000
+          : 0;
+      }
+      updateEnergyCountdown();
+      if (energyCountdownTimer === null) {
+        energyCountdownTimer = window.setInterval(updateEnergyCountdown, 1000);
+      }
+    }
+
+    function updateEnergyCountdown() {
+      const dashboard = featureData?.dashboard || state?.dashboard;
+      if (!dashboard) return;
+      const energy = Number(dashboard.energy || 0);
+      const maxEnergy = Number(dashboard.maxEnergy || 0);
+      const seconds = energyCountdownTarget > 0
+        ? Math.max(0, Math.ceil((energyCountdownTarget - Date.now()) / 1000))
+        : 0;
+      for (const element of document.querySelectorAll("[data-energy-countdown]")) {
+        element.hidden = energy >= maxEnergy || energyCountdownTarget <= 0;
+        element.textContent = `Next in ${Math.floor(seconds / 60)}:${String(seconds % 60).padStart(2, "0")}`;
+      }
+      if (energy < maxEnergy && energyCountdownTarget > 0 && seconds === 0 &&
+          !energyCountdownRefreshPending && (showDashboard || showFeature)) {
+        energyCountdownRefreshPending = true;
+        api("/api/state").then(data => {
+          if (lifecycle.signal.aborted) return;
+          state = data;
+          if (featureData?.dashboard) featureData.dashboard = data.dashboard;
+          render();
+        }).catch(error => {
+          setStatus(connectionError(error), true);
+          energyCountdownTarget = Date.now() + 5000;
+        }).finally(() => { energyCountdownRefreshPending = false; });
+      }
     }
 
     async function openFeature(feature) {
@@ -3751,8 +3974,17 @@
       };
       const version = ++navigationVersion;
       currentFeature = feature;
-      if (feature === "shop") currentShopTab = "skins";
+      if (feature === "shop") {
+        currentShopTab = "skins";
+        currentShopSubTab = "common";
+      }
       if (feature === "skills") currentSkillBranch = skillTreeBranches[0].id;
+      if (feature === "social") {
+        socialPage = "profile";
+        selectedSocialFriend = "";
+        selectedSocialConversation = "";
+        socialConversationData = null;
+      }
       showDashboard = false;
       showFeature = true;
       showModeSelection = false;
@@ -3792,10 +4024,63 @@
         data-feature-action="${action}" ${attributes}${disabled ? " disabled" : ""}>${esc(label)}</button>`;
     }
 
+    function giftActionButton(label, action, attributes = "", disabled = false) {
+      return featureActionButton(label, "gift-shop-item",
+        `data-gift-action="${action}" ${attributes}`, disabled);
+    }
+
+    async function openGiftConfirmation(itemName, request) {
+      const recipients = featureData?.giftRecipients || [];
+      const eligible = recipients.filter(item => item.eligible);
+      const modal = document.getElementById("modal");
+      modal.classList.remove("hidden");
+      modal.innerHTML = `<section class="modal" role="dialog" aria-modal="true" aria-labelledby="giftTitle">
+        <h2 id="giftTitle">Gift ${esc(itemName)}</h2>
+        <p>Choose an eligible friend. Gifts require a friendship of at least 48 hours and an account at least 7 days old.</p>
+        ${recipients.length ? `<label>Friend<select id="giftRecipient" data-initial-focus>
+          ${recipients.map(item => `<option value="${esc(item.handle)}"${item.eligible ? "" : " disabled"}${item.eligible && item === eligible[0] ? " selected" : ""}>${esc(item.handle)}${item.eligible ? "" : ` · ${esc(item.reason)}`}</option>`).join("")}
+        </select></label>` : "<p>You need an eligible friend before you can send a gift.</p>"}
+        <p id="giftError" class="payout-error" role="alert" hidden></p>
+        <div class="product-actions">
+          <button type="button" class="action primary" id="confirmShopGift"${eligible.length ? "" : " disabled"}>Continue</button>
+          <button type="button" class="action secondary" id="cancelShopGift">Cancel</button>
+        </div>
+      </section>`;
+      syncModalAccessibility();
+      modal.querySelector("#cancelShopGift").addEventListener("click", closeShopPreview);
+      modal.querySelector("#confirmShopGift").addEventListener("click", async () => {
+        if (featureActionInProgress) return;
+        const handle = modal.querySelector("#giftRecipient")?.value;
+        if (!eligible.some(item => item.handle === handle)) return;
+        if (!await confirmAction(
+          `Buy ${itemName} for ${handle}?`,
+          `This permanently charges your account and sends the item to ${handle}.`, "Purchase gift"
+        )) return;
+        featureActionInProgress = true;
+        try {
+          const result = await api("/api/shop/gift", { ...request, recipient: handle });
+          featureData = await api("/api/shop");
+          featureData.message = result.message;
+          if (featureData.dashboard) state.dashboard = featureData.dashboard;
+          featureError = "";
+          closeShopPreview();
+          render();
+        } catch (error) {
+          const errorElement = modal.querySelector("#giftError");
+          if (errorElement) {
+            errorElement.textContent = connectionError(error);
+            errorElement.hidden = false;
+          }
+        } finally {
+          featureActionInProgress = false;
+        }
+      });
+    }
+
     function renderFeatureTabs(tabs, selected, dataAttribute) {
       return tabs.map(tab =>
         `<button id="feature-tab-${esc(tab.id)}" class="feature-tab${tab.icon ? " skill-branch-tab" : ""}" type="button" role="tab" aria-selected="${tab.id === selected}" tabindex="${tab.id === selected ? 0 : -1}" aria-controls="featureContent"
-          data-${dataAttribute}="${esc(tab.id)}">${tab.icon ? `<span class="skill-tab-badge"><img src="${import.meta.env.BASE_URL}skins/icons/${esc(tab.icon)}" alt="" aria-hidden="true"></span>` : ""}<span>${esc(tab.label)}</span></button>`
+          data-${dataAttribute}="${esc(tab.id)}">${tab.icon ? `<span class="skill-tab-badge">${spriteIconMarkup(tab.icon)}</span>` : ""}<span>${esc(tab.label)}</span></button>`
       ).join("");
     }
 
@@ -3817,33 +4102,61 @@
         ? `<div class="feature-balance-list">
             <span class="feature-balance">${currencyAmountMarkup(resources.marks, "Marks")}</span>
             <span class="feature-balance">${currencyAmountMarkup(resources.crowns, "Crowns")}</span>
-            <span class="feature-balance" aria-label="${esc(`${resources.energy} of ${resources.maxEnergy} Energy`)}">${resources.energy}/${resources.maxEnergy}${currencyIconMarkup("energy")}</span>
+            <span class="feature-balance energy-feature-balance" aria-label="${esc(`${resources.energy} of ${resources.maxEnergy} Energy`)}"><span>${resources.energy}/${resources.maxEnergy}${currencyIconMarkup("energy")}</span><small class="energy-countdown" data-energy-countdown hidden></small></span>
             <span class="feature-balance">${resources.skillPoints} Skill ${resources.skillPoints === 1 ? "Point" : "Points"}</span>
           </div>`
         : "";
+      syncEnergyCountdown(resources);
       const message = document.getElementById("featureMessage");
       message.innerHTML = currencyTextMarkup(featureError || (featureData && featureData.message) || "");
       const tabs = document.getElementById("featureTabs");
+      const subTabs = document.getElementById("featureSubTabs");
       if (currentFeature === "shop") {
         const shopTabs = [
+          { id: "items", label: "Items" },
           { id: "skins", label: "Skins" },
-          { id: "heroes", label: "Heroes" },
-          { id: "boxes", label: "Boxes" },
-          { id: "energy", label: "Energy & Items" }
+          { id: "heroes-boxes", label: "Heroes & Boxes" }
         ];
         tabs.setAttribute("aria-label", "Shop categories");
         tabs.innerHTML = renderFeatureTabs(shopTabs, currentShopTab, "shop-tab");
         tabs.classList.remove("hidden");
+        const shopSubTabs = {
+          items: [
+            { id: "crowns", label: "Crowns" },
+            { id: "energy", label: "Energy" },
+            { id: "consumables", label: "Consumables" }
+          ],
+          skins: [
+            { id: "common", label: "Common" },
+            { id: "uncommon", label: "Uncommon" },
+            { id: "rare", label: "Rare" },
+            { id: "epic", label: "Epic" },
+            { id: "premium", label: "Premium" }
+          ],
+          "heroes-boxes": [
+            { id: "hero-shop", label: "Hero Shop" },
+            { id: "box-shop", label: "Box Shop" },
+            { id: "skill-points", label: "Skill Points" }
+          ]
+        }[currentShopTab];
+        subTabs.setAttribute("aria-label", "Shop subcategories");
+        subTabs.style.gridTemplateColumns = `repeat(${shopSubTabs.length}, minmax(0, 1fr))`;
+        subTabs.innerHTML = renderFeatureTabs(shopSubTabs, currentShopSubTab, "shop-sub-tab");
+        subTabs.classList.remove("hidden");
       } else if (currentFeature === "skills") {
         tabs.setAttribute("aria-label", "Skill tree branches");
         tabs.innerHTML = renderFeatureTabs(skillTreeBranches, currentSkillBranch, "skill-branch");
         tabs.classList.remove("hidden");
+        subTabs.classList.add("hidden");
+        subTabs.innerHTML = "";
       } else {
         tabs.classList.add("hidden");
         tabs.innerHTML = "";
+        subTabs.classList.add("hidden");
+        subTabs.innerHTML = "";
       }
       const content = document.getElementById("featureContent");
-      const selectedTab = currentFeature === 'shop' ? currentShopTab : currentFeature === 'skills' ? currentSkillBranch : '';
+      const selectedTab = currentFeature === 'shop' ? currentShopSubTab : currentFeature === 'skills' ? currentSkillBranch : '';
       if (selectedTab) {
         content.setAttribute('role', 'tabpanel');
         content.setAttribute('aria-labelledby', `feature-tab-${selectedTab}`);
@@ -4018,22 +4331,46 @@
       </section>`;
     }
 
+    function renderShopCrowns(page) {
+      const offers = (page.crownOffers || []).map(offer => `<article class="feature-item">
+        <h3>${formatNumber(offer.crowns)} Crowns</h3>
+        <p>$${Number(offer.priceDollars).toFixed(2)}</p>
+        <button type="button" class="action secondary" disabled>Purchases coming soon</button>
+      </article>`).join("");
+      return `<section class="feature-section"><h2>Crown Packs</h2>
+        <p>Real-money Crown purchases are not available yet. These pack prices are shown for preview only.</p>
+        <div class="feature-list">${offers}</div>
+      </section>`;
+    }
+
     function renderShopEnergy(page) {
       const energyOffers = (page.energyOffers || []).map(offer => {
         const room = page.dashboard.maxEnergy - page.dashboard.energy;
         const canFit = room >= offer.amount;
         return `<article class="feature-item">
           <h3>${offer.amount} Energy Recharge</h3>
-          <p>Energy: ${page.dashboard.energy}/${page.dashboard.maxEnergy}</p>
+          <p>Energy: ${page.dashboard.energy}/${page.dashboard.maxEnergy}
+            <small class="energy-countdown" data-energy-countdown hidden></small></p>
           <p>${formatNumber(offer.marksCost)} Marks or ${formatNumber(offer.crownsCost)} Crowns</p>
           ${featureActionButton(`Buy for ${formatNumber(offer.marksCost)} Marks`, "buy-energy",
             `data-amount="${offer.amount}" data-payment="marks"`,
             !canFit || page.dashboard.marks < offer.marksCost)}
+          ${giftActionButton(`Gift for ${formatNumber(offer.marksCost)} Marks`, "buy-energy",
+            `data-amount="${offer.amount}" data-payment="marks"`, !canFit || page.dashboard.marks < offer.marksCost)}
           ${featureActionButton(`Buy for ${formatNumber(offer.crownsCost)} Crowns`, "buy-energy",
             `data-amount="${offer.amount}" data-payment="crowns"`,
             !canFit || page.dashboard.crowns < offer.crownsCost)}
+          ${giftActionButton(`Gift for ${formatNumber(offer.crownsCost)} Crowns`, "buy-energy",
+            `data-amount="${offer.amount}" data-payment="crowns"`, !canFit || page.dashboard.crowns < offer.crownsCost)}
         </article>`;
       }).join("");
+      return `<section class="feature-section"><h2>Energy</h2>
+        <p>Purchase a 1-energy or 10-energy recharge with Marks or Crowns. The full recharge must fit below your Energy cap.</p>
+        <div class="feature-list">${energyOffers}</div>
+      </section>`;
+    }
+
+    function renderShopConsumables(page) {
       const consumables = (page.consumableOffers || []).map(offer => {
         const prices = [
           ["marks", offer.marksCost, "Marks", page.dashboard.marks],
@@ -4045,34 +4382,44 @@
           ${prices.map(([payment, cost, currency, balance]) => `<p>${formatNumber(cost)} ${currency}</p>
             ${featureActionButton(`Buy for ${formatNumber(cost)} ${currency}`, "buy-consumable",
               `data-id="${esc(offer.id)}" data-payment="${payment}"`,
-              !offer.canBuy || balance < cost)}`).join("")}
+              !offer.canBuy || balance < cost)}
+            ${giftActionButton(`Gift for ${formatNumber(cost)} ${currency}`, "buy-consumable",
+              `data-id="${esc(offer.id)}" data-payment="${payment}"`, !offer.canBuy || balance < cost)}`).join("")}
         </article>`;
       }).join("");
-      const skillPoints = (page.skillPointOffers || []).map(offer => `<article class="feature-item">
-        <h3>${offer.quantity} ${esc(offer.name)}</h3>
-        <p>Spend Skill Points to unlock skills in any branch.</p>
-        ${featureActionButton(`Buy for ${formatNumber(offer.crownsCost)} Crowns`, "buy-skill-points",
-          `data-id="${esc(offer.id)}"`, page.dashboard.crowns < offer.crownsCost)}
-      </article>`).join("");
-      return `<section class="feature-section"><h2>Energy Shop</h2>
-        <p>Purchase a 1-energy or 10-energy recharge with Marks or Crowns. The full recharge must fit below your Energy cap.</p>
-        <div class="feature-list">${energyOffers}</div>
-      </section>
-      <section class="feature-section"><h2>Consumables</h2>
+      return `<section class="feature-section"><h2>Consumables</h2>
         <p>Restart, Undo, Replace Any Card, and Campaign Skip tokens can only be used in campaigns and vs-CPU games, never in Human-vs-Human play. In-game quick purchases use Crowns; Marks purchases are available here. Camp Draw purchases count toward the three-draw storage limit.</p>
         <div class="feature-list">${consumables}</div>
-      </section>
-      <section class="feature-section"><h2>Skill Points</h2>
+      </section>`;
+    }
+
+    function renderShopSkillPoints(page) {
+      const skillPoints = (page.skillPointOffers || []).map(offer => `<article class="feature-item">
+        <h3>${offer.quantity} ${esc(offer.name)}</h3>
+        <p>Skill unlocks require Skill Points. Crowns cannot be used to unlock skills.</p>
+        ${featureActionButton(`Buy for ${formatNumber(offer.crownsCost)} Crowns`, "buy-skill-points",
+          `data-id="${esc(offer.id)}"`, page.dashboard.crowns < offer.crownsCost)}
+        ${giftActionButton(`Gift for ${formatNumber(offer.crownsCost)} Crowns`, "buy-skill-points",
+          `data-id="${esc(offer.id)}"`, page.dashboard.crowns < offer.crownsCost)}
+      </article>`).join("");
+      return `<section class="feature-section"><h2>Skill Points</h2>
         <p>Skill unlocks require Skill Points. Crowns cannot be used to unlock skills.</p>
         <div class="feature-list">${skillPoints}</div>
       </section>`;
     }
 
     function renderShopFeature(page) {
-      const content = currentShopTab === "heroes" ? renderShopHeroes(page)
-        : currentShopTab === "boxes" ? renderShopBoxes(page)
-          : currentShopTab === "energy" ? renderShopEnergy(page) : renderShopSkins(page);
-      return content;
+      if (currentShopTab === "items") {
+        if (currentShopSubTab === "energy") return renderShopEnergy(page);
+        if (currentShopSubTab === "consumables") return renderShopConsumables(page);
+        return renderShopCrowns(page);
+      }
+      if (currentShopTab === "heroes-boxes") {
+        if (currentShopSubTab === "box-shop") return renderShopBoxes(page);
+        if (currentShopSubTab === "skill-points") return renderShopSkillPoints(page);
+        return renderShopHeroes(page);
+      }
+      return renderShopSkins(page);
     }
 
     function chromaFamilyKey(chroma) {
@@ -4118,9 +4465,27 @@
     }
 
     function shopFamilyItems(page, familyKey) {
-      return (page.chromas || []).filter(item => chromaFamilyKey(item.chroma) === familyKey)
-        .sort((first, second) =>
-          chromaColorName(first.chroma).localeCompare(chromaColorName(second.chroma), undefined, { sensitivity: "base" }));
+      const unique = new Map();
+      for (const item of (page.chromas || []).filter(item => chromaFamilyKey(item.chroma) === familyKey)) {
+        const color = String(item.chroma.color || chromaColorName(item.chroma)).trim().toLowerCase();
+        const hex = String(item.chroma.hexColor || "").trim().toLowerCase();
+        const key = `${color}|${hex}`;
+        const current = unique.get(key);
+        const normalizedColor = color.replace(/[^a-z0-9]/g, "");
+        const matchesColorID = candidate =>
+          String(candidate.chroma.id || "").toLowerCase().endsWith(`-${normalizedColor}`);
+        if (!current || (item.owned && !current.owned) ||
+            (item.owned === current.owned && matchesColorID(item) && !matchesColorID(current))) {
+          unique.set(key, item);
+        }
+      }
+      return [...unique.values()].sort((first, second) =>
+        chromaColorName(first.chroma).localeCompare(chromaColorName(second.chroma), undefined, { sensitivity: "base" }));
+    }
+
+    function shopChromaItems(page) {
+      const familyKeys = new Set((page.chromas || []).map(item => chromaFamilyKey(item.chroma)));
+      return [...familyKeys].flatMap(familyKey => shopFamilyItems(page, familyKey));
     }
 
     function familyBuyAllQuote(page, familyKey) {
@@ -4136,13 +4501,13 @@
 
     function renderShopSkins(page) {
       const families = new Map();
-      for (const item of page.chromas || []) {
+      for (const item of shopChromaItems(page)) {
         const chroma = item.chroma;
         const key = chromaFamilyKey(chroma);
         if (!families.has(key)) families.set(key, { key, name: chromaFamilyName(chroma), items: [] });
         families.get(key).items.push(item);
       }
-      const tierNames = ["Common", "Uncommon", "Rare", "Epic", "Seasonal / Premium"];
+      const tierNames = ["Common", "Uncommon", "Rare", "Epic", "Premium"];
       const tiers = Array.from({ length: tierNames.length }, () => []);
       for (const family of families.values()) {
         family.items = shopFamilyItems(page, family.key);
@@ -4156,28 +4521,30 @@
           tiers[rank].push({ ...family, items, rank, representative: items[0] });
         }
       }
-      const chromas = tiers.map((tier, rank) => {
-        if (!tier.length) return "";
+      const selectedRank = ["common", "uncommon", "rare", "epic", "premium"].indexOf(currentShopSubTab);
+      const tier = tiers[selectedRank] || [];
+      const chromas = !tier.length ? `<section class="feature-section"><h2>${esc(tierNames[selectedRank] || "Skins")}</h2><p>No chromas are available in this tier yet.</p></section>` : (() => {
         const familyTiles = tier.sort((first, second) =>
           first.name.localeCompare(second.name, undefined, { sensitivity: "base" }))
           .map(group => {
           const items = group.items;
           const representative = group.representative;
-          const ownedCount = items.filter(item => item.owned).length;
-          return `<article class="feature-item shop-product shop-family-tile${ownedCount === items.length ? " is-owned" : ""}">
+          const familyItems = shopFamilyItems(page, group.key);
+          const ownedCount = familyItems.filter(item => item.owned).length;
+          return `<article class="feature-item shop-product shop-family-tile${ownedCount === familyItems.length ? " is-owned" : ""}">
             <h3>${esc(group.name)}</h3>
             ${chromaPreview(representative.chroma)}
-            <p>${tierNames[rank]}</p>
+            <p>${tierNames[selectedRank]}</p>
             <p>${esc(chromaColorName(representative.chroma))} · ${formatNumber(representative.chroma.cost)} ${esc(chromaCurrencyName(representative.chroma))}</p>
-            <p>${items.length} colors in this tier · ${ownedCount} owned</p>
+            <p>Owned: ${ownedCount}/${familyItems.length} chromas</p>
             <div class="product-actions">${featureActionButton("Choose color / family bundle", "preview-chroma", `data-id="${esc(representative.chroma.id)}"`)}</div>
           </article>`;
         }).join("");
-        return `<section class="feature-section"><h2>${tierNames[rank]}</h2><div class="feature-list">${familyTiles}</div></section>`;
-      }).join("");
+        return `<section class="feature-section"><h2>${tierNames[selectedRank]}</h2><div class="feature-list">${familyTiles}</div></section>`;
+      })();
       const chromaPick = page.chromaPickTokens > 0
         ? `<article class="feature-item"><h3>Pick Any Chroma · ${page.chromaPickTokens} token(s)</h3>
-          <select id="chromaPickChoice">${(page.chromas || []).filter(item => !item.owned).map(item =>
+          <select id="chromaPickChoice">${shopChromaItems(page).filter(item => !item.owned).map(item =>
             `<option value="${esc(item.chroma.id)}">${esc(item.chroma.name)}</option>`).join("")}</select>
           ${featureActionButton("Redeem token", "redeem-pick")}</article>`
         : "";
@@ -4194,6 +4561,8 @@
          ${!item.owned ? affordability(item.price, page.dashboard.crowns, 'Crowns') : '<a href="#/heroes">Choose your default hero</a>'}
         ${!item.owned ? featureActionButton(`Buy for ${item.price} Crowns`, "buy-hero",
           `data-id="${esc(item.hero.id)}"`, !item.canBuy) : ""}
+        ${!item.owned ? giftActionButton(`Gift for ${item.price} Crowns`, "buy-hero",
+         `data-id="${esc(item.hero.id)}"`, !item.canBuy) : ""}
       </article>`).join("");
       return `<section class="feature-section"><h2>Heroes</h2><p>Direct purchase prices vary by hero, from 300 to 500 Crowns.</p>
           <div class="feature-list">${heroesForSale}</div></section>`;
@@ -4218,6 +4587,8 @@
           ${prices.map(([payment, cost, currency, balance]) => `<p>${formatNumber(cost)} ${currency}</p>
             ${affordability(cost, balance, currency)}
             ${featureActionButton(`Buy for ${formatNumber(cost)} ${currency}`, "buy-box",
+              `data-box-type="${esc(offer.type)}" data-payment="${payment}"`, balance < cost)}
+            ${giftActionButton(`Gift for ${formatNumber(cost)} ${currency}`, "buy-box",
               `data-box-type="${esc(offer.type)}" data-payment="${payment}"`, balance < cost)}`).join("")}
           ${openButton}
         </article>`;
@@ -4335,21 +4706,30 @@
             : campaign.started ? "In progress" : "Available";
         const missions = (comingSoon ? [] : campaign.missions || []).map(mission => {
         const disabled = mission.enabled === false || mission.status === "Coming Soon";
+        const ladderGauntlet = campaign.id === "ladder" && mission.index === 15;
+        const revealedBoss = ladderGauntlet ? ladderBossReveals.get(`${campaign.id}-${mission.index}`) : null;
         const state = disabled ? ["locked", "Coming Soon"]
           : mission.completed ? ["done", "Completed"] : mission.canPlay ? ["next", "Next"] : ["locked", "Locked"];
+        const rewardParts = [currencyAmountMarkup(mission.rewardMarks, "Marks")];
+        if (mission.rewardCrowns > 0) rewardParts.push(currencyAmountMarkup(mission.rewardCrowns, "Crowns"));
+        const rewardText = rewardParts.join(" + ");
         return `<details class="feature-item mission mission-${state[0]}"${!disabled && mission.canPlay && !mission.completed ? ' open' : ''}>
         <summary><span class="mission-title">${esc(mission.index)}. ${esc(mission.name)}</span><span class="mission-chip ${state[0]}">${state[1]}</span></summary>
         <p>${esc(mission.description)}</p>
-        ${disabled ? '<p>This mission will be added in a future update.</p>' : `<p>${mission.completed ? "Completed · free practice replay, no repeat rewards" : `Reward on first completion: ${currencyAmountMarkup(mission.rewardMarks, "Marks")} · Energy cost: ${mission.energyCost}`}</p>
-        ${(mission.heroes || []).length ? `<label class="mission-hero">Mission hero<select data-mission-hero="${esc(campaign.id)}-${mission.index}">${mission.heroes.map(hero => `<option value="${esc(hero.id)}">${esc(hero.name)}</option>`).join('')}</select></label>` : ''}
+        ${disabled ? '<p>This mission will be added in a future update.</p>' : `<p>${mission.completed ? `Completed · replay has no repeat rewards · Energy cost: ${mission.energyCost}` : `Reward on first completion: ${rewardText} · Energy cost: ${mission.energyCost}`}</p>
+        ${(mission.recommendedHeroes || []).length ? `<p>Suggested heroes: ${mission.recommendedHeroes.map(esc).join(", ")}</p>` : ""}
+        ${ladderGauntlet && revealedBoss ? `<p>Revealed CPU hero: <strong>${esc(revealedBoss.name)}</strong></p>` : ""}
+        ${ladderGauntlet && !revealedBoss ? featureActionButton("Reveal CPU hero", "reveal-ladder-boss", `data-campaign="${esc(campaign.id)}" data-index="${mission.index}" data-opponent-heroes="${esc(JSON.stringify((mission.opponentHeroes || []).map(hero => ({id: hero.id, name: hero.name}))))}"`, !mission.canPlay) : ""}
+        ${(!ladderGauntlet || revealedBoss) && (mission.heroes || []).length ? `<label class="mission-hero">Mission hero<select data-mission-hero="${esc(campaign.id)}-${mission.index}">${mission.heroes.map(hero => `<option value="${esc(hero.id)}">${esc(hero.name)}</option>`).join('')}</select></label>` : ''}
         ${conductorTuningMarkup(page.dashboard?.conductorLevel, `missionConductor-${campaign.id}-${mission.index}`)}
-        ${featureActionButton(mission.completed ? 'Practice mission' : `Start ${mission.name}`, 'start-mission', `data-campaign="${esc(campaign.id)}" data-index="${mission.index}"`, !mission.canPlay || !mission.completed && page.dashboard.energy < mission.energyCost)}
+        ${(!ladderGauntlet || revealedBoss) ? featureActionButton(mission.completed ? 'Practice mission' : `Start ${mission.name}`, 'start-mission', `data-campaign="${esc(campaign.id)}" data-index="${mission.index}"`, !mission.canPlay || page.dashboard.energy < mission.energyCost) : ""}
         ${page.skipTokens > 0 && mission.canPlay && !mission.completed ? featureActionButton('Skip mission · 1 token', 'skip-mission', `data-campaign="${esc(campaign.id)}" data-index="${mission.index}"`) : ''}
         ${!mission.canPlay ? '<p>Complete the previous mission and unlock this campaign to play.</p>' : ''}`}
         </details>`;
         }).join("");
+        const campaignIcon = { abandon: "abandon.png", ladder: "ladder.png", poker: "poker.png", rummy: "rummy.png" }[campaign.id];
         return `<article class="feature-item campaign-card">
-          <h3>${esc(campaign.name)} · ${esc(status)}</h3>
+          <h3 class="campaign-card-title">${campaignIcon ? spriteIconMarkup(campaignIcon) : ""}<span>${esc(campaign.name)} · ${esc(status)}</span></h3>
           <p>${esc(campaign.description)}</p>
           ${comingSoon ? "" : `${campaign.requires ? `<p>Requires: complete ${esc(page.campaigns.find(item => item.id === campaign.requires)?.name || campaign.requires)}</p>` : ""}
           <p>${formatNumber(campaign.missionsCompleted)} / ${formatNumber(campaign.totalMissions)} missions</p>
@@ -4395,11 +4775,36 @@
 
     function renderSocialFeature(data) {
       const user = data.user || {};
-      const friends = (data.friends || []).map(friend => `
+      const ratings = [
+        ["main", "Prisoners of War"], ["fog", "Fog of War"], ["rummy", "Rummy"],
+        ["puzzle-battle", "Puzzler"], ["poker-duel", "Poker"], ["ladder", "Ladder"],
+        ["tug-war", "Tug War"], ["abandon-duel", "Abandon"]
+      ];
+      const ratingLines = values => `<ul class="social-rating-list">${ratings.map(([variant, label]) => {
+        const rating = values?.[variant] || {};
+        return `<li>${label}: ${formatNumber(rating.rating ?? 1000)} (${formatNumber(rating.gamesPlayed ?? 0)})</li>`;
+      }).join("")}</ul>`;
+      const friendList = (data.friends || []).map(friend => `
         <article class="feature-item">
-          <h3>${esc(friend.handle)} <small>· ${formatNumber(friend.elo)} ELO</small></h3>
-          <div class="product-actions">${featureActionButton("Block player", "block-player", `data-handle="${esc(friend.handle)}"`)}</div>
+          <button type="button" class="social-select-button" data-social-friend="${esc(friend.id)}"
+            aria-pressed="${selectedSocialFriend === friend.id}">${esc(friend.handle)} · ${formatNumber(friend.elo)} ELO</button>
         </article>`).join("");
+      const selectedFriend = (data.friends || []).find(friend => friend.id === selectedSocialFriend);
+      const friendDetail = selectedFriend ? `<article class="feature-item">
+        <h3>${esc(selectedFriend.handle)}</h3>
+        <h4>Ranked ratings</h4>${ratingLines(selectedFriend.ratings)}
+        <p>Your record vs. this friend: ${formatNumber(selectedFriend.record?.wins || 0)} wins · ${formatNumber(selectedFriend.record?.losses || 0)} losses · ${formatNumber(selectedFriend.record?.draws || 0)} draws</p>
+        <p>Your net wagers vs. this friend: ${selectedFriend.netWagerMarks >= 0 ? "+" : ""}${formatNumber(selectedFriend.netWagerMarks || 0)} Marks</p>
+        <div class="product-actions">
+          ${featureActionButton("Message friend", "open-social-conversation", `data-handle="${esc(selectedFriend.handle)}"`)}
+          ${featureActionButton("Remove friend", "remove-social-friend", `data-handle="${esc(selectedFriend.handle)}"`)}
+          ${featureActionButton("Block player", "block-player", `data-handle="${esc(selectedFriend.handle)}"`)}
+        </div>
+        <h4>Wager a friend</h4>
+        <label>Match mode<select id="socialWagerVariant">${ratings.map(([variant, label]) => `<option value="${variant}">${label}</option>`).join("")}</select></label>
+        <label>Stake per player (0–${formatNumber(data.wagerLimits?.perGame || 1000)} Marks)<input id="socialWagerMarks" type="number" min="0" max="${Number(data.wagerLimits?.perGame || 1000)}" step="50" value="0"></label>
+        ${featureActionButton("Send wager invitation", "send-friend-wager", `data-handle="${esc(selectedFriend.handle)}"`)}
+      </article>` : `<p>Select a friend to see their ratings, record, message, or place a wager.</p>`;
       const incoming = (data.incomingRequests || []).map(request => `
         <article class="feature-item">
           <h3>${esc(request.handle)}</h3><p>${esc(request.message || "No note attached.")}</p>
@@ -4413,63 +4818,86 @@
         <article class="feature-item"><h3>${esc(player.handle)}</h3>
           <div class="product-actions">${featureActionButton("Unblock", "unblock-player", `data-handle="${esc(player.handle)}"`)}</div>
         </article>`).join("");
-      const messages = (data.messages || []).map(message => `
-        <article class="feature-item">
-          <h3>${esc(message.senderHandle)} → ${esc(message.recipientHandle)}</h3>
-          <p>${esc(message.body)}</p><small>${esc(new Date(message.createdAt).toLocaleString())}</small>
-        </article>`).join("");
-      const leaderboard = (data.leaderboard || []).map(player => `
-        <article class="feature-item"><h3>#${formatNumber(player.rank)} ${esc(player.handle)}</h3><p>${formatNumber(player.elo)} ELO</p></article>`).join("");
-      const variantRatings = [
-        ["main", "Prisoners of War"], ["fog", "Fog of War"], ["rummy", "Rummy"],
-        ["puzzle-battle", "Puzzler"], ["poker-duel", "Poker"], ["ladder", "Ladder"],
-        ["tug-war", "Tug War"], ["abandon-duel", "Abandon"]
-      ].map(([variant, label]) => `
-        <article class="feature-item"><h3>${label}</h3><p>${formatNumber(user.ratings?.[variant] ?? 1000)} ELO</p></article>`).join("");
-      return `<section class="feature-section">
-        <h2>Player profile</h2>
-        <p><strong>${esc(user.handle || "")}</strong> · ${formatNumber(user.elo)} ELO · Rank #${formatNumber(user.rank)}</p>
-        <label>Change handle <input id="socialHandleInput" maxlength="20" value="${esc(user.handle || "")}" autocomplete="username"></label>
-        ${featureActionButton("Save handle", "save-social-handle")}
-      </section>
-      <section class="feature-section"><h2>Ranked ratings</h2>
-        <div class="feature-list">${variantRatings}</div>
-      </section>
-      <section class="feature-section"><h2>Rankings</h2>
-        <div class="feature-list">${leaderboard || "<p>No rankings available.</p>"}</div>
-      </section>
-      <section class="feature-section">
-        <h2>Friend requests</h2>
+      const conversations = (data.conversations || []).map(conversation => `
+        <article class="feature-item"><button type="button" class="social-select-button"
+          data-social-conversation="${esc(conversation.handle)}" aria-pressed="${selectedSocialConversation === conversation.handle}">
+          <strong>${esc(conversation.handle)}</strong><p>${esc(conversation.preview)}</p>
+          <small>${esc(new Date(conversation.updatedAt).toLocaleString())}</small></button></article>`).join("");
+      const thread = socialConversationData?.handle === selectedSocialConversation ? socialConversationData : null;
+      const threadMessages = thread?.messages?.map(message => `
+        <article class="feature-item"><h3>${esc(message.senderHandle)}</h3><p>${esc(message.body)}</p>
+          <small>${esc(new Date(message.createdAt).toLocaleString())}</small></article>`).join("");
+      const used = Number(data.wagerLimits?.used24Hours || 0);
+      const dailyLimit = Number(data.wagerLimits?.per24Hours || 5000);
+      const profileContent = `<section class="feature-section">
+        <h2>Player Profile</h2>
+        <p><strong>${esc(user.handle || "")}</strong> · ${formatNumber(user.elo)} overall ELO · Rank #${formatNumber(user.rank)}</p>
+        <label>Change nickname <input id="socialHandleInput" maxlength="20" value="${esc(user.handle || "")}" autocomplete="username"></label>
+        ${featureActionButton("Save nickname", "save-social-handle")}
+        <h3>Ranked ratings</h3>${ratingLines(user.ratings)}
+        <h3>Wager limit for today</h3><p>${formatNumber(Math.max(0, dailyLimit - used))} of ${formatNumber(dailyLimit)} Marks available in the rolling 24-hour window.</p>
+        <p>Maximum per game: ${formatNumber(data.wagerLimits?.perGame || 1000)} Marks.</p>
+      </section>`;
+      const friendsContent = `<section class="feature-section"><h2>Friends</h2>
         <label>Player handle <input id="socialRequestHandle" maxlength="20" autocomplete="off"></label>
         <label>Optional note (140 characters) <input id="socialRequestMessage" maxlength="140" autocomplete="off"></label>
-        ${featureActionButton("Send friend request", "send-friend-request")}
-        <h3>Incoming</h3><div class="feature-list">${incoming || "<p>No incoming requests.</p>"}</div>
-        <h3>Outgoing</h3><div class="feature-list">${outgoing || "<p>No pending requests.</p>"}</div>
-      </section>
-      <section class="feature-section"><h2>Friends</h2>
-        <div class="feature-list">${friends || "<p>Your friends list is empty.</p>"}
-          <label>Message a friend <input id="socialMessageHandle" maxlength="20" autocomplete="off"></label>
-          <label>Message <input id="socialMessageBody" maxlength="1000" autocomplete="off"></label>
-          ${featureActionButton("Send message", "send-social-message")}
-        </div>
-      </section>
-      <section class="feature-section"><h2>Recent messages</h2>
-        <div class="feature-list">${messages || "<p>No messages yet.</p>"}</div>
-      </section>
-      <section class="feature-section"><h2>Blocked players</h2>
-        <div class="feature-list">${blocks || "<p>You have not blocked anyone.</p>"}
+        ${featureActionButton("Add friend", "send-friend-request")}
+        <h3>Friends list</h3><div class="feature-list">${friendList || "<p>Your friends list is empty.</p>"}</div>
+        ${friendDetail}
+        <h3>Incoming requests</h3><div class="feature-list">${incoming || "<p>No incoming requests.</p>"}</div>
+        <h3>Outgoing requests</h3><div class="feature-list">${outgoing || "<p>No pending requests.</p>"}</div>
+        <h3>Blocked players</h3><div class="feature-list">${blocks || "<p>You have not blocked anyone.</p>"}
           <label>Player handle <input id="socialBlockHandle" maxlength="20" autocomplete="off"></label>
           ${featureActionButton("Block player", "block-player-input")}
         </div>
-      </section>
-      <section class="feature-section"><h2>Friendly wager limits</h2>
-        <p>Up to ${formatNumber(data.wagerLimits?.perGame)} Marks per game and ${formatNumber(data.wagerLimits?.per24Hours)} Marks total per 24 hours.</p>
       </section>`;
+      const messagesContent = `<section class="feature-section"><h2>Messages</h2>
+        <div class="feature-list">${conversations || "<p>Your inbox is empty.</p>"}</div>
+        ${selectedSocialConversation ? `<section class="feature-section"><h3>Chat with ${esc(selectedSocialConversation)}</h3>
+          ${thread ? `<div class="feature-list">${threadMessages || "<p>No messages in this chat.</p>"}</div>` : "<p>Loading conversation…</p>"}
+          ${thread?.blockedByOther ? "<p>This player has blocked you; you cannot send messages.</p>" : ""}
+          ${!thread?.blockedByMe && !thread?.blockedByOther ? `<label>Message <textarea id="socialMessageBody" maxlength="1000"></textarea></label>
+            ${featureActionButton("Send message", "send-social-message")}` : ""}
+          <div class="product-actions">
+            ${thread?.blockedByMe
+              ? featureActionButton("Unblock player", "unblock-player", `data-handle="${esc(selectedSocialConversation)}"`)
+              : featureActionButton("Block player", "block-player", `data-handle="${esc(selectedSocialConversation)}"`)}
+            ${featureActionButton("Delete this chat", "delete-social-conversation", `data-handle="${esc(selectedSocialConversation)}"`)}
+          </div>
+        </section>` : "<p>Select a name to open the full chat history.</p>"}
+      </section>`;
+      const pages = { profile: profileContent, friends: friendsContent, messages: messagesContent };
+      return `<nav class="social-page-tabs" aria-label="Social pages">
+        ${[["profile", "Player Profile"], ["friends", "Friends"], ["messages", "Messages"]].map(([id, label]) =>
+          `<button type="button" class="feature-tab" data-social-page="${id}" aria-selected="${socialPage === id}">${label}</button>`).join("")}
+      </nav>${pages[socialPage] || profileContent}`;
+    }
+
+    async function selectSocialConversation(handle) {
+      const version = navigationVersion;
+      selectedSocialConversation = handle;
+      socialConversationData = null;
+      socialPage = "messages";
+      render();
+      try {
+        socialConversationData = await api(`/api/social/conversations/${encodeURIComponent(handle)}`);
+        if (version === navigationVersion && currentFeature === "social" && !lifecycle.signal.aborted) render();
+      } catch (error) {
+        if (version !== navigationVersion || lifecycle.signal.aborted) return;
+        featureError = connectionError(error);
+        render();
+      }
     }
 
     async function handleFeatureClick(event) {
       const dependency = event.target.closest('[data-prerequisite]');
       if (dependency) { const branch = skillTreeBranches.find(branch => branch.nodeIDs.includes(dependency.dataset.prerequisite)); if (branch) navigateGame(`skills/${branch.id}/${dependency.dataset.prerequisite}`); return; }
+      const socialTab = event.target.closest("[data-social-page]");
+      if (socialTab) { socialPage = socialTab.dataset.socialPage; render(); return; }
+      const socialFriend = event.target.closest("[data-social-friend]");
+      if (socialFriend) { selectedSocialFriend = socialFriend.dataset.socialFriend; render(); return; }
+      const socialConversation = event.target.closest("[data-social-conversation]");
+      if (socialConversation) { await selectSocialConversation(socialConversation.dataset.socialConversation); return; }
       const chestChoice = event.target.closest("[data-chest-choice]");
       if (chestChoice) { selectChestReward(Number(chestChoice.dataset.chestChoice)); return; }
       if (event.target.closest("[data-close-chest-reveal]")) {
@@ -4485,6 +4913,12 @@
         navigateGame(`shop/${shopTab.dataset.shopTab}`);
         return;
       }
+      const shopSubTab = event.target.closest("[data-shop-sub-tab]");
+      if (shopSubTab) {
+        featureFocusTarget = shopSubTab.id;
+        navigateGame(`shop/${currentShopTab}/${shopSubTab.dataset.shopSubTab}`);
+        return;
+      }
       const skillTab = event.target.closest("[data-skill-branch]");
       if (skillTab) {
         featureFocusTarget = skillTab.id;
@@ -4495,6 +4929,37 @@
       if (!button || button.disabled || featureActionInProgress) return;
       const action = button.dataset.featureAction;
       if (action === 'retry-feature') { openFeature(currentFeature); return; }
+      if (action === "gift-shop-item") {
+        const request = {
+          action: button.dataset.giftAction,
+          id: button.dataset.id,
+          boxType: button.dataset.boxType,
+          amount: Number(button.dataset.amount || 0),
+          payment: button.dataset.payment
+        };
+        const itemName = button.closest("article")?.querySelector("h3")?.textContent?.trim() || "shop item";
+        await openGiftConfirmation(itemName, request);
+        return;
+      }
+      if (action === "open-social-conversation") {
+        await selectSocialConversation(button.dataset.handle);
+        return;
+      }
+      if (action === "reveal-ladder-boss") {
+        try {
+          const candidates = JSON.parse(button.dataset.opponentHeroes || "[]");
+          if (!Array.isArray(candidates) || candidates.length === 0) {
+            throw new Error("No CPU hero choices are available.");
+          }
+          const opponent = candidates[Math.floor(Math.random() * candidates.length)];
+          ladderBossReveals.set(`${button.dataset.campaign}-${button.dataset.index}`, opponent);
+          featureError = "";
+        } catch (error) {
+          featureError = connectionError(error);
+        }
+        render();
+        return;
+      }
       if (action === 'start-mission') { await startMission(button.dataset.campaign, Number(button.dataset.index)); return; }
       if (action === "preview-chroma") { openShopPreview(button.dataset.id); return; }
       if (action === "buy-chroma") { await purchaseChroma(button.dataset.id); return; }
@@ -4596,8 +5061,39 @@
           break;
         case "send-social-message":
           path = "/api/social/messages";
-          body = { handle: document.getElementById("socialMessageHandle").value, body: document.getElementById("socialMessageBody").value };
+          body = { handle: selectedSocialConversation, body: document.getElementById("socialMessageBody").value };
           break;
+        case "remove-social-friend":
+          if (!await confirmAction("Remove this friend?", `${button.dataset.handle} will be removed from your friends list.`)) return;
+          path = "/api/social/friends/remove";
+          body = { handle: button.dataset.handle };
+          break;
+        case "delete-social-conversation":
+          if (!await confirmAction("Delete this chat?", "This permanently hides the conversation from your inbox. The other player keeps their chat history.")) return;
+          path = "/api/social/conversations/delete";
+          body = { handle: button.dataset.handle };
+          break;
+        case "send-friend-wager": {
+          const variant = document.getElementById("socialWagerVariant").value;
+          const wagerMarks = Number(document.getElementById("socialWagerMarks").value);
+          if (!Number.isInteger(wagerMarks) || wagerMarks < 0 || wagerMarks > Number(featureData?.wagerLimits?.perGame || 1000)) {
+            featureError = "Choose a whole-number wager from 0 to 1,000 Marks per player.";
+            render();
+            return;
+          }
+          if (!await confirmAction(
+            `Invite ${button.dataset.handle} to ${variant}?`,
+            wagerMarks > 0
+              ? `Both players will reserve ${formatNumber(wagerMarks)} Marks if the invitation is accepted. A draw or cancellation returns the stake.`
+              : "This invitation has no Marks wager."
+          )) return;
+          path = variant === "puzzle-battle" ? "/api/puzzle-battle" : "/api/online-battle";
+          body = {
+            action: "invite", variant, recipient: button.dataset.handle,
+            wagerMarks, heroId: state?.dashboard?.defaultHeroId || "recruit"
+          };
+          break;
+        }
         default:
           return;
       }
@@ -4618,9 +5114,20 @@
             "block-player": "Player blocked.",
             "block-player-input": "Player blocked.",
             "unblock-player": "Player unblocked.",
-            "send-social-message": "Message sent."
+            "send-social-message": "Message sent.",
+            "remove-social-friend": "Friend removed.",
+            "delete-social-conversation": "Chat deleted.",
+            "send-friend-wager": "Wager invitation sent."
           }[action];
           data = await api("/api/social");
+          if (action === "remove-social-friend") selectedSocialFriend = "";
+          if (action === "delete-social-conversation") {
+            selectedSocialConversation = "";
+            socialConversationData = null;
+          }
+          if (selectedSocialConversation && socialPage === "messages") {
+            socialConversationData = await api(`/api/social/conversations/${encodeURIComponent(selectedSocialConversation)}`);
+          }
           if (notice) data.message = notice;
         }
         featureData = data;
@@ -4843,6 +5350,7 @@
     async function startOnlineBattle(variant, matchMode, heroID, recipient, conductorTuning = {}) {
       if (actionInProgress) return;
       actionInProgress = true;
+      pokerLessonDismissedKey = '';
       showDashboard = false;
       showFeature = false;
       showModeSelection = false;
@@ -5403,6 +5911,34 @@
 
     function chooseMatchMode() { navigateGame('match/new'); }
 
+    function applyShopRoute(tab, subTab) {
+      const defaults = { items: "crowns", skins: "common", "heroes-boxes": "hero-shop" };
+      const validSubTabs = {
+        items: ["crowns", "energy", "consumables"],
+        skins: ["common", "uncommon", "rare", "epic", "premium"],
+        "heroes-boxes": ["hero-shop", "box-shop", "skill-points"]
+      };
+      const aliases = {
+        energy: ["items", "energy"],
+        consumables: ["items", "consumables"],
+        crowns: ["items", "crowns"],
+        heroes: ["heroes-boxes", "hero-shop"],
+        boxes: ["heroes-boxes", "box-shop"],
+        "hero-shop": ["heroes-boxes", "hero-shop"],
+        "box-shop": ["heroes-boxes", "box-shop"],
+        "skill-points": ["heroes-boxes", "skill-points"]
+      };
+      if (Object.hasOwn(defaults, tab)) {
+        currentShopTab = tab;
+        currentShopSubTab = validSubTabs[tab].includes(subTab) ? subTab : defaults[tab];
+      } else if (aliases[tab]) {
+        [currentShopTab, currentShopSubTab] = aliases[tab];
+      } else {
+        currentShopTab = "skins";
+        currentShopSubTab = defaults.skins;
+      }
+    }
+
     function applyGameRoute() {
       if (!initialized || lifecycle.signal.aborted) return;
       const route = window.location.hash.replace(/^#\//, '') || 'home';
@@ -5426,12 +5962,12 @@
       if (feature === 'skills' && node) featureFocusTarget = `skill-node-${node}`;
       if (['shop', 'skills', 'profile', 'heroes', 'campaigns', 'camp-draw', 'achievements', 'history', 'social'].includes(feature)) {
         if (showFeature && currentFeature === feature && featureData) {
-          if (feature === 'shop') currentShopTab = tab || 'skins';
+          if (feature === 'shop') applyShopRoute(tab || "skins", node || "");
           if (feature === 'skills') currentSkillBranch = tab || 'battle-rewards';
           render();
         } else {
           openFeature(feature);
-          if (feature === 'shop' && ['skins', 'heroes', 'boxes'].includes(tab)) currentShopTab = tab;
+          if (feature === 'shop') applyShopRoute(tab || "skins", node || "");
           if (feature === 'skills' && skillTreeBranches.some(branch => branch.id === tab)) currentSkillBranch = tab;
         }
       } else {
@@ -5589,7 +6125,9 @@
             ${variants.map(entry => `<option value="${esc(entry.chroma.id)}"${entry.chroma.id === chroma.id ? " selected" : ""}>${esc(chromaVariantLabel(entry, variants))}</option>`).join("")}
           </select></label>
           <button type="button" class="action primary" id="shopPreviewBuy"${canBuy ? "" : " disabled"}>${esc(purchaseLabel)}</button>
+          <button type="button" class="action secondary" id="shopPreviewGift"${canBuy ? "" : " disabled"}>Gift this color</button>
           ${buyAllQuote ? `<button type="button" class="action secondary" id="shopPreviewBuyAll" data-family="${esc(familyKey)}"${canBuyAll ? "" : " disabled"}>Buy all · 20% off (${formatNumber(buyAllQuote.cost)} ${currencyDisplayName(buyAllQuote.currency)})</button>` : ""}
+          ${buyAllQuote ? `<button type="button" class="action secondary" id="shopPreviewGiftAll"${canBuyAll ? "" : " disabled"}>Gift family bundle</button>` : ""}
         </div>
         <div class="skin-preview-gallery" aria-label="Skin artwork preview">
           ${[["Small", "small"], ["Medium", "med"], ["Large", "large"]].map(([label, size]) => `<article class="skin-preview-card">
@@ -5601,8 +6139,16 @@
       </section>`;
       modal.querySelector("#shopPreviewColor").addEventListener("change", event =>
         changeShopPreviewChroma(event.target.value));
-      modal.querySelector("#shopPreviewBuy").addEventListener("click", () => purchaseChroma(chroma.id));
+      modal.querySelector("#shopPreviewBuy").addEventListener("click", () =>
+        purchaseChroma(modal.querySelector("#shopPreviewColor").value));
+      modal.querySelector("#shopPreviewGift").addEventListener("click", () => {
+        const selectedID = modal.querySelector("#shopPreviewColor").value;
+        const selected = (featureData?.chromas || []).find(entry => entry.chroma.id === selectedID);
+        if (selected) openGiftConfirmation(selected.chroma.name, { action: "buy-chroma", id: selectedID });
+      });
       modal.querySelector("#shopPreviewBuyAll")?.addEventListener("click", () => purchaseChromaFamily(familyKey));
+      modal.querySelector("#shopPreviewGiftAll")?.addEventListener("click", () =>
+        openGiftConfirmation(`${familyName} family bundle`, { action: "buy-chroma-family", id: familyKey }));
       modal.querySelector("#shopPreviewBack").addEventListener("click", closeShopPreview);
       updateShopPreviewImages();
       return true;
@@ -5744,6 +6290,13 @@
     async function startMission(campaignId, missionIndex) {
       if (actionInProgress) return;
       if (state?.started && state.phase !== 'gameover' && !await confirmAction('Start campaign mission?', 'Your unfinished match will be archived. You can still review its saved history.')) return;
+      const gauntlet = campaignId === "ladder" && missionIndex === 15;
+      const revealedBoss = gauntlet ? ladderBossReveals.get(`${campaignId}-${missionIndex}`) : null;
+      if (gauntlet && !revealedBoss) {
+        featureError = "Reveal the CPU hero before choosing your hero for the Ladder Gauntlet.";
+        render();
+        return;
+      }
       actionInProgress = true;
       const version = navigationVersion;
       try {
@@ -5751,9 +6304,11 @@
         const conductor = document.getElementById(`missionConductor-${campaignId}-${missionIndex}`);
         const data = await api('/api/new', {
           campaignId, missionIndex, playerHeroId: hero?.value,
+          opponentHeroId: revealedBoss?.id,
           ...conductorTuningPayload(conductor)
         });
         if (version !== navigationVersion || lifecycle.signal.aborted) return;
+        if (gauntlet) ladderBossReveals.delete(`${campaignId}-${missionIndex}`);
         state = data;
         activeMode = state.mode;
         setupVariant = state.variant || "main";

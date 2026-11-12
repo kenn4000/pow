@@ -4,7 +4,6 @@ import (
 	"fmt"
 
 	"prisonersofwar/internal/achievements"
-	"prisonersofwar/internal/economy"
 	"prisonersofwar/internal/heroes"
 	"prisonersofwar/internal/lootbox"
 	"prisonersofwar/internal/profile"
@@ -98,45 +97,29 @@ func (s *webServer) matchAchievementUpdates() []string {
 			continue
 		}
 		if len(definition.Tiers) == 0 {
-			updates = append(updates, definition.Name+" — "+achievementRewardDescription(definition.RewardMarks, definition.RewardCrowns, definition.RewardBadge, definition.RewardChromaPick, definition.RewardHeroBox))
+			updates = append(updates, definition.Name+" — "+achievementRewardDescription(
+				definition.RewardMarks, definition.RewardCrowns, definition.RewardBadge,
+				definition.RewardChromaPick, definition.RewardHeroBox, definition.RewardWoodenBoxes,
+				definition.RewardSilverBoxes, definition.RewardGoldBoxes, definition.RewardSkillPoints,
+				definition.RewardUndoTokens,
+				definition.RewardRestartTokens, definition.RewardSkipTokens, definition.RewardSwapTokens))
 			continue
 		}
 		for tier := before; tier < level && tier < len(definition.Tiers); tier++ {
 			reward := definition.Tiers[tier]
-			updates = append(updates, definition.Name+" · "+reward.Name+" — "+achievementRewardDescription(reward.RewardMarks, reward.RewardCrowns, reward.RewardBadge, reward.RewardChromaPick, reward.RewardHeroBox))
+			updates = append(updates, definition.Name+" · "+reward.Name+" — "+achievementRewardDescription(
+				reward.RewardMarks, reward.RewardCrowns, reward.RewardBadge, reward.RewardChromaPick,
+				reward.RewardHeroBox, reward.RewardWoodenBoxes, reward.RewardSilverBoxes,
+				reward.RewardGoldBoxes, reward.RewardSkillPoints, reward.RewardUndoTokens, reward.RewardRestartTokens,
+				reward.RewardSkipTokens, reward.RewardSwapTokens))
 		}
 	}
 	return updates
 }
 
-func achievementCounter(p *profile.Profile, id string) (int, int, string) {
-	switch id {
-	case "long_march":
-		return p.TotalGames, 100, "matches played"
-	case "hard_way":
-		return p.HardCPUWins, 10, "Hard CPU wins"
-	case "first_clash":
-		return p.TotalClashes, 1, "tied exchanges"
-	case "clash_master":
-		return p.MaxClashesInGame, 3, "clashes in one match (best)"
-	case "dead_heat":
-		return p.TotalMatchTies, 1, "equal-score matches"
-	case "first_blood":
-		return p.TotalWins, 1, "matches won"
-	case "both_sides":
-		count := 0
-		if p.WinsAsSeatX > 0 {
-			count++
-		}
-		if p.WinsAsSeatY > 0 {
-			count++
-		}
-		return count, 2, "distinct seats won from"
-	default:
-		modes := map[string]int{"streak_easy": economy.ModeIDCPUEasy, "streak_medium": economy.ModeIDCPUNormal, "streak_hard": economy.ModeIDCPUHard, "streak_ranked": economy.ModeIDRanked}
-		if mode, ok := modes[id]; ok {
-			return p.WinStreakByMode[mode], 3, "consecutive wins in this mode"
-		}
+func achievementCounter(p *profile.Profile, definition achievements.Achievement) (int, int, string) {
+	if p == nil || definition.CounterID == "" {
+		return 0, 0, ""
 	}
-	return 0, 0, ""
+	return p.AchievementCounters[definition.CounterID], definition.Goal, definition.ProgressUnit
 }

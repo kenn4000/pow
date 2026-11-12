@@ -1,465 +1,222 @@
 package achievements
 
 import (
-	"fmt"
 	"testing"
 	"time"
 
-	"prisonersofwar/internal/economy"
 	"prisonersofwar/internal/game"
 	"prisonersofwar/internal/profile"
+	"prisonersofwar/internal/skills"
 )
 
-func TestEveryAchievementHasEvaluatorAndHandlesEmptyContext(t *testing.T) {
-	evaluators := EvalRegistry()
-	definitions := All()
-	if len(evaluators) != len(definitions) {
-		t.Fatalf("registered %d evaluators for %d achievements", len(evaluators), len(definitions))
+func TestCatalogMatchesUpdatedAchievementGroups(t *testing.T) {
+	counts := map[Category]int{}
+	for _, achievement := range All() {
+		counts[achievement.Category]++
 	}
-	p, err := profile.New(time.Now())
-	if err != nil {
-		t.Fatal(err)
+	if counts[CatCampaign] != 7 || counts[CatFeat] != 9 || counts[CatPerMode] != 8 || counts[CatMeta] != 11 {
+		t.Fatalf("catalog counts = %v", counts)
 	}
+	for _, id := range []string{
+		"camp_pow", "camp_abandon", "camp_ladder", "camp_poker", "camp_rummy", "camp_puzzler", "camp_tug_war",
+		"sparse", "efficient", "bounty_hunter", "bounty_denied", "bounty_decided", "comeback",
+		"clash_master", "dead_heat", "photo_finish", "mode_main", "mode_fog", "mode_abandon",
+		"mode_poker", "mode_rummy", "mode_puzzler", "mode_ladder", "mode_tug-war",
+		"chroma_collector", "lucky_draw", "win_streak_humans", "login_streak", "long_march",
+		"hero_variety", "branch_master", "tinkerer", "marathon", "mode_tourist", "ranked_regular",
+	} {
+		if _, ok := Find(id); !ok {
+			t.Errorf("missing achievement %q", id)
+		}
+	}
+
+	mode, _ := Find("mode_main")
+	if got := []int{mode.Tiers[0].Goal, mode.Tiers[1].Goal, mode.Tiers[2].Goal}; got[0] != 1 || got[1] != 10 || got[2] != 30 {
+		t.Fatalf("per-mode goals = %v", got)
+	}
+	capstone := mode.Tiers[2]
+	if capstone.RewardMarks != 1200 || capstone.RewardCrowns != 2 ||
+		capstone.RewardSilverBoxes != 1 || capstone.RewardUndoTokens != 1 {
+		t.Fatalf("Prisoners of War capstone = %+v", capstone)
+	}
+	for _, tier := range mode.Tiers {
+		if tier.RewardMarks != int64(tier.Level*400) {
+			t.Errorf("level %d marks = %d", tier.Level, tier.RewardMarks)
+		}
+	}
+	for _, set := range AllSets() {
+		if len(set.Members) == 0 {
+			t.Errorf("empty display set %q", set.ID)
+		}
+	}
+}
+
+func TestEveryAchievementHasAnEvaluator(t *testing.T) {
+	p := newAchievementProfile(t)
 	ctx := Context{Profile: p, Event: EventProfileLoad}
-	for _, definition := range definitions {
+	evaluators := EvalRegistry()
+	for _, definition := range All() {
 		evaluator, ok := evaluators[definition.ID]
 		if !ok {
 			t.Errorf("achievement %q has no evaluator", definition.ID)
 			continue
 		}
-		evaluator(ctx)
-	}
-	EvaluateAll(ctx)
-}
-
-func TestEveryAchievementEvaluatorHasPassingAndFailingContexts(t *testing.T) {
-	failureProfile := newAchievementProfile(t)
-	failureContext := Context{Profile: failureProfile, Event: EventProfileLoad}
-	for _, definition := range All() {
-		_, unlocked, tier := registry[definition.ID](failureContext)
+		_, unlocked, tier := evaluator(ctx)
 		if unlocked || tier != 0 {
-			t.Errorf("%s unexpectedly passed the empty profile context: unlocked=%t tier=%d",
-				definition.ID, unlocked, tier)
-		}
-	}
-
-	p := newAchievementProfile(t)
-	wonGame := func(cards []game.Card) game.MatchGame {
-		return game.MatchGame{Won: true, PlayerJail: cards, BountySuit: game.Blade}
-	}
-	oneSuit := []game.Card{{Suit: game.Blade, Face: 1}, {Suit: game.Blade, Face: 2}, {Suit: game.Blade, Face: 3}}
-	pass := map[string]Context{
-		"sparse": {
-			Profile: p, Event: EventMatchEnd, MatchWon: true,
-			Result: &game.MatchResult{Games: []game.MatchGame{wonGame([]game.Card{
-				{Suit: game.Blade, Face: 2}, {Suit: game.Fang, Face: 4},
-			})}},
-		},
-		"efficient": {
-			Profile: p, Event: EventMatchEnd,
-			Result: &game.MatchResult{Games: []game.MatchGame{wonGame([]game.Card{
-				{Suit: game.Blade, Face: 1}, {Suit: game.Blade, Face: 2}, {Suit: game.Blade, Face: 3},
-				{Suit: game.Fang, Face: 1}, {Suit: game.Fang, Face: 2}, {Suit: game.Fang, Face: 3},
-				{Suit: game.Shield, Face: 1},
-			})}},
-		},
-		"bounty_hunter": {
-			Profile: p, Event: EventMatchEnd,
-			Result: &game.MatchResult{Games: []game.MatchGame{wonGame(oneSuit)}},
-		},
-		"bounty_denied": {
-			Profile: p, Event: EventMatchEnd,
-			Result: &game.MatchResult{Games: []game.MatchGame{{Won: true, BountySuit: game.Blade}}},
-		},
-		"bounty_decided": {
-			Profile: p, Event: EventMatchEnd,
-			Result: &game.MatchResult{Games: []game.MatchGame{{
-				Won: true, PlayerJail: []game.Card{{Suit: game.Blade, Face: 1}},
-				OpponentJail: []game.Card{{Suit: game.Shield, Face: 1}}, BountySuit: game.Blade,
-				Modifiers: game.GameModifiers{Bounty: 1, Reckoning: [3]int{1, 1, 1}},
-			}}},
-		},
-		"aggressor": {Profile: &profile.Profile{WinsAsSeatX: 1}},
-		"defender":  {Profile: &profile.Profile{WinsAsSeatY: 1}},
-		"streak_easy": {Profile: &profile.Profile{
-			WinStreakByMode: map[int]int{economy.ModeIDCPUEasy: 3},
-		}},
-		"streak_medium": {Profile: &profile.Profile{
-			WinStreakByMode: map[int]int{economy.ModeIDCPUNormal: 3},
-		}},
-		"streak_hard": {Profile: &profile.Profile{
-			WinStreakByMode: map[int]int{economy.ModeIDCPUHard: 3},
-		}},
-		"streak_ranked": {Profile: &profile.Profile{
-			WinStreakByMode: map[int]int{economy.ModeIDRanked: 3},
-		}},
-		"comeback":    {Profile: &profile.Profile{ComebackWins: 1}},
-		"first_clash": {Profile: &profile.Profile{TotalClashes: 1}},
-		"clash_master": {Profile: &profile.Profile{
-			MaxClashesInGame: 3,
-		}},
-		"dead_heat":  {Profile: &profile.Profile{TotalMatchTies: 1}},
-		"collector":  {Profile: &profile.Profile{TotalChromasPurchased: 3}},
-		"long_march": {Profile: &profile.Profile{TotalGames: 100}},
-		"hard_way":   {Profile: &profile.Profile{HardCPUWins: 10}},
-		"login_streak": {Profile: &profile.Profile{
-			LoginStreakBest: 1,
-		}},
-		"first_blood": {
-			Profile: &profile.Profile{TotalWins: 1}, Event: EventMatchEnd, MatchWon: true,
-		},
-		"both_sides": {
-			Profile: &profile.Profile{
-				MatchHistory: []profile.MatchRecord{{Won: true, PlayerSeat: "X"}},
-			},
-			Event: EventMatchEnd, MatchWon: true, PlayerSeat: "Y",
-		},
-		"the_cycle": {
-			Profile: p, Event: EventMatchEnd,
-			Result: &game.MatchResult{Games: []game.MatchGame{{Won: true, SuitDoublingWin: true}}},
-		},
-		"master_both": {
-			Profile: &profile.Profile{AchievementCounters: map[string]int{
-				"master_both_X_streak": 3, "master_both_Y_streak": 3,
-			}},
-			Event: EventMatchEnd,
-		},
-		"photo_finish": {
-			Profile: p, Event: EventMatchEnd, MatchWon: true,
-			Result: &game.MatchResult{PlayerScore: 2, OpponentScore: 1},
-		},
-		"no_not_like_that": {
-			Profile: p, Event: EventMatchEnd,
-			Result: &game.MatchResult{Games: []game.MatchGame{{
-				Won: false, PlayerJail: []game.Card{
-					{Suit: game.Blade, Face: 3}, {Suit: game.Blade, Face: 3}, {Suit: game.Blade, Face: 3},
-				}, BountySuit: game.Fang,
-			}}},
-		},
-		"bounty_connoisseur": {
-			Profile: p, Event: EventMatchEnd, MatchWon: true,
-			Result: &game.MatchResult{Won: true, Games: []game.MatchGame{{
-				Won: true, Modifiers: game.GameModifiers{Bounty: -3, Reckoning: [3]int{1, 1, 1}},
-			}}},
-		},
-		"favored_aficionado": {
-			Profile: p, Event: EventMatchEnd, MatchWon: true,
-			Result: &game.MatchResult{Won: true, Games: []game.MatchGame{{
-				Won: true, Modifiers: game.GameModifiers{Favored: 2, Reckoning: [3]int{1, 1, 1}},
-			}}},
-		},
-		"shift_whisperer": {
-			Profile: p, Event: EventMatchEnd, MatchWon: true,
-			Result: &game.MatchResult{Won: true, Games: []game.MatchGame{{
-				Won: true, Modifiers: game.GameModifiers{Shift: 3, Reckoning: [3]int{1, 1, 1}},
-			}}},
-		},
-		"hero_variety": {
-			Profile: &profile.Profile{UnlockedHeroes: []string{"recruit", "warden", "hunter", "anchor"}},
-			Event:   EventHeroAcquired, AcquisitionSource: "campaign",
-		},
-	}
-	for _, definition := range All() {
-		testContext, ok := pass[definition.ID]
-		if !ok {
-			t.Errorf("missing passing context for %s", definition.ID)
-			continue
-		}
-		_, unlocked, tier := registry[definition.ID](testContext)
-		if !unlocked && tier == 0 {
-			t.Errorf("%s failed its passing context", definition.ID)
+			t.Errorf("%s unexpectedly passed an empty profile: unlocked=%t tier=%d", definition.ID, unlocked, tier)
 		}
 	}
 }
 
-func TestModifierAchievementsUnlockOnlyTheMatchingIndependentTier(t *testing.T) {
-	tests := []struct {
-		id        string
-		modifiers game.GameModifiers
-		tier      int
-	}{
-		{"bounty_connoisseur", game.GameModifiers{Bounty: -3, Reckoning: [3]int{1, 1, 1}}, 1},
-		{"bounty_connoisseur", game.GameModifiers{Bounty: -2, Reckoning: [3]int{1, 1, 1}}, 2},
-		{"bounty_connoisseur", game.GameModifiers{Bounty: -1, Reckoning: [3]int{1, 1, 1}}, 3},
-		{"bounty_connoisseur", game.GameModifiers{Bounty: 0, Reckoning: [3]int{1, 1, 1}}, 4},
-		{"bounty_connoisseur", game.GameModifiers{Bounty: 1, Reckoning: [3]int{1, 1, 1}}, 5},
-		{"bounty_connoisseur", game.GameModifiers{Bounty: 2, Reckoning: [3]int{1, 1, 1}}, 6},
-		{"bounty_connoisseur", game.GameModifiers{Bounty: 3, Reckoning: [3]int{1, 1, 1}}, 7},
-		{"favored_aficionado", game.GameModifiers{Favored: -1, Reckoning: [3]int{1, 1, 1}}, 1},
-		{"favored_aficionado", game.GameModifiers{Favored: 0, Reckoning: [3]int{1, 1, 1}}, 2},
-		{"favored_aficionado", game.GameModifiers{Favored: 1, Reckoning: [3]int{1, 1, 1}}, 3},
-		{"favored_aficionado", game.GameModifiers{Favored: 2, Reckoning: [3]int{1, 1, 1}}, 4},
-		{"shift_whisperer", game.GameModifiers{Shift: 0, Reckoning: [3]int{1, 1, 1}}, 1},
-		{"shift_whisperer", game.GameModifiers{Shift: 1, Reckoning: [3]int{1, 1, 1}}, 2},
-		{"shift_whisperer", game.GameModifiers{Shift: 2, Reckoning: [3]int{1, 1, 1}}, 3},
-		{"shift_whisperer", game.GameModifiers{Shift: 3, Reckoning: [3]int{1, 1, 1}}, 4},
-	}
-	for _, test := range tests {
-		t.Run(fmt.Sprintf("%s/tier-%d", test.id, test.tier), func(t *testing.T) {
-			p := newAchievementProfile(t)
-			result := game.MatchResult{Won: true, Games: []game.MatchGame{{
-				Won: true, Modifiers: test.modifiers,
-			}}}
-			ctx := NewMatchContext(p, result, economy.ModeIDRanked, "X")
-			events := EvaluateAll(ctx)
-			var match *UnlockEvent
-			for index := range events {
-				if events[index].AchievementID == test.id {
-					match = &events[index]
-					break
-				}
-			}
-			if match == nil || match.Tier != test.tier {
-				t.Fatalf("matching tier event = %+v; events %v", match, events)
-			}
-			if got := p.AchievementTiers[test.id]; got != 1<<(test.tier-1) {
-				t.Fatalf("tier mask = %b, want only tier %d", got, test.tier)
-			}
-			if repeated := EvaluateAll(ctx); hasUnlockFor(repeated, test.id) {
-				t.Fatalf("repeated match awarded tier %d again: %+v", test.tier, repeated)
-			}
-		})
-	}
-}
-
-func TestHeroVarietyExcludesRecruitAndRewardsAtThreeSixAndTen(t *testing.T) {
-	p := newAchievementProfile(t)
-	p.UnlockedHeroes = []string{"recruit", "warden", "hunter", "anchor"}
-	events := EvaluateAll(Context{Profile: p, Event: EventHeroAcquired, AcquisitionSource: "campaign"})
-	if !hasTierUnlock(events, "hero_variety", 1) || p.AchievementTiers["hero_variety"] != 1 {
-		t.Fatalf("three non-Recruit heroes did not unlock Novice: %+v", events)
-	}
-	for _, heroID := range []string{"treasurer", "ascendant", "gambler"} {
-		p.UnlockedHeroes = append(p.UnlockedHeroes, heroID)
-	}
-	events = EvaluateAll(Context{Profile: p, Event: EventHeroAcquired, AcquisitionSource: "box"})
-	if !hasTierUnlock(events, "hero_variety", 2) || p.AchievementTiers["hero_variety"] != 2 {
-		t.Fatalf("six non-Recruit heroes did not unlock Collector: %+v", events)
-	}
-	for _, heroID := range []string{"diplomat", "ascetic", "herald", "hater"} {
-		p.UnlockedHeroes = append(p.UnlockedHeroes, heroID)
-	}
-	events = EvaluateAll(Context{Profile: p, Event: EventHeroAcquired, AcquisitionSource: "purchase"})
-	var completion *UnlockEvent
-	for index := range events {
-		if events[index].AchievementID == "hero_variety" && events[index].Tier == 3 {
-			completion = &events[index]
-		}
-	}
-	if completion == nil || completion.Crowns != 500 || completion.Badge != "badge_completionist" ||
-		completion.HeroBoxes != 1 || p.AchievementTiers["hero_variety"] != 3 {
-		t.Fatalf("ten non-Recruit heroes rewards = %+v; events %v", completion, events)
-	}
-	if !IsUnlocked(p, Achievement{ID: "hero_variety", Tiers: []Tier{{Level: 1}, {Level: 2}, {Level: 3}}}) {
-		t.Fatal("Hero Variety should be complete after all three tiers")
-	}
-}
-
-func TestSparseTierMatchingAndMatchHistoryTierIV(t *testing.T) {
-	p := newAchievementProfile(t)
-	games := []game.MatchGame{
-		{Won: true, PlayerJail: []game.Card{{Suit: game.Blade, Face: 2}, {Suit: game.Fang, Face: 4}}},
-		{Won: true, PlayerJail: []game.Card{{Suit: game.Shield, Face: 3}}, OpponentJail: []game.Card{{Suit: game.Blade, Face: 5}}},
-	}
-	result := game.MatchResult{Won: true, PlayerScore: 8, OpponentScore: 4, Games: games}
-	ctx := NewMatchContext(p, result, economy.ModeIDRanked, "X")
-	_, unlocked, tier := registry["sparse"](ctx)
-	if !unlocked || tier != 4 {
-		t.Fatalf("best-of-three sparse result = unlocked %t, tier %d", unlocked, tier)
-	}
-	events := EvaluateAll(ctx)
-	found := false
-	for _, event := range events {
-		if event.AchievementID == "sparse" && event.Tier == 4 {
-			found = event.Marks == 5500 && event.Crowns == 50
-		}
-	}
-	if !found {
-		t.Fatalf("tier IV event with crossed rewards not found: %+v", events)
-	}
-	if p.AchievementTiers["sparse"] != 4 {
-		t.Fatalf("stored sparse tier = %d", p.AchievementTiers["sparse"])
-	}
-}
-
-func TestEfficientBountyComebackAndMiscEvaluators(t *testing.T) {
-	p := newAchievementProfile(t)
-	playerJail := []game.Card{
+func TestFeatUnlocksGrantOneSkillPoint(t *testing.T) {
+	nineCards := []game.Card{
 		{Suit: game.Blade, Face: 1}, {Suit: game.Blade, Face: 2}, {Suit: game.Blade, Face: 3},
 		{Suit: game.Fang, Face: 1}, {Suit: game.Fang, Face: 2}, {Suit: game.Fang, Face: 3},
 		{Suit: game.Shield, Face: 1}, {Suit: game.Shield, Face: 2}, {Suit: game.Shield, Face: 3},
 	}
-	winningGame := game.MatchGame{
-		Won: true, PlayerSeat: game.SeatX, PlayerJail: playerJail,
-		OpponentJail: []game.Card{{Suit: game.Blade, Face: 1}},
-		BountySuit:   game.Blade, Clashes: 0, ScoreAfterR2: 3, OpponentAfterR2: 8,
-		SuitDoublingWin: true,
+	tests := []struct {
+		id     string
+		result game.MatchResult
+	}{
+		{"sparse", game.MatchResult{Won: true, Games: []game.MatchGame{{Won: true, PlayerJail: []game.Card{{Suit: game.Blade}, {Suit: game.Fang}}}}}},
+		{"efficient", game.MatchResult{Won: true, Games: []game.MatchGame{{Won: true, PlayerJail: nineCards}}}},
+		{"bounty_hunter", game.MatchResult{Won: true, Games: []game.MatchGame{{Won: true, BountySuit: game.Blade, PlayerJail: []game.Card{{Suit: game.Blade}, {Suit: game.Blade}, {Suit: game.Blade}}}}}},
+		{"bounty_denied", game.MatchResult{Won: true, Games: []game.MatchGame{{Won: true, BountySuit: game.Blade, PlayerJail: []game.Card{{Suit: game.Fang}}}}}},
+		{"bounty_decided", game.MatchResult{Won: true, Games: []game.MatchGame{{Won: true,
+			PlayerJail: []game.Card{{Suit: game.Blade, Face: 1}}, OpponentJail: []game.Card{{Suit: game.Shield, Face: 1}},
+			BountySuit: game.Blade, Modifiers: game.GameModifiers{Bounty: 1, Reckoning: [3]int{1, 1, 1}},
+		}}}},
+		{"photo_finish", game.MatchResult{Won: true, PlayerScore: 4, OpponentScore: 3}},
 	}
-	result := game.MatchResult{Won: true, PlayerScore: 20, OpponentScore: 8, Games: []game.MatchGame{winningGame}}
-	ctx := NewMatchContext(p, result, economy.ModeID(economy.ModeCPUHard), "X")
-	for id, wantTier := range map[string]int{"efficient": 3} {
-		_, unlocked, tier := registry[id](ctx)
-		if !unlocked || tier != wantTier {
-			t.Errorf("%s result = unlocked %t tier %d, want %d", id, unlocked, tier, wantTier)
-		}
+	for _, test := range tests {
+		t.Run(test.id, func(t *testing.T) {
+			p := newAchievementProfile(t)
+			ctx := NewMatchContext(p, test.result, 0, "X")
+			ctx.Event = EventMatchEnd
+			events := EvaluateAll(ctx)
+			event, unlocked := unlockFor(events, test.id)
+			if !unlocked || !p.Achievements[test.id] || event.SkillPoints != 1 {
+				t.Fatalf("achievement=%t reward=%+v events=%+v", p.Achievements[test.id], event, events)
+			}
+			if repeated := EvaluateAll(ctx); hasUnlock(repeated, test.id) {
+				t.Fatalf("repeat evaluation awarded again: %+v", repeated)
+			}
+		})
 	}
+
+	p := newAchievementProfile(t)
 	p.ComebackWins = 1
-	_, unlocked, tier := registry["comeback"](ctx)
-	if !unlocked || tier != 1 {
-		t.Fatalf("comeback result = %t, tier %d", unlocked, tier)
-	}
-	_, unlocked, _ = registry["the_cycle"](ctx)
-	if !unlocked {
-		t.Fatal("doubling win did not unlock The Cycle")
-	}
-
-	bountyWon := game.MatchGame{
-		Won: true, PlayerJail: []game.Card{
-			{Suit: game.Blade, Face: 1}, {Suit: game.Blade, Face: 2}, {Suit: game.Blade, Face: 3},
-		}, BountySuit: game.Blade,
-	}
-	ctx.Result.Games = []game.MatchGame{bountyWon}
-	_, unlocked, _ = registry["bounty_hunter"](ctx)
-	if !unlocked {
-		t.Fatal("three bounty-suit prisoners did not unlock Bounty Hunter")
-	}
-	_, unlocked, _ = registry["bounty_denied"](ctx)
-	if unlocked {
-		t.Fatal("Bounty Denied unlocked despite bounty-suit prisoners")
-	}
-	ctx.Result.Games = []game.MatchGame{{
-		Won: true, PlayerJail: []game.Card{{Suit: game.Blade, Face: 1}},
-		OpponentJail: []game.Card{{Suit: game.Shield, Face: 1}},
-		BountySuit:   game.Blade,
-		Modifiers:    game.GameModifiers{Bounty: 1, Reckoning: [3]int{1, 1, 1}},
-	}}
-	ctx.Result.PlayerScore = 1
-	ctx.Result.OpponentScore = 0
-	_, unlocked, _ = registry["bounty_decided"](ctx)
-	if !unlocked {
-		t.Fatal("bounty bonus alone should decide this game's score")
-	}
-
-	losingGame := game.MatchGame{
-		Won: false, PlayerJail: []game.Card{{Suit: game.Shield, Face: 9}},
-		BountySuit: game.Blade,
-	}
-	ctx.Result.Games = []game.MatchGame{losingGame}
-	ctx.MatchWon = false
-	_, unlocked, _ = registry["no_not_like_that"](ctx)
-	if !unlocked {
-		t.Fatal("lost game with nine points in one suit did not qualify")
-	}
-}
-
-func TestCountersTierCrossingAndSetCompletionAreIdempotent(t *testing.T) {
-	p := newAchievementProfile(t)
-	p.WinsAsSeatX = 100
-	p.TotalClashes = 5
 	p.MaxClashesInGame = 3
-	p.WinStreakByMode[economy.ModeIDCPUEasy] = 2
-	ctx := Context{
-		Profile: p, Event: EventMatchEnd, MatchWon: true, PlayerSeat: "X",
-		Result: &game.MatchResult{Won: true, Games: []game.MatchGame{{Won: true, PlayerSeat: game.SeatX}}},
-	}
-	events := EvaluateAll(ctx)
-	var aggressor *UnlockEvent
-	var setCompleted bool
-	for i := range events {
-		if events[i].AchievementID == "aggressor" {
-			aggressor = &events[i]
-		}
-		if events[i].SetID == "aggressor" {
-			setCompleted = events[i].SkillPoints == 1
-		}
-	}
-	if aggressor == nil || aggressor.Tier != 3 || aggressor.Marks != 6200 || aggressor.Crowns != 100 ||
-		aggressor.Badge != "badge_aggressor" || aggressor.HeroBoxes != 1 || !setCompleted {
-		t.Fatalf("full tier crossing/set reward missing: %+v", events)
-	}
-	if p.AchievementCounters["streak_easy"] != 2 || p.AchievementCounters["total_clashes"] != 5 ||
-		p.AchievementCounters["max_clashes_in_game"] != 3 {
-		t.Fatalf("counter values not recorded: %+v", p.AchievementCounters)
-	}
-	events = EvaluateAll(ctx)
-	for _, event := range events {
-		if event.AchievementID == "aggressor" || event.SetID == "aggressor" {
-			t.Fatalf("achievement/set reward repeated: %+v", event)
-		}
-	}
-	p.WinStreakByMode[economy.ModeIDCPUEasy] = 0
-	EvaluateAll(Context{Profile: p, Event: EventMatchEnd, Result: ctx.Result})
-	if p.AchievementCounters["streak_easy"] != 0 {
-		t.Fatalf("streak counter did not reset: %d", p.AchievementCounters["streak_easy"])
-	}
-	p.TotalClashes = 1
-	p.MaxClashesInGame = 1
-	EvaluateAll(Context{Profile: p, Event: EventProfileLoad})
-	if p.AchievementCounters["total_clashes"] != 5 || p.AchievementCounters["max_clashes_in_game"] != 3 {
-		t.Fatal("cumulative/best-record counters regressed")
-	}
-}
-
-func TestMatchHistoryBackedAchievementsAndContextDerivation(t *testing.T) {
-	p := newAchievementProfile(t)
-	p.MatchHistory = []profile.MatchRecord{{Won: true, PlayerSeat: "X"}}
-	result := game.MatchResult{
-		Won: true, PlayerScore: 20, OpponentScore: 12,
-		Games: []game.MatchGame{{
-			Won: true, PlayerSeat: game.SeatX,
-			PlayerJail:   []game.Card{{Suit: game.Fang, Face: 7}, {Suit: game.Blade, Face: 2}},
-			OpponentJail: []game.Card{{Suit: game.Shield, Face: 3}},
-			BountySuit:   game.Fang, Clashes: 1, ScoreAfterR2: 4, OpponentAfterR2: 8,
-		}},
-	}
-	ctx := NewMatchContext(p, result, economy.ModeID(economy.ModeCPUEasy), "Y")
-	if ctx.PlayerPrisoners != 2 || ctx.OppPrisoners != 1 || ctx.BountyCount != 1 ||
-		ctx.MaxFace != 7 || ctx.Clashes != 1 || ctx.ScoreAfterR2 != 4 || ctx.OppScoreAfterR2 != 8 {
-		t.Fatalf("derived context = %+v", ctx)
-	}
-	_, unlocked, _ := registry["both_sides"](ctx)
-	if !unlocked {
-		t.Fatal("current Seat Y win plus historical Seat X win should unlock Both Sides")
-	}
-}
-
-func TestLoginRewardAndSetCompletesOnlyWhenAllMembersAreUnlocked(t *testing.T) {
-	p := newAchievementProfile(t)
-	p.LoginStreakBest = 30
-	loginEvents := EvaluateAll(Context{Profile: p, Event: EventLogin})
-	var loginTier *UnlockEvent
-	var loginSet bool
-	for i := range loginEvents {
-		if loginEvents[i].AchievementID == "login_streak" {
-			loginTier = &loginEvents[i]
-		}
-		if loginEvents[i].SetID == "login_streak" {
-			loginSet = loginEvents[i].SkillPoints == 1
-		}
-	}
-	if loginTier == nil || loginTier.Tier != 3 || loginTier.Marks != 3850 ||
-		loginTier.Crowns != 50 || loginTier.Badge != "badge_devoted" || loginTier.HeroBoxes != 1 || !loginSet {
-		t.Fatalf("login tier/set events = %+v", loginEvents)
-	}
-
-	p.Achievements["bounty_hunter"] = true
-	p.Achievements["bounty_denied"] = true
+	p.TotalMatchTies = 1
 	events := EvaluateAll(Context{Profile: p, Event: EventProfileLoad})
-	for _, event := range events {
-		if event.SetID == "bounty" {
-			t.Fatal("incomplete Bounty set was marked complete")
+	for _, id := range []string{"comeback", "clash_master", "dead_heat"} {
+		if !hasUnlock(events, id) {
+			t.Errorf("%s did not unlock from lifetime stats: %+v", id, events)
 		}
 	}
-	p.Achievements["bounty_decided"] = true
+	skillPointRewards := 0
+	for _, event := range events {
+		skillPointRewards += event.SkillPoints
+	}
+	if skillPointRewards != 3 {
+		t.Fatalf("feat Skill Point rewards = %d, want 3", skillPointRewards)
+	}
+}
+
+func TestCampaignCompletionAndTierRewardsAreIdempotent(t *testing.T) {
+	p := newAchievementProfile(t)
+	p.Campaigns["basic"] = &profile.CampaignProgress{Completed: true}
+	events := EvaluateAll(Context{Profile: p, Event: EventCampaignCompleted, CampaignID: "basic"})
+	campaign, ok := unlockFor(events, "camp_pow")
+	if !ok || campaign.Marks != 3000 || campaign.Crowns != 10 {
+		t.Fatalf("campaign reward = %+v; events %+v", campaign, events)
+	}
+	if repeated := EvaluateAll(Context{Profile: p, Event: EventCampaignCompleted, CampaignID: "basic"}); hasUnlock(repeated, "camp_pow") {
+		t.Fatalf("campaign reward repeated: %+v", repeated)
+	}
+
+	p.AchievementCounters["mode_wins_main"] = 30
 	events = EvaluateAll(Context{Profile: p, Event: EventProfileLoad})
-	found := false
-	for _, event := range events {
-		if event.SetID == "bounty" && event.SkillPoints == 1 {
-			found = true
+	mode, ok := unlockFor(events, "mode_main")
+	if !ok || mode.Tier != 3 || mode.Marks != 2400 || mode.Crowns != 3 ||
+		mode.SilverBoxes != 1 || mode.UndoMoveTokens != 1 {
+		t.Fatalf("mode rewards = %+v; events %+v", mode, events)
+	}
+	if repeated := EvaluateAll(Context{Profile: p, Event: EventProfileLoad}); hasUnlock(repeated, "mode_main") {
+		t.Fatalf("mode rewards repeated: %+v", repeated)
+	}
+	if p.SkillPoints != 0 {
+		t.Fatalf("display-set completion unexpectedly awarded Skill Points: %d", p.SkillPoints)
+	}
+}
+
+func TestMetaProgressUsesOwnedItemsAndTrackedActions(t *testing.T) {
+	p := newAchievementProfile(t)
+	for id := range p.OwnedChromas {
+		p.OwnedChromas[id] = true
+	}
+	for i := 0; i < 47; i++ {
+		p.OwnedChromas[string(rune('a'+i))] = true
+	}
+	p.AchievementCounters["boxes_opened"] = 50
+	p.AchievementCounters["consumables_used"] = 200
+	p.AchievementCounters["weekly_matches_best"] = 60
+	p.AchievementCounters["ranked_matches_played"] = 200
+	p.AchievementCounters["human_win_streak_best"] = 12
+	events := EvaluateAll(Context{Profile: p, Event: EventProfileLoad})
+	var tokenRewards UnlockEvent
+	for _, id := range []string{"chroma_collector", "lucky_draw", "tinkerer", "marathon", "ranked_regular", "win_streak_humans"} {
+		event, ok := unlockFor(events, id)
+		if !ok || event.Tier != 3 || event.Marks != 2400 || event.Crowns != 3 || event.GoldBoxes != 1 {
+			t.Errorf("%s capstone = %+v, exists=%t", id, event, ok)
+		}
+		tokenRewards.UndoMoveTokens += event.UndoMoveTokens
+		tokenRewards.RestartMissionTokens += event.RestartMissionTokens
+		tokenRewards.CampaignSkipTokens += event.CampaignSkipTokens
+		tokenRewards.ReplaceCardTokens += event.ReplaceCardTokens
+	}
+	if tokenRewards.CampaignSkipTokens < 2 || tokenRewards.ReplaceCardTokens < 1 ||
+		tokenRewards.UndoMoveTokens < 2 || tokenRewards.RestartMissionTokens < 1 {
+		t.Fatalf("rotated token rewards missing: undo=%d restart=%d skip=%d swap=%d",
+			tokenRewards.UndoMoveTokens, tokenRewards.RestartMissionTokens,
+			tokenRewards.CampaignSkipTokens, tokenRewards.ReplaceCardTokens)
+	}
+}
+
+func TestHeroVarietyAndBranchMasterTrackActualProgress(t *testing.T) {
+	p := newAchievementProfile(t)
+	p.TotalWins = 10
+	p.HeroWinCounts = map[string]int{"recruit": 4, "warden": 1, "hunter": 1, "anchor": 1}
+	events := EvaluateAll(Context{Profile: p, Event: EventProfileLoad})
+	hero, ok := unlockFor(events, "hero_variety")
+	if !ok || hero.Tier != 1 || hero.Marks != 400 {
+		t.Fatalf("Hero Variety first tier = %+v; events %+v", hero, events)
+	}
+
+	p = newAchievementProfile(t)
+	for _, node := range skills.AllNodes() {
+		if node.Branch == "daily-wins" {
+			p.SkillNodes[node.ID] = true
 		}
 	}
-	if !found || !p.CompletedSets["bounty"] {
-		t.Fatal("complete Bounty set did not award one Skill Tree Point")
+	events = EvaluateAll(Context{Profile: p, Event: EventSkillUnlocked})
+	branch, ok := unlockFor(events, "branch_master")
+	if !ok || branch.Tier != 1 || branch.Marks != 400 {
+		t.Fatalf("Branch Master first tier = %+v; events %+v", branch, events)
+	}
+}
+
+func TestGameModeNormalization(t *testing.T) {
+	tests := map[string]string{
+		"": "main", "POW": "main", "fog-of-war": "fog",
+		"puzzle": "puzzler", "tugwar": "tug-war", "poker": "poker",
+		"poker-duel": "poker", "abandon-duel": "abandon",
+		"unknown": "",
+	}
+	for input, want := range tests {
+		if got := NormalizeGameMode(input); got != want {
+			t.Errorf("NormalizeGameMode(%q) = %q, want %q", input, got, want)
+		}
 	}
 }
 
@@ -472,20 +229,16 @@ func newAchievementProfile(t *testing.T) *profile.Profile {
 	return p
 }
 
-func hasTierUnlock(events []UnlockEvent, id string, tier int) bool {
-	for _, event := range events {
-		if event.AchievementID == id && event.Tier == tier {
-			return true
-		}
-	}
-	return false
+func hasUnlock(events []UnlockEvent, id string) bool {
+	_, ok := unlockFor(events, id)
+	return ok
 }
 
-func hasUnlockFor(events []UnlockEvent, id string) bool {
+func unlockFor(events []UnlockEvent, id string) (UnlockEvent, bool) {
 	for _, event := range events {
 		if event.AchievementID == id {
-			return true
+			return event, true
 		}
 	}
-	return false
+	return UnlockEvent{}, false
 }

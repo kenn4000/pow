@@ -38,12 +38,14 @@ type puzzleBattleRequest struct {
 	Index       int    `json:"index"`
 	FirstIndex  int    `json:"firstIndex"`
 	SecondIndex int    `json:"secondIndex"`
+	WagerMarks  int64  `json:"wagerMarks"`
 }
 
 type puzzleBattleInvite struct {
-	ID        string    `json:"id"`
-	Handle    string    `json:"handle"`
-	CreatedAt time.Time `json:"createdAt"`
+	ID         string    `json:"id"`
+	Handle     string    `json:"handle"`
+	WagerMarks int64     `json:"wagerMarks"`
+	CreatedAt  time.Time `json:"createdAt"`
 }
 
 type puzzleBattlePlayerView struct {
@@ -54,8 +56,9 @@ type puzzleBattlePlayerView struct {
 }
 
 type puzzleBattlePublicMatch struct {
-	View    puzzlebattle.View         `json:"view"`
-	Players [2]puzzleBattlePlayerView `json:"players"`
+	View       puzzlebattle.View         `json:"view"`
+	Players    [2]puzzleBattlePlayerView `json:"players"`
+	WagerMarks int64                     `json:"wagerMarks,omitempty"`
 }
 
 type puzzleBattleHistoryEntry struct {
@@ -478,6 +481,10 @@ func (s *webServer) cancelPuzzleBattleQueue(w http.ResponseWriter, r *http.Reque
 }
 
 func (s *webServer) invitePuzzleBattleFriend(w http.ResponseWriter, r *http.Request, user account, request puzzleBattleRequest) {
+	if request.WagerMarks < 0 || request.WagerMarks > friendWagerPerGameLimit {
+		writeError(w, http.StatusBadRequest, errors.New("friend wagers must be between 0 and 1,000 Marks per player"))
+		return
+	}
 	handle := strings.TrimSpace(request.Recipient)
 	if !validSocialHandle(handle) {
 		writeError(w, http.StatusBadRequest, errors.New("enter a valid friend handle"))
@@ -551,8 +558,8 @@ func (s *webServer) invitePuzzleBattleFriend(w http.ResponseWriter, r *http.Requ
 	}
 	inviteID := randomID()
 	_, err = tx.ExecContext(r.Context(), `
-		INSERT INTO puzzle_battle_invites(id,sender_id,recipient_id,sender_hero_id)
-		VALUES($1,$2,$3,$4)`, inviteID, user.ID, recipientID, hero.ID)
+		INSERT INTO puzzle_battle_invites(id,sender_id,recipient_id,sender_hero_id,wager_marks)
+		VALUES($1,$2,$3,$4,$5)`, inviteID, user.ID, recipientID, hero.ID, request.WagerMarks)
 	if err != nil {
 		var pgErr *pgconn.PgError
 		if errors.As(err, &pgErr) && pgErr.Code == "23505" {
@@ -590,11 +597,12 @@ func (s *webServer) respondPuzzleBattleInvite(w http.ResponseWriter, r *http.Req
 		ownerColumn = "sender_id"
 	}
 	var senderID, senderHeroID string
+	var wagerMarks int64
 	query := fmt.Sprintf(`
-		SELECT sender_id,sender_hero_id FROM puzzle_battle_invites
+		SELECT sender_id,sender_hero_id,wager_marks FROM puzzle_battle_invites
 		WHERE id=$1 AND %s=$2 AND status='pending' AND created_at>$3`, ownerColumn)
 	if err := tx.QueryRowContext(r.Context(), query,
-		request.InviteID, user.ID, time.Now().UTC().Add(-puzzleBattleInviteLifetime)).Scan(&senderID, &senderHeroID); err != nil {
+		request.InviteID, user.ID, time.Now().UTC().Add(-puzzleBattleInviteLifetime)).Scan(&senderID, &senderHeroID, &wagerMarks); err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
 			writeError(w, http.StatusNotFound, errors.New("pending Puzzle Battle invitation not found"))
 			return
@@ -632,6 +640,11 @@ func (s *webServer) respondPuzzleBattleInvite(w http.ResponseWriter, r *http.Req
 			writeError(w, http.StatusForbidden, errors.New("this invitation is no longer available"))
 			return
 		}
+		playerIDs := [2]string{senderID, user.ID}
+		if err := reserveFriendWagerTx(r.Context(), tx, playerIDs, wagerMarks); err != nil {
+			writeError(w, http.StatusConflict, err)
+			return
+		}
 		hero, err := puzzleBattleHero(r.Context(), tx, user.ID, request.HeroID)
 		if err != nil {
 			writeError(w, http.StatusBadRequest, err)
@@ -661,6 +674,17 @@ func (s *webServer) respondPuzzleBattleInvite(w http.ResponseWriter, r *http.Req
 		if err != nil {
 			writeError(w, http.StatusConflict, err)
 			return
+		}
+		if wagerMarks > 0 {
+			if _, err := tx.ExecContext(r.Context(),
+				"UPDATE puzzle_battle_matches SET wager_marks=$1 WHERE id=$2", wagerMarks, match.ID); err != nil {
+				databaseError(w, err)
+				return
+			}
+			if err := createFriendWagerTx(r.Context(), tx, "puzzle", match.ID, playerIDs, wagerMarks); err != nil {
+				databaseError(w, err)
+				return
+			}
 		}
 		public, err := buildPuzzleBattlePublicMatch(r.Context(), tx, match, 1, now)
 		if err != nil {
@@ -843,6 +867,9 @@ func (s *webServer) createPuzzleBattleTx(ctx context.Context, tx *sql.Tx, ids, h
 	if active {
 		return nil, errors.New("one of these players already has an active match")
 	}
+	if err := spendAccountEnergyTx(ctx, tx, ids[:], matchEnergyCost(matchMode), now); err != nil {
+		return nil, err
+	}
 	var playerHeroes [2]heroes.Hero
 	for player := range ids {
 		playerHeroes[player], err = puzzleBattleHero(ctx, tx, ids[player], heroIDs[player])
@@ -946,6 +973,10 @@ func buildPuzzleBattlePublicMatch(ctx context.Context, queryer puzzleBattleQuery
 		return puzzleBattlePublicMatch{}, err
 	}
 	public := puzzleBattlePublicMatch{View: view}
+	if err := queryer.QueryRowContext(ctx,
+		"SELECT wager_marks FROM puzzle_battle_matches WHERE id=$1", match.ID).Scan(&public.WagerMarks); err != nil {
+		return puzzleBattlePublicMatch{}, fmt.Errorf("load Puzzle Battle wager: %w", err)
+	}
 	for index, userID := range match.PlayerIDs {
 		if err := queryer.QueryRowContext(ctx, "SELECT public_handle FROM users WHERE id=$1", userID).Scan(&public.Players[index].Handle); err != nil {
 			return puzzleBattlePublicMatch{}, fmt.Errorf("load Puzzle Battle player handle: %w", err)
@@ -968,6 +999,13 @@ func (s *webServer) savePuzzleBattleTx(ctx context.Context, tx *sql.Tx, match *p
 			return err
 		}
 		match.Payouts = &payouts
+		winner := -1
+		if !match.Result.Draw {
+			winner = match.Result.Winner
+		}
+		if err := settleFriendWagerTx(ctx, tx, match.ID, "puzzle", winner, now); err != nil {
+			return err
+		}
 	}
 	state, err := json.Marshal(match)
 	if err != nil {
@@ -1036,7 +1074,7 @@ func queryPuzzleBattleInvites(ctx context.Context, queryer interface {
 		ownerColumn, otherColumn = otherColumn, ownerColumn
 	}
 	rows, err := queryer.QueryContext(ctx, fmt.Sprintf(`
-		SELECT i.id,u.public_handle,i.created_at
+		SELECT i.id,u.public_handle,i.created_at,i.wager_marks
 		FROM puzzle_battle_invites i JOIN users u ON u.id=i.%s
 		WHERE i.%s=$1 AND i.status='pending'
 		ORDER BY i.created_at`, otherColumn, ownerColumn), userID)
@@ -1047,7 +1085,7 @@ func queryPuzzleBattleInvites(ctx context.Context, queryer interface {
 	invites := []puzzleBattleInvite{}
 	for rows.Next() {
 		var invite puzzleBattleInvite
-		if err := rows.Scan(&invite.ID, &invite.Handle, &invite.CreatedAt); err != nil {
+		if err := rows.Scan(&invite.ID, &invite.Handle, &invite.CreatedAt, &invite.WagerMarks); err != nil {
 			return nil, err
 		}
 		invites = append(invites, invite)
@@ -1209,7 +1247,17 @@ func creditPuzzleBattleProfile(p *profile.Profile, match *puzzlebattle.Match, pl
 	} else if match.MatchMode == "ranked" {
 		mode = economy.ModeRanked
 	}
-	updateAchievementStats(p, gameResult, mode)
+	if p.HeroPlayCounts == nil {
+		p.HeroPlayCounts = make(map[string]int)
+	}
+	if p.HeroWinCounts == nil {
+		p.HeroWinCounts = make(map[string]int)
+	}
+	p.HeroPlayCounts[match.PlayerHeroIDs[player]]++
+	if won {
+		p.HeroWinCounts[match.PlayerHeroIDs[player]]++
+	}
+	updateAchievementStatsForGameMode(p, gameResult, mode, "puzzler", match.Result.CompletedAt)
 	if won {
 		p.TotalWins++
 		p.CurrentStreak++
@@ -1241,6 +1289,7 @@ func creditPuzzleBattleProfile(p *profile.Profile, match *puzzlebattle.Match, pl
 	}
 	achievementContext := achievements.NewMatchContext(p, gameResult, economy.ModeID(mode), seat.String())
 	achievementContext.Now = match.Result.CompletedAt
+	achievementContext.GameMode = "puzzler"
 	for _, event := range achievements.EvaluateAll(achievementContext) {
 		applyUnlockEvent(p, event)
 	}
@@ -1252,16 +1301,6 @@ func creditPuzzleBattleProfile(p *profile.Profile, match *puzzlebattle.Match, pl
 		PlayerPrisonerSuits: puzzleBattleSuitCounts(playerJail), Clashes: clashes[player],
 		MarksEarned: payout.TotalMarks,
 	})
-	if p.HeroPlayCounts == nil {
-		p.HeroPlayCounts = make(map[string]int)
-	}
-	if p.HeroWinCounts == nil {
-		p.HeroWinCounts = make(map[string]int)
-	}
-	p.HeroPlayCounts[match.PlayerHeroIDs[player]]++
-	if won {
-		p.HeroWinCounts[match.PlayerHeroIDs[player]]++
-	}
 	p.UpdatedAt = match.Result.CompletedAt
 	return reward, nil
 }

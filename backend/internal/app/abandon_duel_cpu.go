@@ -44,8 +44,34 @@ func chooseAbandonDuelCPUMove(
 	firstTurn bool,
 	randomIntn func(int) int,
 ) abandonDuelCPUMove {
+	return chooseAbandonDuelCPUMoveForPolicy(
+		knownBoard, knownPrivate, hiddenPrivate, hiddenBoard, hero, bountySuit,
+		firstTurn, randomIntn, "SMART", nil, nil,
+	)
+}
+
+func chooseAbandonDuelCPUMoveForPolicy(
+	knownBoard []game.Card,
+	knownPrivate []game.Card,
+	hiddenPrivate []game.Card,
+	hiddenBoard []game.Card,
+	hero abandonDuelHeroParams,
+	bountySuit game.Suit,
+	firstTurn bool,
+	randomIntn func(int) int,
+	policy string,
+	prisoners []game.Card,
+	opponentPrisoners []game.Card,
+) abandonDuelCPUMove {
 	known := append(append([]game.Card(nil), knownBoard...), knownPrivate...)
 	hidden := append(append([]game.Card(nil), hiddenPrivate...), hiddenBoard...)
+	alpha := abandonDuelCPUALPHA
+	switch policy {
+	case "GREEDY", "BOUNTY_FOCUSED":
+		alpha = 0
+	case "SMART_HIGH":
+		alpha = 0.5
+	}
 	bestScore := math.Inf(-1)
 	var best abandonDuelCPUMove
 	foundMove := false
@@ -56,7 +82,9 @@ func chooseAbandonDuelCPUMove(
 			if captured == nil {
 				continue
 			}
-			score := float64(abandonDuelJailValue(*captured, bountySuit, hero.B, hero.S))
+			score := abandonDuelPolicyValue(
+				*captured, bountySuit, hero, policy, prisoners, opponentPrisoners,
+			)
 			if !firstTurn {
 				if containsAbandonDuelCard(knownPrivate, known[firstIndex]) {
 					score += 0.5 * float64(abandonDuelPenalty(known[firstIndex], bountySuit, hero.B, hero.S))
@@ -65,7 +93,7 @@ func chooseAbandonDuelCPUMove(
 					score += 0.5 * float64(abandonDuelPenalty(known[secondIndex], bountySuit, hero.B, hero.S))
 				}
 			}
-			score += abandonDuelCPUALPHA * float64(abandonDuelLookahead(
+			score += alpha * float64(abandonDuelLookahead(
 				removeAbandonDuelCards(known, firstIndex, secondIndex),
 				bountySuit, hero.B, hero.S, hero.F,
 			))
@@ -86,7 +114,9 @@ func chooseAbandonDuelCPUMove(
 				if captured == nil {
 					continue
 				}
-				expectation += float64(abandonDuelJailValue(*captured, bountySuit, hero.B, hero.S))
+				expectation += abandonDuelPolicyValue(
+					*captured, bountySuit, hero, policy, prisoners, opponentPrisoners,
+				)
 				captureCount++
 			}
 			if captureCount == 0 {
@@ -96,7 +126,7 @@ func chooseAbandonDuelCPUMove(
 			if !firstTurn && containsAbandonDuelCard(knownPrivate, knownCard) {
 				score += 0.5 * float64(abandonDuelPenalty(knownCard, bountySuit, hero.B, hero.S))
 			}
-			score += abandonDuelCPUALPHA * float64(abandonDuelLookahead(
+			score += alpha * float64(abandonDuelLookahead(
 				removeAbandonDuelCard(known, knownIndex),
 				bountySuit, hero.B, hero.S, hero.F,
 			))
@@ -117,13 +147,15 @@ func chooseAbandonDuelCPUMove(
 				if captured == nil {
 					continue
 				}
-				expectation += float64(abandonDuelJailValue(*captured, bountySuit, hero.B, hero.S))
+				expectation += abandonDuelPolicyValue(
+					*captured, bountySuit, hero, policy, prisoners, opponentPrisoners,
+				)
 				captureCount++
 			}
 		}
 		if captureCount > 0 {
 			score := expectation / float64(captureCount)
-			score += abandonDuelCPUALPHA * float64(abandonDuelLookahead(
+			score += alpha * float64(abandonDuelLookahead(
 				known, bountySuit, hero.B, hero.S, hero.F,
 			))
 			if !foundMove || score > bestScore {
@@ -156,6 +188,37 @@ func chooseAbandonDuelCPUMove(
 		best.second = hidden[randomIntn(len(hidden))]
 	}
 	return best
+}
+
+func abandonDuelPolicyValue(
+	card game.Card,
+	bountySuit game.Suit,
+	hero abandonDuelHeroParams,
+	policy string,
+	prisoners, opponentPrisoners []game.Card,
+) float64 {
+	value := float64(abandonDuelJailValue(card, bountySuit, hero.B, hero.S))
+	switch policy {
+	case "BOUNTY_FOCUSED":
+		if card.Suit == bountySuit {
+			value += 100
+		}
+	case "ANTI_CONCENTRATE":
+		for _, prisoner := range prisoners {
+			if prisoner.Suit == card.Suit {
+				value -= 5
+			}
+		}
+	case "ANTI_SPREAD":
+		hasSuit := false
+		for _, prisoner := range opponentPrisoners {
+			hasSuit = hasSuit || prisoner.Suit == card.Suit
+		}
+		if !hasSuit {
+			value += 10
+		}
+	}
+	return value
 }
 
 func abandonDuelResolve(first, second game.Card, shift, favor int) (*game.Card, *game.Card) {
@@ -303,9 +366,11 @@ func (s *webServer) advanceAbandonDuelAI() error {
 			B: duel.Modifiers.B, S: duel.Modifiers.S,
 			F: duel.Modifiers.F, D: duel.Modifiers.D,
 		}
-		move := chooseAbandonDuelCPUMove(
+		move := chooseAbandonDuelCPUMoveForPolicy(
 			knownBoard, knownPrivate, hiddenPrivate, hiddenBoard, hero,
 			duel.Bounty.Suit, duel.Players[player].TurnsTaken == 1, s.rng.Intn,
+			duel.Setup.OpponentAlgo, duel.Players[player].Prisoners,
+			duel.Players[1-player].Prisoners,
 		)
 		firstSource, firstIndex, err := duel.sourceForCard(player, move.first)
 		if err != nil {
@@ -326,7 +391,7 @@ func (s *webServer) advanceAbandonDuelAI() error {
 		if duel.GameOver {
 			session.winner = duel.Winner
 			session.message = abandonDuelResultMessage(duel, s.playerName)
-			s.awardLocalMultiplayerPayout(duel.TotalScores[0])
+			s.finishAbandonDuel()
 		} else if duel.Round == 2 && duel.RoundTurn == 0 && duel.Players[duel.ActivePlayer].TurnsTaken == 1 {
 			session.message = "Round 1 complete. Seats swapped; Round 2 begins."
 		} else {

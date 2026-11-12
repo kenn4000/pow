@@ -48,6 +48,7 @@ type abandonDuelPairing struct {
 
 type abandonDuelGame struct {
 	Heroes          [2]heroes.Hero
+	Setup           abandonDuelSetup
 	Modifiers       abandonDuelModifiers
 	Bounty          game.Card
 	Board           []game.Card
@@ -72,10 +73,47 @@ type abandonDuelGame struct {
 	Tiebreak        string
 }
 
+type abandonDuelSetup struct {
+	Board        []game.Card
+	PlayerHand   []game.Card
+	CPUHand      []game.Card
+	BoardSize    int
+	HandSize     int
+	PairCount    int
+	Rounds       int
+	BountySuits  [2]int
+	MirrorHands  bool
+	Snake        bool
+	OpponentAlgo string
+}
+
 func newAbandonDuelGame(heroA, heroB heroes.Hero, rng *rand.Rand) (*abandonDuelGame, error) {
+	return newAbandonDuelGameWithSetup(heroA, heroB, abandonDuelSetup{
+		BoardSize: abandonDuelBoardSize, HandSize: 5, PairCount: abandonDuelPairsPerPlayer,
+		Rounds: 2, BountySuits: [2]int{-1, -1}, MirrorHands: true, Snake: true,
+	}, rng)
+}
+
+func newAbandonDuelGameWithSetup(
+	heroA, heroB heroes.Hero,
+	setup abandonDuelSetup,
+	rng *rand.Rand,
+) (*abandonDuelGame, error) {
 	if rng == nil {
 		return nil, errors.New("Abandon Duel requires a random source")
 	}
+	if setup.BoardSize < 2 || setup.HandSize < 2 || setup.PairCount < 1 ||
+		setup.PairCount*2 > setup.BoardSize+setup.HandSize || setup.Rounds < 1 || setup.Rounds > 2 {
+		return nil, errors.New("Abandon Duel campaign setup is invalid")
+	}
+	if len(setup.Board) > 0 && len(setup.Board) != setup.BoardSize ||
+		len(setup.PlayerHand) > 0 && len(setup.PlayerHand) != setup.HandSize ||
+		len(setup.CPUHand) > 0 && len(setup.CPUHand) != setup.HandSize {
+		return nil, errors.New("Abandon Duel campaign cards do not match their configured sizes")
+	}
+	setup.Board = append([]game.Card(nil), setup.Board...)
+	setup.PlayerHand = append([]game.Card(nil), setup.PlayerHand...)
+	setup.CPUHand = append([]game.Card(nil), setup.CPUHand...)
 	modifiers := abandonDuelModifiers{
 		B: clampInt(heroA.Bounty+heroB.Bounty, -3, 3),
 		S: clampInt(heroA.Shift+heroB.Shift, 0, 4),
@@ -83,7 +121,7 @@ func newAbandonDuelGame(heroA, heroB heroes.Hero, rng *rand.Rand) (*abandonDuelG
 		D: clampInt(heroA.Draft+heroB.Draft, -1, 1),
 	}
 	duel := &abandonDuelGame{
-		Heroes: [2]heroes.Hero{heroA, heroB}, Modifiers: modifiers,
+		Heroes: [2]heroes.Hero{heroA, heroB}, Setup: setup, Modifiers: modifiers,
 		Round: 1, StartingPlayer: 0, ActivePlayer: 0, SelectedIndex: -1,
 		Winner: -1,
 	}
@@ -102,49 +140,144 @@ func (g *abandonDuelGame) dealRound(rng *rand.Rand) error {
 	}
 	deck := game.NewDeck()
 	game.Shuffle(deck, rng)
-	bounty := deck[0]
-	remaining := deck[1:]
-	hand := make([]game.Card, 0, 5)
-	selected := make(map[game.Card]bool, 5)
-	foundSuits := [3]bool{}
-	for _, card := range remaining {
-		suitIndex := int(card.Suit)
-		if !foundSuits[suitIndex] {
-			hand = append(hand, card)
+	selected := make(map[game.Card]bool, len(deck))
+	for _, card := range g.Setup.Board {
+		selected[card] = true
+	}
+	for _, card := range g.Setup.PlayerHand {
+		selected[card] = true
+	}
+	if !g.Setup.MirrorHands {
+		for _, card := range g.Setup.CPUHand {
 			selected[card] = true
-			foundSuits[suitIndex] = true
 		}
 	}
-	for _, card := range remaining {
-		if len(hand) == 5 {
+	roundIndex := g.Round - 1
+	bountySuit := g.Setup.BountySuits[roundIndex]
+	if bountySuit < 0 || bountySuit > int(game.Shield) {
+		bountySuit = -1
+	}
+	bountyIndex := -1
+	for index, card := range deck {
+		suitMatches := bountySuit < 0 || int(card.Suit) == bountySuit
+		if bountySuit < 0 && roundIndex > 0 {
+			suitMatches = card.Suit != g.Bounty.Suit
+		}
+		if suitMatches {
+			if !selected[card] {
+				bountyIndex = index
+				break
+			}
+		}
+	}
+	if bountyIndex < 0 {
+		return errors.New("Abandon Duel could not deal the configured bounty")
+	}
+	bounty := deck[bountyIndex]
+	deck = append(deck[:bountyIndex], deck[bountyIndex+1:]...)
+	selected = map[game.Card]bool{bounty: true}
+	for _, card := range g.Setup.Board {
+		if !card.Valid() || selected[card] {
+			return fmt.Errorf("invalid or duplicate Abandon Duel board card %v", card)
+		}
+		selected[card] = true
+	}
+
+	playerHand := append([]game.Card(nil), g.Setup.PlayerHand...)
+	if len(playerHand) == 0 {
+		playerHand = make([]game.Card, 0, g.Setup.HandSize)
+		if bountySuit >= 0 {
+			for _, card := range deck {
+				if int(card.Suit) == bountySuit {
+					playerHand = append(playerHand, card)
+					break
+				}
+			}
+		} else {
+			for _, card := range deck {
+				if card.Suit == bounty.Suit {
+					playerHand = append(playerHand, card)
+					break
+				}
+			}
+		}
+	}
+	for _, card := range playerHand {
+		if !card.Valid() || selected[card] {
+			return fmt.Errorf("invalid or duplicate Abandon Duel player card %v", card)
+		}
+		selected[card] = true
+	}
+	for _, card := range deck {
+		if len(playerHand) == g.Setup.HandSize {
 			break
 		}
 		if !selected[card] {
-			hand = append(hand, card)
+			playerHand = append(playerHand, card)
 			selected[card] = true
 		}
 	}
-	rng.Shuffle(len(hand), func(i, j int) { hand[i], hand[j] = hand[j], hand[i] })
-	available := make([]game.Card, 0, len(remaining)-len(hand))
-	for _, card := range remaining {
-		if !selected[card] {
-			available = append(available, card)
+	if len(playerHand) != g.Setup.HandSize {
+		return errors.New("not enough cards for the Abandon Duel player hand")
+	}
+
+	cpuHand := append([]game.Card(nil), g.Setup.CPUHand...)
+	if g.Setup.MirrorHands {
+		cpuHand = append([]game.Card(nil), playerHand...)
+	} else {
+		for _, card := range cpuHand {
+			if !card.Valid() || selected[card] {
+				return fmt.Errorf("invalid or duplicate Abandon Duel opponent card %v", card)
+			}
+			selected[card] = true
+		}
+		for _, card := range deck {
+			if len(cpuHand) == g.Setup.HandSize {
+				break
+			}
+			if !selected[card] {
+				cpuHand = append(cpuHand, card)
+				selected[card] = true
+			}
+		}
+		if len(cpuHand) != g.Setup.HandSize {
+			return errors.New("not enough cards for the Abandon Duel opponent hand")
 		}
 	}
-	if len(available) < abandonDuelBoardSize {
+
+	board := append([]game.Card(nil), g.Setup.Board...)
+	if len(board) == 0 {
+		board = make([]game.Card, 0, g.Setup.BoardSize)
+		for _, card := range deck {
+			if len(board) == g.Setup.BoardSize {
+				break
+			}
+			if !selected[card] {
+				board = append(board, card)
+				selected[card] = true
+			}
+		}
+	}
+	if len(board) != g.Setup.BoardSize {
 		return errors.New("not enough cards for the Abandon Duel board")
 	}
-	board := append([]game.Card(nil), available[:abandonDuelBoardSize]...)
 	hasBountyCard := false
 	for _, card := range board {
 		hasBountyCard = hasBountyCard || card.Suit == bounty.Suit
 	}
 	if !hasBountyCard {
-		for _, card := range available[abandonDuelBoardSize:] {
-			if card.Suit == bounty.Suit {
+		replaced := false
+		for _, card := range deck {
+			if card.Suit == bounty.Suit && !selected[card] {
+				selected[board[len(board)-1]] = false
 				board[len(board)-1] = card
+				selected[card] = true
+				replaced = true
 				break
 			}
+		}
+		if !replaced {
+			return errors.New("Abandon Duel board has no available bounty-suit card")
 		}
 	}
 	revealed := make([]bool, len(board))
@@ -158,9 +291,13 @@ func (g *abandonDuelGame) dealRound(rng *rand.Rand) error {
 	for index, card := range board {
 		revealed[index] = card.Suit == bounty.Suit && index != highestBountyIndex
 	}
-	visiblePrivateCount := clampInt(3+g.Modifiers.D, 0, len(hand))
+	visiblePrivateCount := clampInt(3+g.Modifiers.D, 0, len(playerHand))
 	players := [2]abandonDuelPlayer{}
 	for index := range players {
+		hand := playerHand
+		if index == 1 {
+			hand = cpuHand
+		}
 		players[index] = abandonDuelPlayer{
 			PersonalPile: append([]game.Card(nil), hand...),
 			PileRevealed: make([]bool, len(hand)),
@@ -174,7 +311,11 @@ func (g *abandonDuelGame) dealRound(rng *rand.Rand) error {
 	g.Bounty = bounty
 	g.Board, g.BoardRevealed, g.BoardUsed = board, revealed, make([]bool, len(board))
 	g.Players = players
-	g.DrawPile = replacementDeck(append(append([]game.Card{bounty}, board...), hand...), rng)
+	removed := append(append([]game.Card{bounty}, board...), playerHand...)
+	if !g.Setup.MirrorHands {
+		removed = append(removed, cpuHand...)
+	}
+	g.DrawPile = replacementDeck(removed, rng)
 	if len(g.DrawPile) > 0 {
 		rng.Shuffle(len(g.DrawPile), func(i, j int) {
 			g.DrawPile[i], g.DrawPile[j] = g.DrawPile[j], g.DrawPile[i]
@@ -188,6 +329,17 @@ func (g *abandonDuelGame) dealRound(rng *rand.Rand) error {
 		return err
 	}
 	return nil
+}
+
+func (g *abandonDuelGame) turnLimit() int {
+	return 2 * g.Setup.PairCount
+}
+
+func (g *abandonDuelGame) turnOwner(turn int) int {
+	if !g.Setup.Snake {
+		return (g.StartingPlayer + turn) % 2
+	}
+	return abandonDuelSnakeOwner(turn, g.StartingPlayer)
 }
 
 type webAbandonDuelCard struct {
@@ -233,7 +385,7 @@ func (g *abandonDuelGame) webView(phase string, activePlayer int, canAct bool) *
 		return nil
 	}
 	result := &webAbandonDuelState{
-		Round: g.Round, TurnNumber: g.RoundTurn + 1, TurnLimit: abandonDuelTurnCount,
+		Round: g.Round, TurnNumber: g.RoundTurn + 1, TurnLimit: g.turnLimit(),
 		StartingPlayer: g.StartingPlayer, ActivePlayer: g.ActivePlayer,
 		Bounty: g.Bounty, Modifiers: g.Modifiers,
 		Board:       make([]webAbandonDuelCard, len(g.Board)),
@@ -289,8 +441,8 @@ func (g *abandonDuelGame) webView(phase string, activePlayer int, canAct bool) *
 }
 
 func (g *abandonDuelGame) beginTurn(rng *rand.Rand) error {
-	for g.RoundTurn < abandonDuelTurnCount {
-		owner := abandonDuelSnakeOwner(g.RoundTurn, g.StartingPlayer)
+	for g.RoundTurn < g.turnLimit() {
+		owner := g.turnOwner(g.RoundTurn)
 		g.ActivePlayer = owner
 		g.Players[owner].TurnsTaken++
 		g.FlippedThisTurn = !g.hasHiddenBoardCard()
@@ -488,7 +640,7 @@ func (g *abandonDuelGame) finishRound(rng *rand.Rand) error {
 		g.RoundScores[g.Round-1][playerIndex] = score
 		g.TotalScores[playerIndex] += score
 	}
-	if g.Round == 1 {
+	if g.Round < g.Setup.Rounds {
 		g.Round = 2
 		g.StartingPlayer = 1
 		return g.dealRound(rng)
@@ -546,10 +698,10 @@ func (g *abandonDuelGame) validateState() error {
 	if g == nil {
 		return errors.New("Abandon Duel state is unavailable")
 	}
-	if g.Round < 1 || g.Round > 2 || g.ActivePlayer < 0 || g.ActivePlayer > 1 {
+	if g.Round < 1 || g.Round > g.Setup.Rounds || g.ActivePlayer < 0 || g.ActivePlayer > 1 {
 		return errors.New("Abandon Duel has invalid round or turn state")
 	}
-	if !g.Bounty.Valid() || len(g.Board) != abandonDuelBoardSize ||
+	if !g.Bounty.Valid() || len(g.Board) != g.Setup.BoardSize ||
 		len(g.BoardRevealed) != len(g.Board) || len(g.BoardUsed) != len(g.Board) {
 		return errors.New("Abandon Duel has invalid bounty or board state")
 	}
@@ -561,11 +713,16 @@ func (g *abandonDuelGame) validateState() error {
 		}
 		seen[card] = true
 	}
-	for _, card := range g.Players[0].PersonalPile {
-		if !card.Valid() || seen[card] {
-			return fmt.Errorf("Abandon Duel has an invalid or duplicate personal card %v", card)
+	for playerIndex, player := range g.Players {
+		for _, card := range player.PersonalPile {
+			if !card.Valid() || !g.Setup.MirrorHands && seen[card] {
+				return fmt.Errorf("Abandon Duel has an invalid or duplicate personal card %v", card)
+			}
+			if g.Setup.MirrorHands && playerIndex == 1 {
+				continue
+			}
+			seen[card] = true
 		}
-		seen[card] = true
 	}
 	for _, card := range g.DrawPile {
 		if !card.Valid() || seen[card] {
@@ -579,17 +736,22 @@ func (g *abandonDuelGame) validateState() error {
 		}
 		seen[card] = true
 	}
-	if len(g.Players[0].PersonalPile) != 5 || len(g.Players[1].PersonalPile) != 5 ||
-		len(g.Players[0].PileRevealed) != 5 || len(g.Players[1].PileRevealed) != 5 ||
-		len(g.Players[0].PileUsed) != 5 || len(g.Players[1].PileUsed) != 5 {
-		return errors.New("Abandon Duel players must have matching five-card piles")
+	if len(g.Players[0].PersonalPile) != g.Setup.HandSize ||
+		len(g.Players[1].PersonalPile) != g.Setup.HandSize ||
+		len(g.Players[0].PileRevealed) != g.Setup.HandSize ||
+		len(g.Players[1].PileRevealed) != g.Setup.HandSize ||
+		len(g.Players[0].PileUsed) != g.Setup.HandSize ||
+		len(g.Players[1].PileUsed) != g.Setup.HandSize {
+		return errors.New("Abandon Duel players have invalid personal pile sizes")
 	}
-	for index, card := range g.Players[0].PersonalPile {
-		if g.Players[1].PersonalPile[index] != card {
-			return errors.New("Abandon Duel players do not have identical personal piles")
+	if g.Setup.MirrorHands {
+		for index, card := range g.Players[0].PersonalPile {
+			if g.Players[1].PersonalPile[index] != card {
+				return errors.New("Abandon Duel players do not have identical personal piles")
+			}
 		}
 	}
-	if !g.GameOver && g.RoundTurn >= abandonDuelTurnCount {
+	if !g.GameOver && g.RoundTurn >= g.turnLimit() {
 		return errors.New("Abandon Duel has an invalid round turn")
 	}
 	if g.SelectedSource == "" && g.SelectedIndex != -1 ||

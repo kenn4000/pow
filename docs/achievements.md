@@ -1,112 +1,137 @@
 # Achievements, Milestones, and Match History
 
-Achievements are stored with the local player profile and evaluated by the
-terminal progression flow. They do not change card resolution, scoring, the
-deck, or AI decisions. See [economy.md](./economy.md) for the
-broader progression economy.
+Achievements are stored in the local player profile and evaluated from match,
+campaign, collection, and account progression. They do not change card
+resolution, scoring, decks, or AI decisions. See [economy.md](./economy.md) for
+the broader progression economy.
 
 ## Progress and rewards
 
-The profile schema is version 4. Loading older profiles initializes
-the newer fields without dropping existing profile data. Profiles newer than
-the supported schema fail to load. Match history is newest-first and bounded
-to 50 records.
+Achievements are grouped into four categories:
 
-Each achievement is evaluated from lifetime profile statistics, the current
-completed-game summary, or both. Tiered achievements grant every reward for
-tiers crossed in one evaluation; their stored tier makes subsequent
-evaluations idempotent. Each listed set grants one Skill Tree Point exactly
-once when all of its members are complete. Collector III grants one
-Pick-Any-Chroma token. Tier capstones can award badges.
+- **Campaigns:** seven one-time campaign completion achievements.
+- **Feats:** nine one-time match feats, each granting one Skill Point.
+- **Per-Mode:** eight achievements with three cumulative win milestones each.
+- **Meta:** eleven achievements with three cumulative or best-record milestones
+  each.
 
-The role identifiers remain the game’s existing suit values. Display names
-and descriptions use **Scissors**, **Paper**, and **Rock**, never the current
-skin colors. The gallery displays each role’s current color as a swatch.
+Tiered achievements grant the rewards for every newly crossed tier. Stored
+achievement state makes repeated evaluation idempotent. Campaign and Feat
+rewards are also granted only once. Sets are gallery groupings and do not
+grant rewards.
 
-## Achievement catalog
+Rewards include Marks, Crowns, boxes, consumable tokens, and Skill Points.
+Skill Points from achievements come only from the nine Feats.
 
-| ID | Achievement | Set | Requirement | Rewards |
-|---|---|---|---|---|
-| `sparse` | Sparse I | Sparse | Win with exactly two suits represented in your jail | 500 Marks |
-| `sparse` | Sparse II | Sparse | Win with exactly two suits represented across both jails | 1,000 Marks |
-| `sparse` | Sparse III | Sparse | Win with exactly one suit represented in your jail | 1,500 Marks |
-| `sparse` | Sparse IV | Sparse | Win a best-of-three match where every game you won had at most two suits in your jail | 2,500 Marks, 50 Crowns |
-| `efficient` | Efficient I | Efficient | Win with at least 7 prisoners | 500 Marks |
-| `efficient` | Efficient II | Efficient | Win with at least 8 prisoners | 1,000 Marks |
-| `efficient` | Efficient III | Efficient | Win with all 9 prisoners and no clashes | 2,500 Marks, 50 Crowns |
-| `bounty_hunter` | Bounty Hunter | Bounty | Win with at least 3 prisoners matching the bounty role | 1,000 Marks |
-| `bounty_denied` | Bounty Denied | Bounty | Win with no prisoners matching the bounty role | 1,500 Marks |
-| `bounty_decided` | Bounty Decided | Bounty | Win a game where the non-bounty score does not beat the opponent, but the final score does | 2,500 Marks, 50 Crowns |
-| `aggressor` | Aggressor I | Aggressor | Win 1 game as Seat X | 200 Marks |
-| `aggressor` | Aggressor II | Aggressor | Win 10 games as Seat X | 1,000 Marks |
-| `aggressor` | Aggressor III | Aggressor | Win 100 games as Seat X | 5,000 Marks, 100 Crowns, `badge_aggressor` |
-| `defender` | Defender I | Defender | Win 1 game as Seat Y | 200 Marks |
-| `defender` | Defender II | Defender | Win 10 games as Seat Y | 1,000 Marks |
-| `defender` | Defender III | Defender | Win 100 games as Seat Y | 5,000 Marks, 100 Crowns, `badge_defender` |
-| `streak_easy` | Easy Streak | Win Streaks | Win 3 consecutive matches against Easy CPU | 250 Marks |
-| `streak_medium` | Medium Streak | Win Streaks | Win 3 consecutive matches against Normal CPU | 500 Marks |
-| `streak_hard` | Hard Streak | Win Streaks | Win 3 consecutive matches against Hard CPU | 1,000 Marks |
-| `streak_ranked` | Ranked Streak | Win Streaks | Win 3 consecutive Ranked matches | 1,500 Marks, 50 Crowns |
-| `comeback` | Comeback I | Comeback | Win 1 game after trailing at the end of Round 2 | 500 Marks |
-| `comeback` | Comeback II | Comeback | Win 10 such games | 1,500 Marks |
-| `comeback` | Comeback III | Comeback | Win 50 such games | 4,000 Marks, 50 Crowns, `badge_resilient` |
-| `first_clash` | First Clash | Ties | Tie an exchange | 100 Marks |
-| `clash_master` | Clash Master | Ties | Tie at least 3 exchanges in one game | 500 Marks |
-| `dead_heat` | Dead Heat | Ties | Finish a match with equal final scores | 1,500 Marks, 50 Crowns |
-| `collector` | Collector I | Collector | Purchase 3 chromas of any rarity | 500 Marks |
-| `collector` | Collector II | Collector | Purchase 3 rare chromas | 1,500 Marks |
-| `collector` | Collector III | Collector | Purchase 3 super-rare or seasonal chromas | 1 Pick-Any-Chroma token |
-| `long_march` | Long March | Dedication | Play 100 matches | 2,000 Marks |
-| `hard_way` | The Hard Way | Dedication | Win 10 matches against the Hard CPU, including local Ranked matches | 2,500 Marks, 100 Crowns, `badge_determined` |
-| `login_streak` | Login Streak I | Login Streak | Log in for the first time | 100 Marks |
-| `login_streak` | Login Streak II | Login Streak | Log in 7 consecutive days | 750 Marks |
-| `login_streak` | Login Streak III | Login Streak | Log in 30 consecutive days | 3,000 Marks, 50 Crowns, `badge_devoted` |
-| `first_blood` | First Blood | — | Win your first match | 200 Marks |
-| `both_sides` | Both Sides | — | Win a match as Seat X and a match as Seat Y | 300 Marks |
-| `the_cycle` | The Cycle | — | Win a game with a lane won by suit doubling | 200 Marks |
-| `master_both` | Master Both | — | Win 3 consecutive matches as Seat X and 3 consecutive matches as Seat Y | 1,500 Marks |
-| `photo_finish` | Photo Finish | — | Win a match by exactly 1 point | 1,500 Marks, 50 Crowns |
-| `no_not_like_that` | No, Not Like That | — | Lose a game with at least 9 points from one suit | 1,000 Marks, 50 Crowns |
+## Tier reward ladder
+
+All Per-Mode and Meta achievements use the same tier payout. Per-Mode capstone
+boxes vary by game type; Meta capstones grant a Gold Box. Capstone token types
+rotate across achievements.
+
+| Level | Marks | Crowns | Capstone box | Capstone token |
+|---|---:|---:|---|---|
+| I | 400 | — | — | — |
+| II | 800 | 1 | — | — |
+| III | 1,200 | 2 | Per-Mode: Wooden or Silver; Meta: Gold | One token |
+
+## Campaigns
+
+Complete every mission in the named campaign for the one-time reward.
+`camp_pow` currently maps to the Basic campaign.
+
+| ID | Campaign | Reward |
+|---|---|---|
+| `camp_pow` | Prisoners of War (Basic) | 3,000 Marks + 10 Crowns |
+| `camp_abandon` | Abandon | 3,000 Marks + 10 Crowns |
+| `camp_ladder` | Ladder | 3,000 Marks + 10 Crowns |
+| `camp_poker` | Poker | 3,000 Marks + 10 Crowns |
+| `camp_rummy` | Rummy | 3,000 Marks + 10 Crowns |
+| `camp_puzzler` | Puzzler | 3,000 Marks + 10 Crowns |
+| `camp_tug_war` | Tug War | 3,000 Marks + 10 Crowns |
+
+## Feats
+
+Each Feat grants one Skill Point when its requirement is met.
+
+| ID | Feat | Requirement |
+|---|---|---|
+| `sparse` | Sparse | Win with exactly two suits represented in your jail. |
+| `efficient` | Efficient | Win with all 9 prisoners and no clashes. |
+| `bounty_hunter` | Bounty Hunter | Win with at least 3 prisoners matching the bounty role. |
+| `bounty_denied` | Bounty Denied | Win with no prisoners matching the bounty role. |
+| `bounty_decided` | Bounty Decided | Win when your non-bounty score does not beat the opponent, but your final score does. |
+| `comeback` | Comeback | Win a game after trailing at the end of Round 2. |
+| `clash_master` | Clash Master | Tie at least 3 exchanges in one game. |
+| `dead_heat` | Dead Heat | Finish a match with equal final scores. |
+| `photo_finish` | Photo Finish | Win a match by exactly 1 point. |
+
+## Per-Mode
+
+Win each game type 1, 10, and 30 times. Each milestone pays the standard
+ladder above; the box and token listed are awarded at level III.
+
+| ID | Game type | Level III box | Level III token |
+|---|---|---|---|
+| `mode_main` | Prisoners of War | Silver | Undo |
+| `mode_fog` | Fog of War | Silver | Undo |
+| `mode_abandon` | Abandon | Wooden | Restart |
+| `mode_poker` | Poker | Silver | Restart |
+| `mode_rummy` | Rummy | Wooden | Restart |
+| `mode_puzzler` | Puzzler | Wooden | Replace Card |
+| `mode_ladder` | Ladder | Wooden | Skip Level |
+| `mode_tug-war` | Tug War | Wooden | Skip Level |
+
+## Meta
+
+Each milestone pays the standard ladder above; every level III milestone also
+grants one Gold Box and the listed token.
+
+| ID | Achievement | I / II / III requirements | Level III token |
+|---|---|---|---|
+| `chroma_collector` | Chroma Collector | Own 5 / 20 / 50 chromas | Replace Card |
+| `lucky_draw` | Lucky Draw | Open 5 / 20 / 50 boxes | Skip Level |
+| `win_streak_humans` | Win Streak (Humans) | Win 3 / 6 / 12 consecutive matches against human opponents | Undo |
+| `login_streak` | Login Streak | Log in on 1 / 10 / 30 consecutive days | Restart |
+| `long_march` | Long March | Win 20 / 50 / 100 matches | Undo |
+| `hero_variety` | Hero Variety | Win at least 10 matches while winning with 3 / 6 / 10 different heroes | Replace Card |
+| `branch_master` | Branch Master | Fully unlock 1 / 3 / 6 Skill Tree branches | Skip Level |
+| `tinkerer` | Tinkerer | Use 10 / 50 / 200 consumables | Restart |
+| `marathon` | Marathon | Play 10 / 30 / 60 matches in a single week | Undo |
+| `mode_tourist` | Mode Tourist | Win in 2 / 4 / 7 different game types | Replace Card |
+| `ranked_regular` | Ranked Regular | Play 10 / 50 / 200 ranked matches | Skip Level |
 
 ## Sets
 
-| Set | Members | Completion reward |
-|---|---|---|
-| Sparse | Sparse | 1 Skill Tree Point |
-| Efficient | Efficient | 1 Skill Tree Point |
-| Bounty | Bounty Hunter, Bounty Denied, Bounty Decided | 1 Skill Tree Point |
-| Aggressor | Aggressor | 1 Skill Tree Point |
-| Defender | Defender | 1 Skill Tree Point |
-| Win Streaks | Easy, Medium, Hard, and Ranked Streak | 1 Skill Tree Point |
-| Comeback | Comeback | 1 Skill Tree Point |
-| Ties | First Clash, Clash Master, Dead Heat | 1 Skill Tree Point |
-| Collector | Collector | 1 Skill Tree Point |
-| Dedication | Long March, The Hard Way | 1 Skill Tree Point |
-| Login Streak | Login Streak | 1 Skill Tree Point |
+The gallery groups achievements into Campaigns, Bounty Feats, Other Feats,
+Per-Mode, and Meta. Completing a set grants no additional reward.
 
-The detailed list defines 11 sets and therefore 11 Skill Tree Points. Although
-the source specification mentions 12 sets in its introduction, it lists 11
-sets and sets the tuning target to 11 Skill Tree Points; this implementation
-follows the named sets and tuning target. Summing the listed achievement
-rewards yields 53,300 Marks and 700 Crowns, above the specification’s
-approximate targets of 52,000 Marks and 600 Crowns. The individual rewards are
-kept as specified rather than silently adjusted.
+## Totals
+
+These totals assume every achievement tier is earned.
+
+| Source | Marks | Crowns | Skill Points | Boxes | Tokens |
+|---|---:|---:|---:|---:|---:|
+| Campaigns (7) | 21,000 | 70 | — | — | — |
+| Feats (9) | — | — | 9 | — | — |
+| Per-Mode (8 × 3 tiers) | 19,200 | 24 | — | 8 | 8 |
+| Meta (11 × 3 tiers) | 26,400 | 33 | — | 11 | 11 |
+| **Total** | **66,600** | **127** | **9** | **19** | **19** |
 
 ## Gallery and integration
 
-In the terminal UI, choose **Achievements** to browse categories, progress,
-status, tier rewards, current role-color swatches, and set completion. Newly
-earned achievements and sets are reported after a match or progression event.
-Skill Points are the only currency for skill unlocks; the Shop sells one for
-300 Crowns or ten for 2,400 Crowns.
-Collector tokens can be redeemed from the chroma shop by selecting `pick` and
-then an unowned chroma.
+The browser and terminal galleries show categories, requirements, progress,
+tier rewards, and set groupings. Rewards are credited automatically; no claim
+action is required.
 
-Match results, Camp Draws, chroma purchases, profile startup, and login streak
-updates feed the achievement evaluator. The match result summaries are
-progression data adapters; they do not change game rules. Achievement and set
-definitions are also included in the JSON output from:
+Match outcomes update mode wins, total wins, hero wins, ranked matches,
+human win streaks, and weekly match counts. Opening Wooden, Silver, Gold, or
+Hero Boxes advances Lucky Draw; using Undo, Restart, Skip Level, or Replace
+Card advances Tinkerer. Login events update Login Streak. These progression
+updates do not alter game rules.
+
+Achievement definitions are included in the economy JSON output:
 
 ```powershell
-GOWORK=off go -C backend run ./cmd/prisoners-of-war --dump-economy
+go -C backend run ./cmd/prisoners-of-war --dump-economy
 ```

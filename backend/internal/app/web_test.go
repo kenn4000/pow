@@ -314,6 +314,8 @@ func TestWebSkinAssetsAreServedWithImageHeaders(t *testing.T) {
 		"/skins/icons/hero_chest.png",
 		"/skins/icons/animations/clouds.png",
 		"/skins/icons/animations/clouds.json",
+		"/skins/icons/animations/icons1.png",
+		"/skins/icons/animations/icons1.json",
 	} {
 		request = httptest.NewRequest(http.MethodGet, assetPath, nil)
 		response = httptest.NewRecorder()
@@ -519,18 +521,41 @@ func TestCampDrawRewardChoiceAppliesOnlySelectedReward(t *testing.T) {
 	}
 }
 
-func TestWebSkillTreeBranchIconsAreServed(t *testing.T) {
+func TestWebIconAtlasContainsSkillTreeAndCampaignIcons(t *testing.T) {
 	web := &webServer{}
-	for _, name := range []string{
-		"branch_daily.png", "branch_multi.png", "branch_general.png",
-		"branch_energy.png", "branch_chest.png", "branch_deck.png",
+	for _, assetPath := range []string{
+		"/skins/icons/animations/icons1.png",
+		"/skins/icons/animations/icons1.json",
 	} {
-		request := httptest.NewRequest(http.MethodGet, "/skins/icons/"+name, nil)
+		request := httptest.NewRequest(http.MethodGet, assetPath, nil)
 		response := httptest.NewRecorder()
 		web.handleSkinAsset(response, request)
-		if response.Code != http.StatusOK || response.Header().Get("Content-Type") != "image/png" || response.Body.Len() == 0 {
-			t.Errorf("branch icon %q status=%d content-type=%q body-size=%d", name, response.Code,
-				response.Header().Get("Content-Type"), response.Body.Len())
+		if response.Code != http.StatusOK || response.Body.Len() == 0 {
+			t.Fatalf("icon atlas asset %q status=%d body-size=%d", assetPath, response.Code, response.Body.Len())
+		}
+		if filepath.Ext(assetPath) == ".png" {
+			if response.Header().Get("Content-Type") != "image/png" {
+				t.Fatalf("icon atlas image content type = %q", response.Header().Get("Content-Type"))
+			}
+			continue
+		}
+		var metadata struct {
+			Frames map[string]json.RawMessage `json:"frames"`
+		}
+		if err := json.Unmarshal(response.Body.Bytes(), &metadata); err != nil {
+			t.Fatalf("decode icon atlas metadata: %v", err)
+		}
+		for _, name := range []string{
+			"abandon.png", "poker.png", "ladder.png", "rummy.png",
+			"branch_daily.png", "branch_multi.png", "branch_general.png",
+			"branch_energy.png", "branch_chest.png", "branch_deck.png",
+			"battle.png", "social.png", "shop.png", "campaigns.png",
+			"campdraw.png", "acheivements.png", "heroselect.png", "skilltree.png",
+			"home.png", "matchhistory.png",
+		} {
+			if _, ok := metadata.Frames[name]; !ok {
+				t.Errorf("icon atlas is missing frame %q", name)
+			}
 		}
 	}
 }
@@ -598,6 +623,38 @@ func TestWebHeroSelectionRejectsLockedHeroes(t *testing.T) {
 	}
 	if web.session != nil {
 		t.Fatal("invalid hero selection started a game")
+	}
+}
+
+func TestWebCPUMatchChargesOneEnergyAndRejectsEmptyBalance(t *testing.T) {
+	playerProfile, err := profile.New(time.Now())
+	if err != nil {
+		t.Fatal(err)
+	}
+	playerProfile.SetSaveHandler(func(*profile.Profile) error { return nil })
+	web := &webServer{rng: rand.New(rand.NewSource(58)), playerProfile: playerProfile}
+	request := httptest.NewRequest(http.MethodPost, "/api/new", bytes.NewBufferString(
+		`{"mode":"easy","playerHeroId":"recruit"}`,
+	))
+	response := httptest.NewRecorder()
+	web.handleNewGame(response, request)
+	if response.Code != http.StatusOK {
+		t.Fatalf("single CPU match status = %d: %s", response.Code, response.Body.String())
+	}
+	if playerProfile.Energy != playerProfile.MaxEnergy-1 {
+		t.Fatalf("single CPU match Energy = %d/%d, want one spent", playerProfile.Energy, playerProfile.MaxEnergy)
+	}
+
+	web.session = nil
+	playerProfile.Energy = 0
+	playerProfile.EnergyUpdatedAt = time.Now()
+	request = httptest.NewRequest(http.MethodPost, "/api/new", bytes.NewBufferString(
+		`{"mode":"easy","playerHeroId":"recruit"}`,
+	))
+	response = httptest.NewRecorder()
+	web.handleNewGame(response, request)
+	if response.Code != http.StatusConflict || web.session != nil {
+		t.Fatalf("empty Energy start status/session = %d/%v", response.Code, web.session != nil)
 	}
 }
 
@@ -704,7 +761,7 @@ func TestWebWaitingStateIncludesLiveDashboardData(t *testing.T) {
 	p.DrawsAvailable = 3
 	p.PendingBoxes["wooden"] = 2
 	p.SkillPoints = 1
-	p.AchievementTiers["aggressor"] = 1
+	p.AchievementTiers["mode_main"] = 1
 	web := &webServer{playerProfile: p}
 
 	dashboard := web.view().Dashboard
@@ -716,6 +773,7 @@ func TestWebWaitingStateIncludesLiveDashboardData(t *testing.T) {
 		len(dashboard.OwnedChromaDetails) != 3 ||
 		dashboard.Marks != p.Marks || dashboard.Crowns != p.Crowns ||
 		dashboard.Energy != 7 || dashboard.MaxEnergy != p.MaxEnergy ||
+		dashboard.EnergyRechargeSeconds != int(profile.DefaultEnergyRecharge.Seconds()) ||
 		dashboard.AdsLeft != energy.DailyAdLimit-2 ||
 		dashboard.LoginStreakCurrent != 12 || dashboard.LoginStreakBest != 30 ||
 		dashboard.WinsSinceCampDraw != 4 || dashboard.WinsPerCampDraw != 10 ||
@@ -753,7 +811,7 @@ func TestWebDashboardFeatureActionsUseTemporaryPreviewProfile(t *testing.T) {
 		t.Fatal(err)
 	}
 	p.Marks = 10000
-	p.AchievementTiers["aggressor"] = 1
+	p.AchievementTiers["mode_main"] = 1
 	web := &webServer{rng: rand.New(rand.NewSource(71)), playerProfile: p}
 
 	campResponse := callDashboardHandler(t, web.handleCampDraw, http.MethodGet, "/api/camp-draw?preview=dashboard", nil)
@@ -909,12 +967,16 @@ func TestShopChromaFamilyPurchasePersistsDiscountAndOwnership(t *testing.T) {
 		t.Fatal(err)
 	}
 	var familyFullPrice int64
-	for _, id := range []string{"alien-blue", "alien-red", "alien-yellow"} {
-		chroma, ok := catalog.FindChroma(id)
-		if !ok {
-			t.Fatalf("Alien chroma %q is missing", id)
+	familyIDs := []string{}
+	for _, chroma := range catalog.AllChromas() {
+		if shopChromaFamilyKey(chroma) == "alien" &&
+			(chroma.Currency == string(catalog.Marks) || chroma.Currency == string(catalog.Crowns)) {
+			familyIDs = append(familyIDs, chroma.ID)
+			familyFullPrice += chroma.Cost
 		}
-		familyFullPrice += chroma.Cost
+	}
+	if len(familyIDs) < 2 {
+		t.Fatal("Alien family must have at least two purchasable chromas")
 	}
 	p.Marks = (familyFullPrice*4 + 2) / 5
 	profilePath := filepath.Join(t.TempDir(), "profile.json")
@@ -930,11 +992,11 @@ func TestShopChromaFamilyPurchasePersistsDiscountAndOwnership(t *testing.T) {
 	if err := json.Unmarshal(response.Body.Bytes(), &page); err != nil {
 		t.Fatal(err)
 	}
-	if p.Marks != page.Dashboard.Marks || p.TotalChromasPurchased != 3 {
+	if p.Marks != page.Dashboard.Marks || p.TotalChromasPurchased != len(familyIDs) {
 		t.Fatalf("family purchase did not apply discount and ownership: marks=%d purchased=%d dashboard=%+v",
 			p.Marks, p.TotalChromasPurchased, page.Dashboard)
 	}
-	for _, id := range []string{"alien-blue", "alien-red", "alien-yellow"} {
+	for _, id := range familyIDs {
 		if !p.OwnedChromas[id] {
 			t.Errorf("family purchase did not grant %q", id)
 		}
@@ -943,9 +1005,14 @@ func TestShopChromaFamilyPurchasePersistsDiscountAndOwnership(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if saved.Marks != p.Marks || saved.TotalChromasPurchased != 3 || !saved.OwnedChromas["alien-yellow"] {
-		t.Fatalf("saved family purchase = marks:%d purchased:%d alien-yellow:%t",
-			saved.Marks, saved.TotalChromasPurchased, saved.OwnedChromas["alien-yellow"])
+	if saved.Marks != p.Marks || saved.TotalChromasPurchased != len(familyIDs) {
+		t.Fatalf("saved family purchase = marks:%d purchased:%d",
+			saved.Marks, saved.TotalChromasPurchased)
+	}
+	for _, id := range familyIDs {
+		if !saved.OwnedChromas[id] {
+			t.Errorf("saved family purchase did not grant %q", id)
+		}
 	}
 }
 
@@ -982,8 +1049,8 @@ func TestShopBoxPurchasesChargeCurrencyAndGrantInventory(t *testing.T) {
 	wantOffers := []webShopBoxOffer{
 		{Type: "wooden", MarksCost: 300, CrownsCost: 13, Available: 1},
 		{Type: "silver", MarksCost: 600, CrownsCost: 25, Available: 1},
-		{Type: "hero", MarksCost: heroes.HeroBoxMarksCost, Available: 1},
 		{Type: "gold", MarksCost: 1200, CrownsCost: 50, Available: 1},
+		{Type: "hero", MarksCost: heroes.HeroBoxMarksCost, Available: 1},
 	}
 	for index, offer := range offers {
 		want := wantOffers[index]
@@ -1030,6 +1097,15 @@ func TestShopEnergyRechargeOptionsAndPurchases(t *testing.T) {
 		page.EnergyOffers[0] != (webShopEnergyOffer{Amount: 1, MarksCost: 500, CrownsCost: 25}) ||
 		page.EnergyOffers[1] != (webShopEnergyOffer{Amount: 10, MarksCost: 4500, CrownsCost: 225}) {
 		t.Fatalf("energy offers = %+v", page.EnergyOffers)
+	}
+	if want := []webShopCrownOffer{
+		{Crowns: 100, PriceDollars: 1}, {Crowns: 550, PriceDollars: 5}, {Crowns: 1150, PriceDollars: 10},
+	}; len(page.CrownOffers) != len(want) || page.CrownOffers[0] != want[0] ||
+		page.CrownOffers[1] != want[1] || page.CrownOffers[2] != want[2] {
+		t.Fatalf("Crown pack previews = %+v, want %+v", page.CrownOffers, want)
+	}
+	if got := []string{page.BoxOffers[0].Type, page.BoxOffers[1].Type, page.BoxOffers[2].Type, page.BoxOffers[3].Type}; got[0] != "wooden" || got[1] != "silver" || got[2] != "gold" || got[3] != "hero" {
+		t.Fatalf("box shop order = %v, want Hero Box last", got)
 	}
 	if _, err := web.applyShopAction(p, actionRequest{
 		Action: "buy-energy", Amount: 10, Payment: "crowns",
@@ -1165,6 +1241,10 @@ func TestWebProfileCampaignAndHistoryPagesUseProfileData(t *testing.T) {
 	featured := dailyFeaturedShopItem(p, now)
 	if featured == nil || featured.Date != now.Format("2006-01-02") {
 		t.Fatalf("daily featured item = %+v", featured)
+	}
+	chroma, ok := catalog.FindChroma(featured.ID)
+	if !ok || featured.Skin != chroma.Skin || featured.Skin == "" {
+		t.Fatalf("daily featured artwork path = %q; chroma = %+v", featured.Skin, chroma)
 	}
 	if other := dailyFeaturedShopItem(p, now.Add(5*time.Hour)); other == nil || other.ID != featured.ID {
 		t.Fatalf("daily shop item changed during the same date: first=%+v later=%+v", featured, other)
