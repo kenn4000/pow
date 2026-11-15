@@ -327,7 +327,7 @@ func (s *webServer) applyPokerDuelCPUAction() error {
 		if err := duel.completeTurn(now); err != nil {
 			return err
 		}
-		s.finishPokerDuelTurn(1, now, "pass", false)
+		s.finishPokerDuelTurn(1, now, "pass")
 		return nil
 	}
 

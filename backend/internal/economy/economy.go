@@ -157,7 +157,7 @@ func CalculateMultiplayerPayout(
 	case "easy":
 		payout.AIMultiplier = 0.5
 	case "normal":
-		payout.AIMultiplier = 0.7
+		payout.AIMultiplier = 0.75
 	case "hard":
 		payout.AIMultiplier = 0.9
 	default:

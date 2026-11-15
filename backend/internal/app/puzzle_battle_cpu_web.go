@@ -6,11 +6,15 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"math/bits"
+	"math/rand"
 	"net/http"
+	"strings"
 	"time"
 
 	"github.com/go-chi/chi/v5"
 	"prisonersofwar/internal/energy"
+	"prisonersofwar/internal/game"
 	"prisonersofwar/internal/heroes"
 	"prisonersofwar/internal/puzzlebattle"
 )
@@ -102,6 +106,11 @@ func (s *webServer) getPuzzleBattleCPU(w http.ResponseWriter, r *http.Request, u
 }
 
 func (s *webServer) startPuzzleBattleCPU(w http.ResponseWriter, r *http.Request, user account, request puzzleBattleRequest) {
+	matchMode, err := puzzleBattleCPUMatchMode(request.MatchMode)
+	if err != nil {
+		writeError(w, http.StatusBadRequest, err)
+		return
+	}
 	tx, err := s.db.BeginTx(r.Context(), nil)
 	if err != nil {
 		databaseError(w, err)
@@ -168,7 +177,7 @@ func (s *webServer) startPuzzleBattleCPU(w http.ResponseWriter, r *http.Request,
 		databaseError(w, fmt.Errorf("create Easy CPU Puzzle Battle: %w", err))
 		return
 	}
-	match.MatchMode = "cpu_easy"
+	match.MatchMode = matchMode
 	if err := match.StartImmediately(now); err != nil {
 		databaseError(w, err)
 		return
@@ -281,7 +290,7 @@ func loadPuzzleBattleCPUMatch(ctx context.Context, tx *sql.Tx, matchID, userID s
 		return nil, "", fmt.Errorf("decode CPU Puzzle Battle: %w", err)
 	}
 	if match.ID != matchID || match.PlayerIDs != [2]string{userID, "easy-cpu:" + matchID} ||
-		match.PlayerHeroIDs != [2]string{heroID, "recruit"} || match.MatchMode != "cpu_easy" {
+		match.PlayerHeroIDs != [2]string{heroID, "recruit"} || !isPuzzleBattleCPUMatchMode(match.MatchMode) {
 		return nil, "", errors.New("stored CPU Puzzle Battle does not match its owner")
 	}
 	return &match, status, nil
@@ -292,9 +301,10 @@ func buildPuzzleBattleCPUResponse(match *puzzlebattle.Match, now time.Time) (puz
 	if err != nil {
 		return puzzleBattleResponse{}, err
 	}
+	difficulty := strings.TrimPrefix(match.MatchMode, "cpu_")
 	players := [2]puzzleBattlePlayerView{
 		{Handle: "You"},
-		{Handle: "Easy CPU"},
+		{Handle: strings.ToUpper(difficulty[:1]) + difficulty[1:] + " CPU"},
 	}
 	for index, heroID := range match.PlayerHeroIDs {
 		hero, ok := heroes.ByID(heroID)
@@ -306,7 +316,7 @@ func buildPuzzleBattleCPUResponse(match *puzzlebattle.Match, now time.Time) (puz
 		players[index].Draft = match.PlayerDraft[index]
 	}
 	return puzzleBattleResponse{
-		Status: match.Status, MatchMode: "easy", CPUPractice: true,
+		Status: match.Status, MatchMode: difficulty, CPUPractice: true,
 		Match:  &puzzleBattlePublicMatch{View: view, Players: players},
 		Payout: puzzleBattlePayoutForPlayer(match, 0),
 	}, nil
@@ -372,12 +382,108 @@ func submitPuzzleBattleCPUPairs(match *puzzlebattle.Match, now time.Time) error 
 	if err != nil {
 		return fmt.Errorf("create CPU pair-selection randomness: %w", err)
 	}
-	indices := rng.Perm(len(round.Board))
-	for pairIndex := 0; pairIndex < requiredPairs; pairIndex++ {
+	pairs := choosePuzzleBattleCPUPairs(match, round, strings.TrimPrefix(match.MatchMode, "cpu_"), rng, requiredPairs)
+	for pairIndex, pair := range pairs {
 		match.LastHeartbeatAt[1] = now
-		if err := match.SubmitPair(1, indices[pairIndex*2], indices[pairIndex*2+1], now); err != nil {
+		if err := match.SubmitPair(1, pair.FirstIndex, pair.SecondIndex, now); err != nil {
 			return fmt.Errorf("submit CPU pair %d: %w", pairIndex+1, err)
 		}
 	}
 	return nil
+}
+
+func puzzleBattleCPUMatchMode(mode string) (string, error) {
+	if mode == "" {
+		mode = "easy"
+	}
+	if mode != "easy" && mode != "normal" && mode != "hard" {
+		return "", errors.New("CPU difficulty must be easy, normal, or hard")
+	}
+	return "cpu_" + mode, nil
+}
+
+func isPuzzleBattleCPUMatchMode(mode string) bool {
+	return mode == "cpu_easy" || mode == "cpu_normal" || mode == "cpu_hard"
+}
+
+func choosePuzzleBattleCPUPairs(match *puzzlebattle.Match, round *puzzlebattle.Round, difficulty string, rng *rand.Rand, required int) []puzzlebattle.Pair {
+	if difficulty == "easy" {
+		indices := rng.Perm(len(round.Board))
+		pairs := make([]puzzlebattle.Pair, required)
+		for i := range pairs {
+			pairs[i] = puzzlebattle.Pair{FirstIndex: indices[i*2], SecondIndex: indices[i*2+1]}
+		}
+		return pairs
+	}
+
+	var available uint64
+	for index := range round.Board {
+		available |= uint64(1) << index
+	}
+	pairs := make([]puzzlebattle.Pair, 0, required)
+	captured := make([]game.Card, 0, required)
+	bestPairs := make([]puzzlebattle.Pair, 0, required)
+	bestScore, bestCaptures, tiedSelections := -1, -1, 0
+	var search func(uint64, int)
+	search = func(mask uint64, remaining int) {
+		if remaining == 0 {
+			score := len(captured)
+			if difficulty == "hard" {
+				var capturedByRound [3][3]int
+				for _, card := range captured {
+					capturedByRound[round.Number-1][int(card.Suit)]++
+				}
+				score = game.ScoreWithModifiers(
+					captured, capturedByRound, match.BountySuit, match.Modifiers,
+				).Total
+			}
+			if score > bestScore || score == bestScore && len(captured) > bestCaptures {
+				bestScore, bestCaptures = score, len(captured)
+				bestPairs = append(bestPairs[:0], pairs...)
+				tiedSelections = 1
+			} else if score == bestScore && len(captured) == bestCaptures {
+				tiedSelections++
+				if rng.Intn(tiedSelections) == 0 {
+					bestPairs = append(bestPairs[:0], pairs...)
+				}
+			}
+			return
+		}
+		if bits.OnesCount64(mask) < remaining*2 {
+			return
+		}
+		firstIndex := bits.TrailingZeros64(mask)
+		withoutFirst := mask &^ (uint64(1) << firstIndex)
+		if bits.OnesCount64(withoutFirst) >= remaining*2 {
+			search(withoutFirst, remaining)
+		}
+		for candidates := withoutFirst; candidates != 0; candidates &= candidates - 1 {
+			secondIndex := bits.TrailingZeros64(candidates)
+			attackerIndex, defenderIndex := firstIndex, secondIndex
+			if round.Controller != 1 {
+				attackerIndex, defenderIndex = secondIndex, firstIndex
+			}
+			outcome := game.ResolveWithModifiers(
+				round.Board[attackerIndex], round.Board[defenderIndex], match.Modifiers,
+			)
+			winner := -1
+			switch outcome.Winner {
+			case 0:
+				winner = round.Controller
+			case 1:
+				winner = 1 - round.Controller
+			}
+			pairs = append(pairs, puzzlebattle.Pair{FirstIndex: firstIndex, SecondIndex: secondIndex})
+			if winner == 1 {
+				captured = append(captured, outcome.Captured)
+			}
+			search(withoutFirst&^(uint64(1)<<secondIndex), remaining-1)
+			if winner == 1 {
+				captured = captured[:len(captured)-1]
+			}
+			pairs = pairs[:len(pairs)-1]
+		}
+	}
+	search(available, required)
+	return bestPairs
 }

@@ -7,6 +7,7 @@ import (
 	"testing"
 	"time"
 
+	"prisonersofwar/internal/game"
 	"prisonersofwar/internal/heroes"
 )
 
@@ -174,6 +175,9 @@ func TestTogglePairSubmitAndPrivateView(t *testing.T) {
 	if view.RoundOneScores != nil || view.Result != nil {
 		t.Fatalf("round-one score leaked before round two: %+v", view)
 	}
+	if view.RoundOneJails[0] != nil || view.RoundOneJails[1] != nil {
+		t.Fatalf("round-one jail leaked before both players submitted: %+v", view.RoundOneJails)
+	}
 	if len(view.OwnPairs) != len(round.Players[1].Pairs) || view.OwnPairs[0] != round.Players[1].Pairs[0] {
 		t.Fatal("view does not contain only the requesting player's pairs")
 	}
@@ -190,11 +194,42 @@ func TestTogglePairSubmitAndPrivateView(t *testing.T) {
 	if view.RoundOneScores == nil {
 		t.Fatal("round-one scores should be revealed at the start of round two")
 	}
+	for player := range view.RoundOneJails {
+		if len(view.RoundOneJails[player]) != len(round.Players[player].Jail) {
+			t.Fatalf("round-one jail %d has %d cards, want %d", player,
+				len(view.RoundOneJails[player]), len(round.Players[player].Jail))
+		}
+		for index, card := range view.RoundOneJails[player] {
+			if card != round.Players[player].Jail[index] {
+				t.Fatalf("round-one jail %d card %d = %v, want %v", player, index, card, round.Players[player].Jail[index])
+			}
+		}
+	}
 	if view.RoundNumber != 2 || view.RequiredPairs != 4 || view.Deadline == nil {
 		t.Fatalf("round two view is incomplete: %+v", view)
 	}
 	if view.RemainingMillis != int64(MatchLength/time.Millisecond) {
 		t.Fatalf("round two should use the existing global clock, got %dms", view.RemainingMillis)
+	}
+}
+
+func TestRoundTwoJailScoringUsesRoundTwoReckoning(t *testing.T) {
+	match := testMatch(t, 29, time.Now())
+	match.Modifiers.Reckoning = [3]int{1, 1, 5}
+	round := &Round{
+		Number: 2, Controller: 0,
+		Board: []game.Card{
+			{Suit: game.Shield, Face: 9},
+			{Suit: game.Shield, Face: 1},
+		},
+	}
+	score, jail, captured := match.scorePairs(round, 0, []Pair{{FirstIndex: 0, SecondIndex: 1}})
+	if len(jail) != 1 || captured[1][int(game.Shield)] != 1 || captured[0][int(game.Shield)] != 0 {
+		t.Fatalf("round-two capture tally = %v / %v, want one Shield captured in round two", jail, captured)
+	}
+	want := game.ScoreWithModifiers(jail, captured, match.BountySuit, match.Modifiers).Total
+	if score != want {
+		t.Fatalf("round-two score = %d, want %d", score, want)
 	}
 }
 

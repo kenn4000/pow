@@ -1,0 +1,315 @@
+{
+    "frames":  {
+                   "diplomat.png":  {
+                                        "trimmed":  false,
+                                        "spriteSourceSize":  {
+                                                                 "y":  0,
+                                                                 "w":  256,
+                                                                 "h":  256,
+                                                                 "x":  0
+                                                             },
+                                        "sourceSize":  {
+                                                           "h":  256,
+                                                           "w":  256
+                                                       },
+                                        "rotated":  false,
+                                        "frame":  {
+                                                      "y":  256,
+                                                      "w":  256,
+                                                      "h":  256,
+                                                      "x":  512
+                                                  }
+                                    },
+                   "warden.png":  {
+                                      "trimmed":  false,
+                                      "spriteSourceSize":  {
+                                                               "y":  0,
+                                                               "w":  256,
+                                                               "h":  256,
+                                                               "x":  0
+                                                           },
+                                      "sourceSize":  {
+                                                         "h":  256,
+                                                         "w":  256
+                                                     },
+                                      "rotated":  false,
+                                      "frame":  {
+                                                    "y":  768,
+                                                    "w":  256,
+                                                    "h":  256,
+                                                    "x":  512
+                                                }
+                                  },
+                   "treasure.png":  {
+                                        "trimmed":  false,
+                                        "spriteSourceSize":  {
+                                                                 "y":  0,
+                                                                 "w":  256,
+                                                                 "h":  256,
+                                                                 "x":  0
+                                                             },
+                                        "sourceSize":  {
+                                                           "h":  256,
+                                                           "w":  256
+                                                       },
+                                        "rotated":  false,
+                                        "frame":  {
+                                                      "y":  768,
+                                                      "w":  256,
+                                                      "h":  256,
+                                                      "x":  0
+                                                  }
+                                    },
+                   "turtle.png":  {
+                                      "trimmed":  false,
+                                      "spriteSourceSize":  {
+                                                               "y":  0,
+                                                               "w":  256,
+                                                               "h":  256,
+                                                               "x":  0
+                                                           },
+                                      "sourceSize":  {
+                                                         "h":  256,
+                                                         "w":  256
+                                                     },
+                                      "rotated":  false,
+                                      "frame":  {
+                                                    "y":  768,
+                                                    "w":  256,
+                                                    "h":  256,
+                                                    "x":  256
+                                                }
+                                  },
+                   "cpu_med.png":  {
+                                       "trimmed":  false,
+                                       "spriteSourceSize":  {
+                                                                "y":  0,
+                                                                "w":  256,
+                                                                "h":  256,
+                                                                "x":  0
+                                                            },
+                                       "sourceSize":  {
+                                                          "h":  256,
+                                                          "w":  256
+                                                      },
+                                       "rotated":  false,
+                                       "frame":  {
+                                                     "y":  256,
+                                                     "w":  256,
+                                                     "h":  256,
+                                                     "x":  256
+                                                 }
+                                   },
+                   "recruit.png":  {
+                                       "trimmed":  false,
+                                       "spriteSourceSize":  {
+                                                                "y":  0,
+                                                                "w":  256,
+                                                                "h":  256,
+                                                                "x":  0
+                                                            },
+                                       "sourceSize":  {
+                                                          "h":  256,
+                                                          "w":  256
+                                                      },
+                                       "rotated":  false,
+                                       "frame":  {
+                                                     "y":  512,
+                                                     "w":  256,
+                                                     "h":  256,
+                                                     "x":  768
+                                                 }
+                                   },
+                   "hater.png":  {
+                                     "trimmed":  false,
+                                     "spriteSourceSize":  {
+                                                              "y":  0,
+                                                              "w":  256,
+                                                              "h":  256,
+                                                              "x":  0
+                                                          },
+                                     "sourceSize":  {
+                                                        "h":  256,
+                                                        "w":  256
+                                                    },
+                                     "rotated":  false,
+                                     "frame":  {
+                                                   "y":  512,
+                                                   "w":  256,
+                                                   "h":  256,
+                                                   "x":  256
+                                               }
+                                 },
+                   "bodybuilder.png":  {
+                                           "trimmed":  false,
+                                           "spriteSourceSize":  {
+                                                                    "y":  0,
+                                                                    "w":  256,
+                                                                    "h":  256,
+                                                                    "x":  0
+                                                                },
+                                           "sourceSize":  {
+                                                              "h":  256,
+                                                              "w":  256
+                                                          },
+                                           "rotated":  false,
+                                           "frame":  {
+                                                         "y":  0,
+                                                         "w":  256,
+                                                         "h":  256,
+                                                         "x":  0
+                                                     }
+                                       },
+                   "cpu_easy.png":  {
+                                        "trimmed":  false,
+                                        "spriteSourceSize":  {
+                                                                 "y":  0,
+                                                                 "w":  256,
+                                                                 "h":  256,
+                                                                 "x":  0
+                                                             },
+                                        "sourceSize":  {
+                                                           "h":  256,
+                                                           "w":  256
+                                                       },
+                                        "rotated":  false,
+                                        "frame":  {
+                                                      "y":  0,
+                                                      "w":  256,
+                                                      "h":  256,
+                                                      "x":  768
+                                                  }
+                                    },
+                   "coach.png":  {
+                                     "trimmed":  false,
+                                     "spriteSourceSize":  {
+                                                              "y":  0,
+                                                              "w":  256,
+                                                              "h":  256,
+                                                              "x":  0
+                                                          },
+                                     "sourceSize":  {
+                                                        "h":  256,
+                                                        "w":  256
+                                                    },
+                                     "rotated":  false,
+                                     "frame":  {
+                                                   "y":  0,
+                                                   "w":  256,
+                                                   "h":  256,
+                                                   "x":  512
+                                               }
+                                 },
+                   "gorilla.png":  {
+                                       "trimmed":  false,
+                                       "spriteSourceSize":  {
+                                                                "y":  0,
+                                                                "w":  256,
+                                                                "h":  256,
+                                                                "x":  0
+                                                            },
+                                       "sourceSize":  {
+                                                          "h":  256,
+                                                          "w":  256
+                                                      },
+                                       "rotated":  false,
+                                       "frame":  {
+                                                     "y":  512,
+                                                     "w":  256,
+                                                     "h":  256,
+                                                     "x":  0
+                                                 }
+                                   },
+                   "cpu_hard.png":  {
+                                        "trimmed":  false,
+                                        "spriteSourceSize":  {
+                                                                 "y":  0,
+                                                                 "w":  256,
+                                                                 "h":  256,
+                                                                 "x":  0
+                                                             },
+                                        "sourceSize":  {
+                                                           "h":  256,
+                                                           "w":  256
+                                                       },
+                                        "rotated":  false,
+                                        "frame":  {
+                                                      "y":  256,
+                                                      "w":  256,
+                                                      "h":  256,
+                                                      "x":  0
+                                                  }
+                                    },
+                   "gambler.png":  {
+                                       "trimmed":  false,
+                                       "spriteSourceSize":  {
+                                                                "y":  0,
+                                                                "w":  256,
+                                                                "h":  256,
+                                                                "x":  0
+                                                            },
+                                       "sourceSize":  {
+                                                          "h":  256,
+                                                          "w":  256
+                                                      },
+                                       "rotated":  false,
+                                       "frame":  {
+                                                     "y":  256,
+                                                     "w":  256,
+                                                     "h":  256,
+                                                     "x":  768
+                                                 }
+                                   },
+                   "bureaucrat.png":  {
+                                          "trimmed":  false,
+                                          "spriteSourceSize":  {
+                                                                   "y":  0,
+                                                                   "w":  256,
+                                                                   "h":  256,
+                                                                   "x":  0
+                                                               },
+                                          "sourceSize":  {
+                                                             "h":  256,
+                                                             "w":  256
+                                                         },
+                                          "rotated":  false,
+                                          "frame":  {
+                                                        "y":  0,
+                                                        "w":  256,
+                                                        "h":  256,
+                                                        "x":  256
+                                                    }
+                                      },
+                   "hunter.png":  {
+                                      "trimmed":  false,
+                                      "spriteSourceSize":  {
+                                                               "y":  0,
+                                                               "w":  256,
+                                                               "h":  256,
+                                                               "x":  0
+                                                           },
+                                      "sourceSize":  {
+                                                         "h":  256,
+                                                         "w":  256
+                                                     },
+                                      "rotated":  false,
+                                      "frame":  {
+                                                    "y":  512,
+                                                    "w":  256,
+                                                    "h":  256,
+                                                    "x":  512
+                                                }
+                                  }
+               },
+    "meta":  {
+                 "size":  {
+                              "h":  1024,
+                              "w":  1024
+                          },
+                 "version":  "1.0",
+                 "app":  "dotnet-drawing",
+                 "image":  "heroes.png",
+                 "scale":  "1",
+                 "format":  "RGBA8888"
+             }
+}

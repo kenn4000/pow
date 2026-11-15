@@ -2,7 +2,7 @@ package skins
 
 import "embed"
 
-//go:embed hero_icons skinshop
+//go:embed skinshop
 var Files embed.FS
 
 //go:embed icons

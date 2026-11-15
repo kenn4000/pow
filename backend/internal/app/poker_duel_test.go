@@ -9,7 +9,7 @@ import (
 	"prisonersofwar/internal/heroes"
 )
 
-func TestNewPokerDuelGameUsesSharedModifiersAndSplitPiles(t *testing.T) {
+func TestNewPokerDuelGameDealsEachPlayerAnIdenticalDeck(t *testing.T) {
 	heroP1, _ := heroes.ByID("warden")
 	heroP2, _ := heroes.ByID("treasurer")
 	now := time.Date(2026, time.January, 1, 0, 0, 0, 0, time.UTC)
@@ -23,23 +23,29 @@ func TestNewPokerDuelGameUsesSharedModifiersAndSplitPiles(t *testing.T) {
 		t.Fatalf("unexpected shared stats: %+v", duel.SharedStats)
 	}
 	if len(duel.Players[0].Hand) != pokerDuelHandSize || len(duel.Players[1].Hand) != pokerDuelHandSize ||
-		len(duel.Players[0].DrawPile)+len(duel.Players[1].DrawPile) != 12 ||
-		(len(duel.Players[0].DrawPile) != 6 && len(duel.Players[0].DrawPile) != 7) {
+		len(duel.Players[0].DrawPile) != 18 || len(duel.Players[1].DrawPile) != 18 {
 		t.Fatalf("unexpected deal or draw piles: hands %d/%d, piles %d/%d",
 			len(duel.Players[0].Hand), len(duel.Players[1].Hand),
 			len(duel.Players[0].DrawPile), len(duel.Players[1].DrawPile))
 	}
-	seen := make(map[game.Card]bool)
-	for _, player := range duel.Players {
+	decks := make([]map[game.Card]bool, len(duel.Players))
+	for playerIndex, player := range duel.Players {
+		seen := make(map[game.Card]bool)
 		for _, card := range append(append([]game.Card(nil), player.Hand...), player.DrawPile...) {
 			if seen[card] {
 				t.Fatalf("duplicate card in deal: %v", card)
 			}
 			seen[card] = true
 		}
+		decks[playerIndex] = seen
 	}
-	if len(seen) != 24 {
-		t.Fatalf("filtered deck contains %d cards, want 24", len(seen))
+	if len(decks[0]) != 24 || len(decks[1]) != 24 {
+		t.Fatalf("filtered deck sizes are %d/%d, want 24 each", len(decks[0]), len(decks[1]))
+	}
+	for card := range decks[0] {
+		if !decks[1][card] {
+			t.Fatalf("second player's deck is missing %s", card)
+		}
 	}
 }
 
@@ -55,10 +61,11 @@ func TestNewPokerDuelGameUsesSharedDraftForTheDeckFloor(t *testing.T) {
 	if duel.SharedStats.Draft != 1 || duel.SharedStats.DeckFloor != 1 {
 		t.Fatalf("shared Draft floor = %d/%d, want 1/1", duel.SharedStats.Draft, duel.SharedStats.DeckFloor)
 	}
-	cards := len(duel.Players[0].Hand) + len(duel.Players[1].Hand) +
-		len(duel.Players[0].DrawPile) + len(duel.Players[1].DrawPile)
-	if cards != 27 {
-		t.Fatalf("deck contains %d cards at floor 1, want 27", cards)
+	for playerIndex, player := range duel.Players {
+		cards := len(player.Hand) + len(player.DrawPile)
+		if cards != 27 {
+			t.Fatalf("player %d deck contains %d cards at floor 1, want 27", playerIndex, cards)
+		}
 	}
 }
 
@@ -83,6 +90,19 @@ func TestPokerDuelTurnBanksRemainingTimeAndHidesPrivateCards(t *testing.T) {
 		!view.Players[0].Table[2].CanPlace {
 		t.Fatal("active view offered placements that violate balanced hand sizes")
 	}
+	duel.ActivePlayer = 1
+	duel.TurnStarted = now
+	cpuTurnView := duel.webView("poker-duel-thinking", now.Add(5*time.Second), 1)
+	if len(cpuTurnView.Players[0].Hand) != len(duel.Players[0].Hand) ||
+		!cpuTurnView.Players[1].HandHidden || cpuTurnView.TurnRemainingMS != 10_000 {
+		t.Fatal("CPU turn hid the player's hand or failed to advance the turn clock")
+	}
+	opponentView := duel.webView("poker-duel-play", now, 0)
+	if len(opponentView.Players[1].Hand) != len(duel.Players[1].Hand) ||
+		!opponentView.Players[0].HandHidden {
+		t.Fatal("online view did not keep the viewing player's hand private and visible")
+	}
+	duel.ActivePlayer = 0
 	handoffView := duel.webView("handoff", now, -1)
 	if !handoffView.Players[0].HandHidden || !handoffView.Players[1].HandHidden ||
 		!handoffView.Players[0].Table[1].Hidden || !handoffView.Players[1].Table[1].Hidden {
@@ -157,7 +177,7 @@ func TestPokerDuelSessionUsesPrivateHandoffs(t *testing.T) {
 	}
 }
 
-func TestPokerDuelTimeoutPlacesCardWithoutTimeBankBonus(t *testing.T) {
+func TestPokerDuelTimeoutPassesWithoutPlacingCard(t *testing.T) {
 	hero, _ := heroes.ByID("warden")
 	now := time.Date(2026, time.January, 1, 0, 0, 0, 0, time.UTC)
 	rng := rand.New(rand.NewSource(19))
@@ -166,13 +186,35 @@ func TestPokerDuelTimeoutPlacesCardWithoutTimeBankBonus(t *testing.T) {
 		t.Fatal(err)
 	}
 	duel.ActivePlayer = 0
+	hand := append([]game.Card(nil), duel.Players[0].Hand...)
 	if err := duel.handleTimeout(now.Add(15*time.Second), rng); err != nil {
 		t.Fatal(err)
 	}
-	if duel.Players[0].TimeBank != 0 || len(duel.Players[0].Table[0]) != 1 ||
+	if duel.Players[0].TimeBank != 0 || len(duel.Players[0].Table[0]) != 0 ||
+		len(duel.Players[0].Hand) != len(hand) ||
+		duel.Players[0].Hand[0] != hand[0] ||
 		duel.ActivePlayer != 1 || duel.TurnNumber != 2 {
-		t.Fatalf("timeout outcome incorrect: bank=%s table=%v active=%d turn=%d",
-			duel.Players[0].TimeBank, duel.Players[0].Table[0], duel.ActivePlayer, duel.TurnNumber)
+		t.Fatalf("timeout outcome incorrect: bank=%s hand=%v table=%v active=%d turn=%d",
+			duel.Players[0].TimeBank, duel.Players[0].Hand, duel.Players[0].Table[0],
+			duel.ActivePlayer, duel.TurnNumber)
+	}
+}
+
+func TestPokerDuelExpiredTurnStillUsesExplicitlyChosenPlacement(t *testing.T) {
+	hero, _ := heroes.ByID("warden")
+	now := time.Date(2026, time.January, 1, 0, 0, 0, 0, time.UTC)
+	rng := rand.New(rand.NewSource(20))
+	duel, err := newPokerDuelGame(hero, hero, rng, now)
+	if err != nil {
+		t.Fatal(err)
+	}
+	duel.ActivePlayer = 0
+	card := duel.Players[0].Hand[0]
+	if err := duel.takeTurn(0, 2, false, now.Add(15*time.Second), rng); err != nil {
+		t.Fatal(err)
+	}
+	if len(duel.Players[0].Table[2]) != 1 || duel.Players[0].Table[2][0] != card {
+		t.Fatal("expired turn did not honor the player's selected card and hand")
 	}
 }
 

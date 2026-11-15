@@ -271,15 +271,63 @@ func (s *webServer) advanceTugWarAI() error {
 		session.phase == "gameover" || !isAI(session.mode, session.actor) {
 		return nil
 	}
-	action := session.tugWar.ChooseCPUAction()
+	var action tugwar.Action
 	if session.tugWar.Mission != nil {
 		action = session.tugWar.ChooseCampaignCPUAction(s.rng)
+	} else {
+		switch session.mode {
+		case "easy":
+			if s.rng == nil {
+				return errors.New("Tug War Easy CPU requires a random source")
+			}
+			action = chooseRandomTugWarAction(session.tugWar, s.rng)
+		case "hard":
+			if s.rng == nil {
+				return errors.New("Tug War Hard CPU requires a random source")
+			}
+			hardGame := *session.tugWar
+			hardGame.Mission = &tugwar.CampaignMission{CPUPolicy: tugwar.CPUPolicyBlitz}
+			action = hardGame.ChooseCampaignCPUAction(s.rng)
+		default:
+			action = session.tugWar.ChooseCPUAction()
+		}
 	}
 	if err := session.tugWar.Apply(action); err != nil {
 		return fmt.Errorf("Tug War CPU action: %w", err)
 	}
 	s.updateTugWarSession()
 	return nil
+}
+
+func chooseRandomTugWarAction(match *tugwar.Game, rng *rand.Rand) tugwar.Action {
+	player := match.State.Current
+	actions := make([]tugwar.Action, 0)
+	if match.HasWinningPlay(player) {
+		for cardIndex, card := range match.State.Hands[player] {
+			for pileIndex, pile := range match.State.Piles {
+				top, ok := pile.Top()
+				if ok && tugwar.CardBeatsTop(card, top, match.State.S, match.State.F) {
+					actions = append(actions, tugwar.Action{
+						Kind: tugwar.ActionPlayCard, CardIndex: cardIndex, PileIndex: pileIndex,
+					})
+				}
+			}
+		}
+	}
+	if len(match.State.Deck) > 0 {
+		for pileIndex := range match.State.Piles {
+			actions = append(actions, tugwar.Action{Kind: tugwar.ActionFlipDeck, PileIndex: pileIndex})
+		}
+	}
+	for pileIndex := range match.State.Piles {
+		if match.CanSpendPush(player, pileIndex) {
+			actions = append(actions, tugwar.Action{Kind: tugwar.ActionSpendPush, PileIndex: pileIndex})
+		}
+	}
+	if len(actions) == 0 {
+		return tugwar.Action{Kind: tugwar.ActionPass}
+	}
+	return actions[rng.Intn(len(actions))]
 }
 
 func (s *webServer) finishTugWarCampaignGame() {

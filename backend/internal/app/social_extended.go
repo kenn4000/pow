@@ -169,6 +169,19 @@ func (s *webServer) socialConversations(ctx context.Context, userID string) ([]s
 	return result, rows.Err()
 }
 
+func (s *webServer) handleSocialConversations(w http.ResponseWriter, r *http.Request) {
+	user, ok := s.requireAccount(w, r)
+	if !ok {
+		return
+	}
+	conversations, err := s.socialConversations(r.Context(), user.ID)
+	if err != nil {
+		databaseError(w, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"conversations": conversations})
+}
+
 func (s *webServer) handleSocialConversation(w http.ResponseWriter, r *http.Request) {
 	user, ok := s.requireAccount(w, r)
 	if !ok {

@@ -834,6 +834,7 @@ func (s *webServer) handleNewGame(w http.ResponseWriter, r *http.Request) {
 			writeError(w, http.StatusInternalServerError, err)
 			return
 		}
+		duel.Setup.OpponentAlgo = abandonDuelPolicyForMode(mode)
 		s.session = &webSession{
 			mode: mode, variant: variant, abandonDuel: duel,
 			phase: duel.phase(), actor: duel.ActivePlayer, winner: -1,
@@ -2126,6 +2127,9 @@ func (s *webServer) advanceAI() error {
 		return s.advanceLadderAI()
 	}
 	if session != nil && session.variant == "rummy" {
+		if isAI(session.mode, session.actor) {
+			time.Sleep(500 * time.Millisecond)
+		}
 		return s.advanceRummyAI()
 	}
 	if session != nil && session.variant == "poker-duel" {

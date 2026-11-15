@@ -163,6 +163,7 @@ type View struct {
 	PlayerSubmitted   [2]bool            `json:"playerSubmitted"`
 	ReadyStatus       [2]string          `json:"readyStatus"`
 	RoundOneScores    *[2]int            `json:"roundOneScores,omitempty"`
+	RoundOneJails     [2][]game.Card     `json:"roundOneJails,omitempty"`
 	Result            *Result            `json:"result,omitempty"`
 	MatchMode         string             `json:"matchMode,omitempty"`
 	RankedSeries      *ranked.Series     `json:"rankedSeries,omitempty"`
@@ -527,8 +528,13 @@ func (m *Match) ViewFor(player int, now time.Time) (View, error) {
 		view.PlayerSubmitted = [2]bool{round.Players[0].Submitted, round.Players[1].Submitted}
 	}
 	if m.Status == PhaseRoundTwo || m.Status == PhaseComplete {
-		scores := [2]int{m.Rounds[0].Players[0].Score, m.Rounds[0].Players[1].Score}
+		roundOne := m.Rounds[0]
+		scores := [2]int{roundOne.Players[0].Score, roundOne.Players[1].Score}
 		view.RoundOneScores = &scores
+		view.RoundOneJails = [2][]game.Card{
+			append([]game.Card{}, roundOne.Players[0].Jail...),
+			append([]game.Card{}, roundOne.Players[1].Jail...),
+		}
 	}
 	if m.Status == PhaseComplete {
 		view.Result = cloneResult(m.Result)
@@ -714,7 +720,7 @@ func (m *Match) scorePairs(round *Round, player int, pairs []Pair) (int, []game.
 		}
 		card := *result.CapturedCard
 		jail = append(jail, card)
-		captured[0][int(card.Suit)]++
+		captured[round.Number-1][int(card.Suit)]++
 	}
 	breakdown := game.ScoreWithModifiers(jail, captured, m.BountySuit, m.Modifiers)
 	return breakdown.Total, jail, captured

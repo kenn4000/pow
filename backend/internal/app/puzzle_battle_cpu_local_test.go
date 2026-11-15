@@ -8,9 +8,91 @@ import (
 	"testing"
 	"time"
 
+	"prisonersofwar/internal/game"
+	"prisonersofwar/internal/heroes"
 	"prisonersofwar/internal/profile"
 	"prisonersofwar/internal/puzzlebattle"
 )
+
+func TestPuzzleBattleCPUModesAndPairSelection(t *testing.T) {
+	for _, test := range []struct {
+		request string
+		want    string
+	}{
+		{"", "cpu_easy"},
+		{"easy", "cpu_easy"},
+		{"normal", "cpu_normal"},
+		{"hard", "cpu_hard"},
+	} {
+		got, err := puzzleBattleCPUMatchMode(test.request)
+		if err != nil || got != test.want {
+			t.Fatalf("puzzleBattleCPUMatchMode(%q) = %q, %v; want %q", test.request, got, err, test.want)
+		}
+	}
+	if _, err := puzzleBattleCPUMatchMode("impossible"); err == nil {
+		t.Fatal("invalid Puzzle Battle CPU difficulty was accepted")
+	}
+
+	player, ok := heroes.ByID("recruit")
+	if !ok {
+		t.Fatal("recruit hero is unavailable")
+	}
+	match, err := puzzlebattle.New(
+		"cpu-mode-test", [2]string{"player", "cpu"},
+		[2]string{player.ID, player.ID}, [2]heroes.Hero{player, player},
+		rand.New(rand.NewSource(42)), time.Now(),
+	)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := match.StartImmediately(time.Now()); err != nil {
+		t.Fatal(err)
+	}
+	for _, difficulty := range []string{"easy", "normal", "hard"} {
+		pairs := choosePuzzleBattleCPUPairs(
+			match, &match.Rounds[0], difficulty, rand.New(rand.NewSource(7)), 3,
+		)
+		if len(pairs) != 3 {
+			t.Fatalf("%s CPU chose %d pairs, want 3", difficulty, len(pairs))
+		}
+		used := make(map[int]bool)
+		for _, pair := range pairs {
+			if used[pair.FirstIndex] || used[pair.SecondIndex] || pair.FirstIndex == pair.SecondIndex {
+				t.Fatalf("%s CPU reused a board card: %+v", difficulty, pairs)
+			}
+			used[pair.FirstIndex], used[pair.SecondIndex] = true, true
+		}
+	}
+}
+
+func TestHardPuzzleBattleCPUFindsCapturingPairs(t *testing.T) {
+	round := &puzzlebattle.Round{
+		Number: 1, Controller: 0, Board: make([]game.Card, 0, 12),
+	}
+	for i := 0; i < 6; i++ {
+		round.Board = append(round.Board, game.Card{Suit: game.Shield, Face: 9})
+	}
+	for i := 0; i < 6; i++ {
+		round.Board = append(round.Board, game.Card{Suit: game.Shield, Face: 1})
+	}
+	match := &puzzlebattle.Match{
+		Modifiers:  game.GameModifiers{Reckoning: [3]int{1, 1, 1}},
+		BountySuit: game.Blade,
+	}
+	pairs := choosePuzzleBattleCPUPairs(match, round, "hard", rand.New(rand.NewSource(42)), 3)
+	captures := 0
+	for _, pair := range pairs {
+		attacker := round.Board[pair.SecondIndex]
+		defender := round.Board[pair.FirstIndex]
+		if game.ResolveWithModifiers(attacker, defender, match.Modifiers).Winner == 1 {
+			captures++
+		}
+	}
+	if len(pairs) != 3 || captures != 3 {
+		t.Fatalf("Hard CPU selected %d pairs with %d captures, want 3 pairs and 3 captures: %+v",
+			len(pairs), captures, pairs)
+	}
+}
 
 func TestLocalPuzzleBattleCPURewardsHalfPayout(t *testing.T) {
 	t.Setenv("BASE_PATH", "")

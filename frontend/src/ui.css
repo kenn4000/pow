@@ -68,7 +68,35 @@ button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible
 .feature-message:empty { display: none; }
 .feature-item h3 { font-size: 16px; }
 .campaign-card-title { display: flex; align-items: center; gap: 8px; }
-.campaign-card-title .sprite-icon { width: 30px; height: 30px; }
+.campaign-card-title .sprite-icon, .campaign-card-title .campaign-icon-image { width: 30px; height: 30px; }
+.campaign-select-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
+.campaign-select { display: grid; grid-template-columns: 42px minmax(0, 1fr); align-items: center; gap: 8px; min-width: 0; padding: 9px; border: 1px solid #303c53; border-radius: 10px; background: #1a2231; color: #eef1f7; text-align: left; cursor: pointer; }
+.campaign-select:hover, .campaign-select:focus-visible { border-color: #d4b85d; background: #242d3e; }
+.campaign-select-icon { width: 40px; height: 40px; }
+.campaign-icon-image { display: block; flex: 0 0 auto; object-fit: contain; }
+.campaign-select-copy { display: grid; gap: 4px; min-width: 0; }
+.campaign-select-copy strong, .campaign-select-copy small { overflow-wrap: anywhere; }
+.campaign-select-copy strong { font-size: 13px; }
+.campaign-select-copy small { color: #b8c6db; font-size: 10px; line-height: 1.3; }
+.campaign-select-copy .feature-progress { height: 6px; }
+.campaign-detail > .campaign-back { margin-bottom: 10px; }
+.multiplayer-opt-in, .multiplayer-queue { margin-bottom: 10px; }
+.multiplayer-preference-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 7px; }
+.multiplayer-preference { min-width: 0; margin: 0; padding: 8px; border: 1px solid #303c53; border-radius: 8px; background: #111827; }
+.multiplayer-preference legend { padding-inline: 3px; color: #eef1f7; font-size: 11px; font-weight: 700; }
+.multiplayer-preference label { display: flex; align-items: center; gap: 6px; min-height: 28px; color: #c1cbda; font-size: 10px; }
+.multiplayer-preference input { width: 16px; height: 16px; margin: 0; accent-color: #e7c55e; }
+.multiplayer-queue-fields { display: grid; gap: 8px; }
+.multiplayer-field { display: grid; gap: 5px; }
+.multiplayer-field select, .multiplayer-field input { width: 100%; }
+.multiplayer-help { margin: 0; font-size: 11px; line-height: 1.4; color: #b8c6db; }
+.multiplayer-help .currency-icon { width: 1.1em; height: 1.1em; }
+.multiplayer-cooldown { color: #f0c75e !important; }
+.shop-purchase-grid { display: grid; grid-template-columns: minmax(0, 1fr); gap: 6px; }
+.shop-purchase-row { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 6px; min-width: 0; }
+.shop-purchase-row > .action { width: 100%; min-width: 0; min-height: 42px; padding: 7px 5px; font-size: 11px; line-height: 1.25; overflow-wrap: anywhere; }
+.shop-purchase-row .currency-amount { white-space: nowrap; }
+.shop-purchase-row .currency-icon { width: 1.15em; height: 1.15em; }
 .feature-item p { font-size: 14px; color: #c1cbda; }
 .feature-section > p { line-height: 1.6; }
 .feature-item details { margin-top: .75rem; }
@@ -87,6 +115,8 @@ button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible
 .feature-section textarea { width: 100%; min-height: 90px; resize: vertical; }
 .affordability { color: #f2ce78 !important; }
 .board { display: grid; grid-template-columns: 1fr 1fr; grid-template-areas: 'track track' 'info info' 'battle players' 'actions players'; align-content: start; align-items: start; gap: 14px; }
+#gameShell[data-variant="main"] .board,
+#gameShell[data-variant="fog"] .board { grid-template-columns: minmax(0, 1fr); grid-template-areas: 'track' 'info' 'battle' 'players' 'actions'; }
 #gameShell[data-variant="puzzler"] .board { grid-template-columns: minmax(0, 1fr); grid-template-areas: 'track' 'info' 'battle' 'players' 'actions'; }
 #gameShell[data-variant="rummy"] .board { grid-template-columns: minmax(0, 1fr); grid-template-areas: 'info' 'battle' 'actions'; }
 #gameShell[data-variant="rummy"] #players { display: none; }
@@ -221,13 +251,14 @@ button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible
 .battle-card-wrap { display: flex; justify-content: center; min-width: 0; }
 .battle-card-line .skin-card { width: clamp(56px, 8vw, 96px); height: clamp(72px, 10vw, 124px); }
 .battle-card-line .battle-card-wrap:has(.skin-card) { padding: 0; }
-.battle.drafting { grid-template-columns: minmax(0, 1fr); min-height: 0; }
+.board.drafting { display: flex; flex-direction: column; align-items: stretch; gap: 14px; }
+.battle.drafting { display: block; width: 100%; min-height: 0; height: auto; }
 .battle.drafting #battleVs, .battle.drafting #battleRight { display: none; }
-.battle.drafting #battleLeft { width: 100%; }
-.board.drafting { grid-template-columns: minmax(0, 1fr); grid-template-areas: 'track' 'info' 'battle' 'players' 'actions'; }
-.draft-battlefield { width: 100%; min-width: 0; }
-.draft-card-pool { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 8px; margin-top: 10px; }
-.draft-card-pool .card { width: clamp(48px, 8vw, 82px); height: clamp(62px, 10vw, 102px); justify-self: center; }
+.battle.drafting #battleLeft { display: block; width: 100%; min-height: 0; }
+.draft-battlefield { display: grid; gap: 10px; width: 100%; min-width: 0; padding: 12px; border: 1px solid #46536a; border-radius: 10px; background: #101624; }
+.draft-battlefield .battle-player-name { font-size: 12px; }
+.draft-card-pool { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 8px; width: 100%; min-width: 0; }
+.draft-card-pool .card { width: clamp(40px, 12vw, 58px); height: clamp(54px, 16vw, 78px); justify-self: center; }
 .draft-player-panel .card-row { min-height: 84px; }
 .draft-opponent-count { margin: 4px 0 0; color: #b8c6db; font-size: 12px; }
 .rummy-overview { display: grid; gap: 16px; width: min(100%, 980px); margin-inline: auto; text-align: left; }
@@ -371,6 +402,7 @@ button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible
 }
 .campaign-coach { display: flex; align-items: center; gap: 10px; margin: 8px 0 14px; color: #e5d08a; font-weight: 700; }
 .campaign-coach img { width: 52px; height: 52px; object-fit: cover; border: 2px solid #d7a629; border-radius: 8px; }
+.campaign-coach .hero-icon-sprite { width: 52px; height: 52px; border: 2px solid #d7a629; border-radius: 8px; }
 
 /* Iteration 9 · UI-60: minimum 24px targets for inline links and dependency links without reflowing prose */
 a:not(.action) { padding-block: 4px; }

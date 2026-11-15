@@ -45,6 +45,7 @@ type puzzleBattleInvite struct {
 	ID         string    `json:"id"`
 	Handle     string    `json:"handle"`
 	WagerMarks int64     `json:"wagerMarks"`
+	MatchMode  string    `json:"matchMode"`
 	CreatedAt  time.Time `json:"createdAt"`
 }
 
@@ -73,15 +74,16 @@ type puzzleBattleHistoryEntry struct {
 }
 
 type puzzleBattleResponse struct {
-	Status      string                     `json:"status"`
-	MatchMode   string                     `json:"matchMode,omitempty"`
-	Match       *puzzleBattlePublicMatch   `json:"match,omitempty"`
-	Payout      *puzzlebattle.RewardPayout `json:"payout,omitempty"`
-	CPUPractice bool                       `json:"cpuPractice,omitempty"`
-	Incoming    []puzzleBattleInvite       `json:"incomingInvites"`
-	Outgoing    []puzzleBattleInvite       `json:"outgoingInvites"`
-	History     []puzzleBattleHistoryEntry `json:"history"`
-	InviteID    string                     `json:"inviteId,omitempty"`
+	Status                     string                     `json:"status"`
+	MatchMode                  string                     `json:"matchMode,omitempty"`
+	Match                      *puzzleBattlePublicMatch   `json:"match,omitempty"`
+	Payout                     *puzzlebattle.RewardPayout `json:"payout,omitempty"`
+	CPUPractice                bool                       `json:"cpuPractice,omitempty"`
+	Incoming                   []puzzleBattleInvite       `json:"incomingInvites"`
+	Outgoing                   []puzzleBattleInvite       `json:"outgoingInvites"`
+	History                    []puzzleBattleHistoryEntry `json:"history"`
+	InviteID                   string                     `json:"inviteId,omitempty"`
+	MatchmakingCooldownSeconds int                        `json:"matchmakingCooldownSeconds,omitempty"`
 }
 
 type puzzleBattleHistoryResponse struct {
@@ -158,6 +160,15 @@ func (s *webServer) getPuzzleBattle(w http.ResponseWriter, r *http.Request, user
 	defer tx.Rollback()
 
 	now := time.Now().UTC()
+	if err := lockOnlineBattleQueue(r.Context(), tx); err != nil {
+		databaseError(w, err)
+		return
+	}
+	_, cooldownSeconds, err := refreshChallengeAvailabilityTx(r.Context(), tx, user.ID, now)
+	if err != nil {
+		databaseError(w, err)
+		return
+	}
 	if _, err := tx.ExecContext(r.Context(), `
 		UPDATE puzzle_battle_invites SET status='expired',responded_at=$1
 		WHERE status='pending' AND created_at <= $2`, now, now.Add(-puzzleBattleInviteLifetime)); err != nil {
@@ -166,10 +177,11 @@ func (s *webServer) getPuzzleBattle(w http.ResponseWriter, r *http.Request, user
 	}
 
 	response := puzzleBattleResponse{
-		Status:   "idle",
-		Incoming: []puzzleBattleInvite{},
-		Outgoing: []puzzleBattleInvite{},
-		History:  []puzzleBattleHistoryEntry{},
+		Status:                     "idle",
+		Incoming:                   []puzzleBattleInvite{},
+		Outgoing:                   []puzzleBattleInvite{},
+		History:                    []puzzleBattleHistoryEntry{},
+		MatchmakingCooldownSeconds: cooldownSeconds,
 	}
 	match, player, matchErr := loadActivePuzzleBattle(r.Context(), tx, user.ID)
 	if matchErr != nil && !errors.Is(matchErr, sql.ErrNoRows) {
@@ -266,6 +278,10 @@ func (s *webServer) queuePuzzleBattle(w http.ResponseWriter, r *http.Request, us
 
 	if _, err := tx.ExecContext(r.Context(), "SELECT pg_advisory_xact_lock(783094201)"); err != nil {
 		databaseError(w, err)
+		return
+	}
+	if err := requireChallengeCooldownExpiredTx(r.Context(), tx, user.ID, time.Now().UTC()); err != nil {
+		writeError(w, http.StatusTooManyRequests, err)
 		return
 	}
 	now := time.Now().UTC()
@@ -500,14 +516,21 @@ func (s *webServer) invitePuzzleBattleFriend(w http.ResponseWriter, r *http.Requ
 		databaseError(w, err)
 		return
 	}
-
+	if err := requireChallengeCooldownExpiredTx(r.Context(), tx, user.ID, time.Now().UTC()); err != nil {
+		writeError(w, http.StatusTooManyRequests, err)
+		return
+	}
 	var recipientID string
 	if err := tx.QueryRowContext(r.Context(), "SELECT id FROM users WHERE lower(public_handle)=lower($1)", handle).Scan(&recipientID); err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
 			writeError(w, http.StatusNotFound, errors.New("player not found"))
-			return
+		} else {
+			databaseError(w, err)
 		}
-		databaseError(w, err)
+		return
+	}
+	if err := requireChallengeCooldownExpiredTx(r.Context(), tx, recipientID, time.Now().UTC()); err != nil {
+		writeError(w, http.StatusTooManyRequests, errors.New("this player is temporarily unavailable for challenges"))
 		return
 	}
 	if recipientID == user.ID {
@@ -596,13 +619,13 @@ func (s *webServer) respondPuzzleBattleInvite(w http.ResponseWriter, r *http.Req
 	if !accept && request.Action == "cancel-invite" {
 		ownerColumn = "sender_id"
 	}
-	var senderID, senderHeroID string
+	var senderID, senderHeroID, matchMode string
 	var wagerMarks int64
 	query := fmt.Sprintf(`
-		SELECT sender_id,sender_hero_id,wager_marks FROM puzzle_battle_invites
+		SELECT sender_id,sender_hero_id,wager_marks,match_mode FROM puzzle_battle_invites
 		WHERE id=$1 AND %s=$2 AND status='pending' AND created_at>$3`, ownerColumn)
 	if err := tx.QueryRowContext(r.Context(), query,
-		request.InviteID, user.ID, time.Now().UTC().Add(-puzzleBattleInviteLifetime)).Scan(&senderID, &senderHeroID, &wagerMarks); err != nil {
+		request.InviteID, user.ID, time.Now().UTC().Add(-puzzleBattleInviteLifetime)).Scan(&senderID, &senderHeroID, &wagerMarks, &matchMode); err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
 			writeError(w, http.StatusNotFound, errors.New("pending Puzzle Battle invitation not found"))
 			return
@@ -624,23 +647,15 @@ func (s *webServer) respondPuzzleBattleInvite(w http.ResponseWriter, r *http.Req
 			writeError(w, http.StatusConflict, errors.New("one of these players already has an active match"))
 			return
 		}
-		var friend, blocked bool
-		if err := tx.QueryRowContext(r.Context(), `
-			SELECT EXISTS (
-				SELECT 1 FROM friendships
-				WHERE user_a=LEAST($1,$2) AND user_b=GREATEST($1,$2)
-			), EXISTS (
-				SELECT 1 FROM player_blocks
-				WHERE (blocker_id=$1 AND blocked_id=$2) OR (blocker_id=$2 AND blocked_id=$1)
-			)`, senderID, user.ID).Scan(&friend, &blocked); err != nil {
-			databaseError(w, err)
-			return
-		}
-		if !friend || blocked {
-			writeError(w, http.StatusForbidden, errors.New("this invitation is no longer available"))
+		if err := validateIncomingChallengeTx(r.Context(), tx, senderID, user.ID, matchMode); err != nil {
+			writeError(w, http.StatusForbidden, err)
 			return
 		}
 		playerIDs := [2]string{senderID, user.ID}
+		if wagerMarks > 0 && matchMode != "friend" {
+			writeError(w, http.StatusForbidden, errors.New("only friend challenges can include a wager"))
+			return
+		}
 		if err := reserveFriendWagerTx(r.Context(), tx, playerIDs, wagerMarks); err != nil {
 			writeError(w, http.StatusConflict, err)
 			return
@@ -670,7 +685,7 @@ func (s *webServer) respondPuzzleBattleInvite(w http.ResponseWriter, r *http.Req
 			databaseError(w, err)
 			return
 		}
-		match, err := s.createPuzzleBattleTx(r.Context(), tx, [2]string{senderID, user.ID}, [2]string{senderHeroID, hero.ID}, "friend", now)
+		match, err := s.createPuzzleBattleTx(r.Context(), tx, [2]string{senderID, user.ID}, [2]string{senderHeroID, hero.ID}, matchMode, now)
 		if err != nil {
 			writeError(w, http.StatusConflict, err)
 			return
@@ -695,7 +710,7 @@ func (s *webServer) respondPuzzleBattleInvite(w http.ResponseWriter, r *http.Req
 			databaseError(w, err)
 			return
 		}
-		writeJSON(w, http.StatusCreated, puzzleBattleResponse{Status: match.Status, MatchMode: "friend", Match: &public})
+		writeJSON(w, http.StatusCreated, puzzleBattleResponse{Status: match.Status, MatchMode: matchMode, Match: &public})
 		return
 	}
 	status := "declined"
@@ -717,6 +732,12 @@ func (s *webServer) respondPuzzleBattleInvite(w http.ResponseWriter, r *http.Req
 			writeError(w, http.StatusNotFound, errors.New("pending Puzzle Battle invitation not found"))
 		}
 		return
+	}
+	if status == "declined" {
+		if err := setChallengeDeclineCooldownTx(r.Context(), tx, user.ID, time.Now().UTC()); err != nil {
+			databaseError(w, err)
+			return
+		}
 	}
 	if err := tx.Commit(); err != nil {
 		databaseError(w, err)
@@ -1074,7 +1095,7 @@ func queryPuzzleBattleInvites(ctx context.Context, queryer interface {
 		ownerColumn, otherColumn = otherColumn, ownerColumn
 	}
 	rows, err := queryer.QueryContext(ctx, fmt.Sprintf(`
-		SELECT i.id,u.public_handle,i.created_at,i.wager_marks
+		SELECT i.id,u.public_handle,i.created_at,i.wager_marks,i.match_mode
 		FROM puzzle_battle_invites i JOIN users u ON u.id=i.%s
 		WHERE i.%s=$1 AND i.status='pending'
 		ORDER BY i.created_at`, otherColumn, ownerColumn), userID)
@@ -1085,7 +1106,8 @@ func queryPuzzleBattleInvites(ctx context.Context, queryer interface {
 	invites := []puzzleBattleInvite{}
 	for rows.Next() {
 		var invite puzzleBattleInvite
-		if err := rows.Scan(&invite.ID, &invite.Handle, &invite.CreatedAt, &invite.WagerMarks); err != nil {
+		if err := rows.Scan(&invite.ID, &invite.Handle, &invite.CreatedAt,
+			&invite.WagerMarks, &invite.MatchMode); err != nil {
 			return nil, err
 		}
 		invites = append(invites, invite)
@@ -1163,7 +1185,7 @@ func creditPuzzleBattleProfiles(ctx context.Context, tx *sql.Tx, match *puzzleba
 	}
 	var players [2]*profile.Profile
 	indices := []int{0, 1}
-	if match.MatchMode == "cpu_easy" {
+	if isPuzzleBattleCPUMatchMode(match.MatchMode) {
 		indices = []int{0}
 	} else if match.PlayerIDs[0] > match.PlayerIDs[1] {
 		indices[0], indices[1] = 1, 0
@@ -1241,10 +1263,15 @@ func creditPuzzleBattleProfile(p *profile.Profile, match *puzzlebattle.Match, pl
 	}
 	mode := economy.ModeFriendCasual
 	aiDifficulty := ""
-	if match.MatchMode == "cpu_easy" {
-		mode = economy.ModeCPUEasy
-		aiDifficulty = "easy"
-	} else if match.MatchMode == "ranked" {
+	switch match.MatchMode {
+	case "cpu_easy":
+		mode, aiDifficulty = economy.ModeCPUEasy, "easy"
+	case "cpu_normal":
+		mode, aiDifficulty = economy.ModeCPUNormal, "normal"
+	case "cpu_hard":
+		mode, aiDifficulty = economy.ModeCPUHard, "hard"
+	}
+	if match.MatchMode == "ranked" {
 		mode = economy.ModeRanked
 	}
 	if p.HeroPlayCounts == nil {

@@ -133,6 +133,7 @@ func TestMultiplayerPayoutVariantsDailyBonusAndAIScaling(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+
 	p.SkillNodes["daily-triumph"] = true
 	first, err := CalculateMultiplayerPayout("main", 10, true, false, true, "easy", ModeCPUEasy, p, now)
 	if err != nil {
@@ -156,6 +157,23 @@ func TestMultiplayerPayoutVariantsDailyBonusAndAIScaling(t *testing.T) {
 	}
 	if tie.BaseMarks != 300 || tie.TotalMarks != 300 || tie.MatchCrowns != 3 {
 		t.Fatalf("draw win-payout = %+v", tie)
+	}
+}
+
+func TestMediumCPUMultiplayerPayoutUsesTwentyFivePercentReduction(t *testing.T) {
+	now := time.Date(2026, time.June, 8, 12, 0, 0, 0, time.Local)
+	p, err := profile.New(now)
+	if err != nil {
+		t.Fatal(err)
+	}
+	payout, err := CalculateMultiplayerPayout(
+		"main", 10, true, false, false, "normal", ModeCPUNormal, p, now,
+	)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if payout.AIMultiplier != 0.75 || payout.TotalMarks != 247 {
+		t.Fatalf("Medium CPU payout = %+v, want 0.75 multiplier and 247 marks", payout)
 	}
 }
 

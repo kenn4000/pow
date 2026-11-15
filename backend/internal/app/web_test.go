@@ -287,9 +287,6 @@ func TestWebSkinAssetsAreServedWithImageHeaders(t *testing.T) {
 	for _, assetPath := range []string{
 		"/skins/shop/conq/lime/small_idle.png",
 		"/skins/shop/conq/gold/large_win.png",
-		"/skins/hero_icons/gorilla.png",
-		"/skins/hero_icons/coach.png",
-		"/skins/hero_icons/cpu_easy.png",
 		"/skins/shop/alien/yellow/large_idle.png",
 		"/skins/shop/amazon/green/large_idle.png",
 		"/skins/shop/bee/silver/large_idle.png",
@@ -307,6 +304,7 @@ func TestWebSkinAssetsAreServedWithImageHeaders(t *testing.T) {
 		"/skins/icons/victory_banner.png",
 		"/skins/icons/defeat_banner.png",
 		"/skins/icons/trichooser.png",
+		"/skins/icons/tugwar.png",
 		"/skins/icons/wooden_chest.png",
 		"/skins/icons/silver_chest.png",
 		"/skins/icons/golden_chest.png",
@@ -316,6 +314,10 @@ func TestWebSkinAssetsAreServedWithImageHeaders(t *testing.T) {
 		"/skins/icons/animations/clouds.json",
 		"/skins/icons/animations/icons1.png",
 		"/skins/icons/animations/icons1.json",
+		"/skins/icons/animations/heroes.png",
+		"/skins/icons/animations/heroes.json",
+		"/skins/icons/animations/heroesgray.png",
+		"/skins/icons/animations/heroesgray.json",
 	} {
 		request = httptest.NewRequest(http.MethodGet, assetPath, nil)
 		response = httptest.NewRecorder()
@@ -802,6 +804,20 @@ func TestWebWaitingStateIncludesLiveDashboardData(t *testing.T) {
 		if !detailFound {
 			t.Errorf("dashboard did not expose details for owned chroma %q", id)
 		}
+	}
+}
+
+func TestClownPurpleAssetDoesNotServeTribalPurpleArtwork(t *testing.T) {
+	clown, err := skinSpriteFrame("shop/clown/purple/large_idle.png")
+	if err != nil {
+		t.Fatal(err)
+	}
+	tribal, err := skinSpriteFrame("shop/tribal/purple/large_idle.png")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if bytes.Equal(clown, tribal) {
+		t.Fatal("Clown purple artwork resolves to the Tribal purple sprite frame")
 	}
 }
 

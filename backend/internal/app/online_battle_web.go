@@ -31,21 +31,22 @@ var onlineBattleVariants = map[string]bool{
 }
 
 type onlineBattleRequest struct {
-	Action            string `json:"action"`
-	Variant           string `json:"variant"`
-	MatchMode         string `json:"matchMode"`
-	HeroID            string `json:"heroId"`
-	ConductorModifier string `json:"conductorModifier"`
-	ConductorAmount   int    `json:"conductorAmount"`
-	Recipient         string `json:"recipient"`
-	InviteID          string `json:"inviteId"`
-	Index             int    `json:"index"`
-	Slot              int    `json:"slot"`
-	Source            string `json:"source"`
-	Cards             []int  `json:"cards"`
-	FaceUp            int    `json:"faceUpIndex"`
-	Buried            int    `json:"buriedIndex"`
-	WagerMarks        int64  `json:"wagerMarks"`
+	Action             string   `json:"action"`
+	Variant            string   `json:"variant"`
+	MatchMode          string   `json:"matchMode"`
+	HeroID             string   `json:"heroId"`
+	ConductorModifier  string   `json:"conductorModifier"`
+	ConductorAmount    int      `json:"conductorAmount"`
+	Recipient          string   `json:"recipient"`
+	InviteID           string   `json:"inviteId"`
+	Index              int      `json:"index"`
+	Slot               int      `json:"slot"`
+	Source             string   `json:"source"`
+	Cards              []int    `json:"cards"`
+	FaceUp             int      `json:"faceUpIndex"`
+	Buried             int      `json:"buriedIndex"`
+	WagerMarks         int64    `json:"wagerMarks"`
+	AcceptedChallenges []string `json:"acceptedChallenges"`
 }
 
 type onlineBattleInvite struct {
@@ -54,6 +55,7 @@ type onlineBattleInvite struct {
 	Handle     string    `json:"handle"`
 	HeroID     string    `json:"heroId,omitempty"`
 	WagerMarks int64     `json:"wagerMarks"`
+	MatchMode  string    `json:"matchMode"`
 	CreatedAt  time.Time `json:"createdAt"`
 }
 
@@ -75,13 +77,15 @@ type onlineBattlePublicMatch struct {
 }
 
 type onlineBattleResponse struct {
-	Status    string                   `json:"status"`
-	Variant   string                   `json:"variant,omitempty"`
-	MatchMode string                   `json:"matchMode,omitempty"`
-	Match     *onlineBattlePublicMatch `json:"match,omitempty"`
-	Incoming  []onlineBattleInvite     `json:"incomingInvites"`
-	Outgoing  []onlineBattleInvite     `json:"outgoingInvites"`
-	InviteID  string                   `json:"inviteId,omitempty"`
+	Status                     string                   `json:"status"`
+	Variant                    string                   `json:"variant,omitempty"`
+	MatchMode                  string                   `json:"matchMode,omitempty"`
+	Match                      *onlineBattlePublicMatch `json:"match,omitempty"`
+	Incoming                   []onlineBattleInvite     `json:"incomingInvites"`
+	Outgoing                   []onlineBattleInvite     `json:"outgoingInvites"`
+	InviteID                   string                   `json:"inviteId,omitempty"`
+	AcceptedChallenges         []string                 `json:"acceptedChallenges,omitempty"`
+	MatchmakingCooldownSeconds int                      `json:"matchmakingCooldownSeconds,omitempty"`
 }
 
 type onlineBattleState struct {
@@ -105,6 +109,10 @@ func (s *webServer) handleOnlineBattle(w http.ResponseWriter, r *http.Request) {
 		switch request.Action {
 		case "queue":
 			s.queueOnlineBattle(w, r, user, request)
+		case "challenge-queue":
+			s.queueOnlineChallenge(w, r, user, request)
+		case "set-accepted-challenges":
+			s.setOnlineChallengePreferences(w, r, user, request)
 		case "cancel-queue":
 			s.cancelOnlineBattleQueue(w, r, user)
 		case "invite":
@@ -285,6 +293,15 @@ func (s *webServer) getOnlineBattle(w http.ResponseWriter, r *http.Request, user
 	}
 	defer tx.Rollback()
 	now := time.Now().UTC()
+	if err := lockOnlineBattleQueue(r.Context(), tx); err != nil {
+		databaseError(w, err)
+		return
+	}
+	acceptedChallenges, cooldownSeconds, err := refreshChallengeAvailabilityTx(r.Context(), tx, user.ID, now)
+	if err != nil {
+		databaseError(w, err)
+		return
+	}
 	if _, err := tx.ExecContext(r.Context(), `
 		UPDATE online_battle_invites SET status='expired',responded_at=$1
 		WHERE status='pending' AND created_at<=$2`, now, now.Add(-onlineBattleInviteLifetime)); err != nil {
@@ -293,6 +310,7 @@ func (s *webServer) getOnlineBattle(w http.ResponseWriter, r *http.Request, user
 	}
 	response := onlineBattleResponse{
 		Status: "idle", Incoming: []onlineBattleInvite{}, Outgoing: []onlineBattleInvite{},
+		AcceptedChallenges: acceptedChallenges, MatchmakingCooldownSeconds: cooldownSeconds,
 	}
 	match, player, err := loadCurrentOnlineBattle(r.Context(), tx, user.ID)
 	if err != nil && !errors.Is(err, sql.ErrNoRows) {
@@ -382,6 +400,10 @@ func (s *webServer) queueOnlineBattle(w http.ResponseWriter, r *http.Request, us
 	defer tx.Rollback()
 	if err := lockOnlineBattleQueue(r.Context(), tx); err != nil {
 		databaseError(w, err)
+		return
+	}
+	if err := requireChallengeCooldownExpiredTx(r.Context(), tx, user.ID, time.Now().UTC()); err != nil {
+		writeError(w, http.StatusTooManyRequests, err)
 		return
 	}
 	now := time.Now().UTC()
@@ -524,6 +546,10 @@ func (s *webServer) cancelOnlineBattleQueue(w http.ResponseWriter, r *http.Reque
 		databaseError(w, err)
 		return
 	}
+	if _, err := tx.ExecContext(r.Context(), "DELETE FROM puzzle_battle_queue WHERE user_id=$1", user.ID); err != nil {
+		databaseError(w, err)
+		return
+	}
 	if err := tx.Commit(); err != nil {
 		databaseError(w, err)
 		return
@@ -551,6 +577,10 @@ func (s *webServer) inviteOnlineBattleFriend(w http.ResponseWriter, r *http.Requ
 		databaseError(w, err)
 		return
 	}
+	if err := requireChallengeCooldownExpiredTx(r.Context(), tx, user.ID, time.Now().UTC()); err != nil {
+		writeError(w, http.StatusTooManyRequests, err)
+		return
+	}
 	var recipientID string
 	if err := tx.QueryRowContext(r.Context(), "SELECT id FROM users WHERE lower(public_handle)=lower($1)", handle).Scan(&recipientID); err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
@@ -558,6 +588,10 @@ func (s *webServer) inviteOnlineBattleFriend(w http.ResponseWriter, r *http.Requ
 		} else {
 			databaseError(w, err)
 		}
+		return
+	}
+	if err := requireChallengeCooldownExpiredTx(r.Context(), tx, recipientID, time.Now().UTC()); err != nil {
+		writeError(w, http.StatusTooManyRequests, errors.New("this player is temporarily unavailable for challenges"))
 		return
 	}
 	if recipientID == user.ID {
@@ -637,15 +671,15 @@ func (s *webServer) respondOnlineBattleInvite(w http.ResponseWriter, r *http.Req
 	if !accept && request.Action == "cancel-invite" {
 		ownerColumn = "sender_id"
 	}
-	var senderID, variant, senderHeroID, senderModifier string
+	var senderID, variant, senderHeroID, senderModifier, matchMode string
 	var senderAmount int
 	var wagerMarks int64
 	err = tx.QueryRowContext(r.Context(), fmt.Sprintf(`
-		SELECT sender_id,variant,sender_hero_id,sender_conductor_modifier,sender_conductor_amount,wager_marks
+		SELECT sender_id,variant,sender_hero_id,sender_conductor_modifier,sender_conductor_amount,wager_marks,match_mode
 		FROM online_battle_invites
 		WHERE id=$1 AND %s=$2 AND status='pending' AND created_at>$3 FOR UPDATE`, ownerColumn),
 		request.InviteID, user.ID, time.Now().UTC().Add(-onlineBattleInviteLifetime)).
-		Scan(&senderID, &variant, &senderHeroID, &senderModifier, &senderAmount, &wagerMarks)
+		Scan(&senderID, &variant, &senderHeroID, &senderModifier, &senderAmount, &wagerMarks, &matchMode)
 	if err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
 			writeError(w, http.StatusNotFound, errors.New("pending invitation not found"))
@@ -659,8 +693,8 @@ func (s *webServer) respondOnlineBattleInvite(w http.ResponseWriter, r *http.Req
 			databaseError(w, err)
 			return
 		}
-		if err := ensureOnlineBattleFriends(r.Context(), tx, senderID, user.ID); err != nil {
-			writeError(w, http.StatusForbidden, errors.New("this invitation is no longer available"))
+		if err := validateIncomingChallengeTx(r.Context(), tx, senderID, user.ID, matchMode); err != nil {
+			writeError(w, http.StatusForbidden, err)
 			return
 		}
 		active, err := onlineBattlePlayersActive(r.Context(), tx, senderID, user.ID)
@@ -673,6 +707,10 @@ func (s *webServer) respondOnlineBattleInvite(w http.ResponseWriter, r *http.Req
 			return
 		}
 		ids := [2]string{senderID, user.ID}
+		if wagerMarks > 0 && matchMode != "friend" {
+			writeError(w, http.StatusForbidden, errors.New("only friend challenges can include a wager"))
+			return
+		}
 		if err := reserveFriendWagerTx(r.Context(), tx, ids, wagerMarks); err != nil {
 			writeError(w, http.StatusConflict, err)
 			return
@@ -692,7 +730,7 @@ func (s *webServer) respondOnlineBattleInvite(w http.ResponseWriter, r *http.Req
 		}
 		tunings := [2]heroes.Tuning{senderTuning, tuning}
 		public, err := s.createOnlineBattleTx(
-			r.Context(), tx, variant, "friend", ids, heroIDs, tunings, 1, now,
+			r.Context(), tx, variant, matchMode, ids, heroIDs, tunings, 1, now,
 		)
 		if err != nil {
 			writeError(w, http.StatusConflict, err)
@@ -720,7 +758,7 @@ func (s *webServer) respondOnlineBattleInvite(w http.ResponseWriter, r *http.Req
 			databaseError(w, err)
 			return
 		}
-		writeJSON(w, http.StatusCreated, onlineBattleResponse{Status: "active", Variant: variant, MatchMode: "friend", Match: &public})
+		writeJSON(w, http.StatusCreated, onlineBattleResponse{Status: "active", Variant: variant, MatchMode: matchMode, Match: &public})
 		return
 	}
 	status := "declined"
@@ -730,6 +768,12 @@ func (s *webServer) respondOnlineBattleInvite(w http.ResponseWriter, r *http.Req
 	if _, err := tx.ExecContext(r.Context(), "UPDATE online_battle_invites SET status=$1,responded_at=$2 WHERE id=$3", status, time.Now().UTC(), request.InviteID); err != nil {
 		databaseError(w, err)
 		return
+	}
+	if status == "declined" {
+		if err := setChallengeDeclineCooldownTx(r.Context(), tx, user.ID, time.Now().UTC()); err != nil {
+			databaseError(w, err)
+			return
+		}
 	}
 	if err := tx.Commit(); err != nil {
 		databaseError(w, err)
@@ -1299,7 +1343,7 @@ func queryOnlineBattleInvites(ctx context.Context, queryer interface {
 		ownerColumn, otherColumn = otherColumn, ownerColumn
 	}
 	rows, err := queryer.QueryContext(ctx, fmt.Sprintf(`
-		SELECT i.id,i.variant,u.public_handle,i.sender_hero_id,i.created_at,i.wager_marks
+		SELECT i.id,i.variant,u.public_handle,i.sender_hero_id,i.created_at,i.wager_marks,i.match_mode
 		FROM online_battle_invites i JOIN users u ON u.id=i.%s
 		WHERE i.%s=$1 AND i.status='pending' AND i.created_at>$2
 		ORDER BY i.created_at DESC`, otherColumn, ownerColumn), userID, time.Now().UTC().Add(-onlineBattleInviteLifetime))
@@ -1310,7 +1354,8 @@ func queryOnlineBattleInvites(ctx context.Context, queryer interface {
 	invites := []onlineBattleInvite{}
 	for rows.Next() {
 		var invite onlineBattleInvite
-		if err := rows.Scan(&invite.ID, &invite.Variant, &invite.Handle, &invite.HeroID, &invite.CreatedAt, &invite.WagerMarks); err != nil {
+		if err := rows.Scan(&invite.ID, &invite.Variant, &invite.Handle, &invite.HeroID,
+			&invite.CreatedAt, &invite.WagerMarks, &invite.MatchMode); err != nil {
 			return nil, err
 		}
 		invites = append(invites, invite)

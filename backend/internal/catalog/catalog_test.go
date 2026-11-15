@@ -7,6 +7,20 @@ import (
 	"prisonersofwar/internal/profile"
 )
 
+func TestClownPurpleUsesItsOwnSpriteSheet(t *testing.T) {
+	clown, ok := FindChroma("clown-purple")
+	if !ok {
+		t.Fatal("Clown purple chroma is missing")
+	}
+	tribal, ok := FindChroma("tribal-purple")
+	if !ok {
+		t.Fatal("Tribal purple chroma is missing")
+	}
+	if clown.Skin != "shop/clown/purple" || tribal.Skin != "shop/tribal/purple" {
+		t.Fatalf("purple chroma artwork paths = clown:%q tribal:%q", clown.Skin, tribal.Skin)
+	}
+}
+
 func TestShopPurchasesChromasAndColorAssignments(t *testing.T) {
 	p, err := profile.New(time.Now())
 	if err != nil {

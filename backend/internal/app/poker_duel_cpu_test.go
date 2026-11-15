@@ -122,12 +122,12 @@ func TestPokerDuelCPUWaitsForPersistedThinkTimeAndRestores(t *testing.T) {
 	}
 }
 
-func TestPokerDuelCPUViewKeepsItsPrivateCardsHidden(t *testing.T) {
+func TestPokerDuelCPUViewKeepsPlayersHandVisibleAndCPUCardsHidden(t *testing.T) {
 	server, now := pokerDuelCPUFixture(t, "easy", 111)
 	view := server.session.pokerDuel.webView("poker-duel-thinking", now, 1)
 	if !view.Players[1].HandHidden || !view.Players[1].Table[1].Hidden ||
-		!view.Players[0].HandHidden {
-		t.Fatal("CPU thinking view exposed private cards")
+		len(view.Players[0].Hand) == 0 || view.Players[0].HandHidden {
+		t.Fatal("CPU thinking view hid the player's hand or exposed the CPU's private cards")
 	}
 	if view.Players[1].Table[0].Hidden {
 		t.Fatal("CPU's public first hand was hidden")

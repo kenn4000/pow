@@ -401,6 +401,17 @@ func (s *webServer) advanceAbandonDuelAI() error {
 	return nil
 }
 
+func abandonDuelPolicyForMode(mode string) string {
+	switch mode {
+	case "easy":
+		return "GREEDY"
+	case "hard":
+		return "SMART_HIGH"
+	default:
+		return "SMART"
+	}
+}
+
 func (g *abandonDuelGame) sourceForCard(player int, target game.Card) (string, int, error) {
 	for index, card := range g.Board {
 		if !g.BoardUsed[index] && card == target {

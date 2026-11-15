@@ -16,14 +16,16 @@ import (
 var socialHandlePattern = regexp.MustCompile(`^[A-Za-z][A-Za-z0-9_]{2,19}$`)
 
 type socialPlayer struct {
-	ID            string                  `json:"id"`
-	Handle        string                  `json:"handle"`
-	ELO           int                     `json:"elo"`
-	Rank          int                     `json:"rank,omitempty"`
-	CreatedAt     time.Time               `json:"createdAt"`
-	Ratings       map[string]socialRating `json:"ratings,omitempty"`
-	Record        socialRecord            `json:"record,omitempty"`
-	NetWagerMarks int64                   `json:"netWagerMarks,omitempty"`
+	ID                  string                  `json:"id"`
+	Handle              string                  `json:"handle"`
+	ELO                 int                     `json:"elo"`
+	Rank                int                     `json:"rank,omitempty"`
+	CreatedAt           time.Time               `json:"createdAt"`
+	Ratings             map[string]socialRating `json:"ratings,omitempty"`
+	Record              socialRecord            `json:"record,omitempty"`
+	NetWagerMarks       int64                   `json:"netWagerMarks,omitempty"`
+	AvailableMarks      int64                   `json:"availableMarks,omitempty"`
+	AvailableWagerLimit int64                   `json:"availableWagerLimit,omitempty"`
 }
 
 type socialFriendRequest struct {
@@ -81,6 +83,21 @@ func (s *webServer) handleSocialOverview(w http.ResponseWriter, r *http.Request)
 		return
 	}
 	for index := range friends {
+		var usedWagerMarks int64
+		if err := s.db.QueryRowContext(r.Context(), `
+			SELECT COALESCE((p.profile->>'marks')::bigint,0),
+				(SELECT COALESCE(SUM(stake_marks),0) FROM friend_wagers
+				 WHERE (player_a_id=$1 OR player_b_id=$1)
+					AND created_at>=now()-interval '24 hours')
+			FROM player_data p WHERE p.user_id=$1`, friends[index].ID).
+			Scan(&friends[index].AvailableMarks, &usedWagerMarks); err != nil {
+			databaseError(w, err)
+			return
+		}
+		friends[index].AvailableWagerLimit = friendWagerDailyLimit - usedWagerMarks
+		if friends[index].AvailableWagerLimit < 0 {
+			friends[index].AvailableWagerLimit = 0
+		}
 		friends[index].Ratings, err = s.rankedRatings(r.Context(), friends[index].ID)
 		if err != nil {
 			databaseError(w, err)

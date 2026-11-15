@@ -115,6 +115,16 @@ func TestPostgresSocialGiftingChatAndWagerFlows(t *testing.T) {
 	}
 
 	alice.request("POST", "/social/messages", map[string]string{"handle": bobAccount.PublicHandle, "body": "Hello"}, http.StatusCreated)
+	var bobInbox struct {
+		Conversations []socialConversation `json:"conversations"`
+	}
+	if err := json.Unmarshal(bob.request("GET", "/social/conversations", nil, http.StatusOK), &bobInbox); err != nil {
+		t.Fatal(err)
+	}
+	if len(bobInbox.Conversations) != 1 || bobInbox.Conversations[0].Handle != aliceAccount.PublicHandle ||
+		bobInbox.Conversations[0].Preview != "Hello" {
+		t.Fatalf("recipient inbox did not list the new conversation: %+v", bobInbox.Conversations)
+	}
 	alice.request("POST", "/social/conversations/delete", map[string]string{"handle": bobAccount.PublicHandle}, http.StatusOK)
 	var aliceThread, bobThread struct {
 		Messages []socialMessage `json:"messages"`

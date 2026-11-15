@@ -62,6 +62,7 @@ func (s *webServer) applicationRoutes(r chi.Router) {
 			})
 			protected.Route("/social", func(social chi.Router) {
 				social.Get("/", s.handleSocialOverview)
+				social.Get("/conversations", s.handleSocialConversations)
 				social.Post("/handle", s.handleSocialSetHandle)
 				social.Post("/requests", s.handleSocialFriendRequest)
 				social.Post("/requests/{requestID}/{decision}", s.handleSocialRequestResponse)

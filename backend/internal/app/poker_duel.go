@@ -143,14 +143,8 @@ func newPokerDuelGame(heroP1, heroP2 heroes.Hero, rng *rand.Rand, now time.Time)
 			deck = append(deck, card)
 		}
 	}
-	if len(deck) < 2*pokerDuelHandSize {
+	if len(deck) < pokerDuelHandSize {
 		return nil, errors.New("shared Draft leaves too few cards for Poker")
-	}
-	rng.Shuffle(len(deck), func(i, j int) { deck[i], deck[j] = deck[j], deck[i] })
-	remaining := deck[2*pokerDuelHandSize:]
-	splitIndex := 6 + rng.Intn(2)
-	if splitIndex >= len(remaining) {
-		return nil, errors.New("Poker duel deck cannot be split into draw piles")
 	}
 	suits := [...]game.Suit{game.Blade, game.Fang, game.Shield}
 
@@ -160,13 +154,13 @@ func newPokerDuelGame(heroP1, heroP2 heroes.Hero, rng *rand.Rand, now time.Time)
 		ActivePlayer: rng.Intn(2), TurnNumber: 1, TurnStarted: now,
 		Winner: -1,
 	}
-	result.Players[0] = pokerDuelPlayer{
-		Hand:     append([]game.Card(nil), deck[:pokerDuelHandSize]...),
-		DrawPile: append([]game.Card(nil), remaining[:splitIndex]...),
-	}
-	result.Players[1] = pokerDuelPlayer{
-		Hand:     append([]game.Card(nil), deck[pokerDuelHandSize:2*pokerDuelHandSize]...),
-		DrawPile: append([]game.Card(nil), remaining[splitIndex:]...),
+	for index := range result.Players {
+		playerDeck := append([]game.Card(nil), deck...)
+		rng.Shuffle(len(playerDeck), func(i, j int) { playerDeck[i], playerDeck[j] = playerDeck[j], playerDeck[i] })
+		result.Players[index] = pokerDuelPlayer{
+			Hand:     append([]game.Card(nil), playerDeck[:pokerDuelHandSize]...),
+			DrawPile: append([]game.Card(nil), playerDeck[pokerDuelHandSize:]...),
+		}
 	}
 	if err := result.validateState(); err != nil {
 		return nil, err
@@ -209,10 +203,6 @@ func (g *pokerDuelGame) takeTurn(index, slot int, redraw bool, now time.Time, rn
 	if rng == nil {
 		return errors.New("Poker duel requires a random source")
 	}
-	if now.Sub(g.TurnStarted) >= time.Duration(pokerDuelTurnSeconds)*time.Second {
-		return g.handleTimeout(now, rng)
-	}
-
 	remaining := time.Duration(pokerDuelTurnSeconds)*time.Second - now.Sub(g.TurnStarted)
 	if remaining < 0 {
 		remaining = 0
@@ -245,20 +235,9 @@ func (g *pokerDuelGame) handleTimeout(now time.Time, rng *rand.Rand) error {
 	if rng == nil {
 		return errors.New("Poker duel requires a random source")
 	}
-	player := &g.Players[g.ActivePlayer]
-	if slot := firstOpenPokerDuelSlot(player); slot >= 0 && len(player.Hand) > 0 {
-		index := rng.Intn(len(player.Hand))
-		card := player.Hand[index]
-		player.Hand = removePokerDuelCard(player.Hand, index)
-		player.Table[slot] = append(player.Table[slot], card)
-	} else if len(player.DrawPile) > 0 && len(player.Hand) > 0 {
-		index := rng.Intn(len(player.Hand))
-		card := player.Hand[index]
-		player.Hand = removePokerDuelCard(player.Hand, index)
-		player.DiscardPile = append(player.DiscardPile, card)
-		player.Hand = append(player.Hand, drawPokerDuelCard(&player.DrawPile))
+	if rng == nil {
+		return errors.New("Poker duel requires a random source")
 	}
-	refillPokerDuelHand(player)
 	return g.completeTurn(now)
 }
 
@@ -461,7 +440,8 @@ func (g *pokerDuelGame) webView(phase string, now time.Time, cpuPlayer int) *web
 			Done: player.Done,
 		}
 		privateVisible := g.GameOver ||
-			phase == "poker-duel-play" && index == g.ActivePlayer && index != cpuPlayer
+			cpuPlayer >= 0 && index != cpuPlayer ||
+			cpuPlayer < 0 && phase == "poker-duel-play" && index == g.ActivePlayer
 		if privateVisible {
 			view.Hand = make([]webCard, len(player.Hand))
 			for cardIndex, card := range player.Hand {
@@ -534,8 +514,8 @@ func (g *pokerDuelGame) validateState() error {
 	if g.SharedStats.DeckFloor <= 9 {
 		expectedCards = (10 - g.SharedStats.DeckFloor) * 3
 	}
-	seen := make(map[game.Card]bool, expectedCards)
 	for playerIndex, player := range g.Players {
+		seen := make(map[game.Card]bool, expectedCards)
 		if len(player.Hand) > pokerDuelHandSize {
 			return fmt.Errorf("Poker player %d has more than %d cards in hand", playerIndex, pokerDuelHandSize)
 		}
@@ -563,9 +543,10 @@ func (g *pokerDuelGame) validateState() error {
 				seen[card] = true
 			}
 		}
-	}
-	if len(seen) != expectedCards {
-		return fmt.Errorf("Poker duel contains %d cards; deck floor requires %d", len(seen), expectedCards)
+		if len(seen) != expectedCards {
+			return fmt.Errorf("Poker player %d has %d cards; deck floor requires %d",
+				playerIndex, len(seen), expectedCards)
+		}
 	}
 	return nil
 }
@@ -601,7 +582,6 @@ func (s *webServer) applyPokerDuelTurn(request actionRequest, now time.Time) err
 		return err
 	}
 	previousPlayer := duel.ActivePlayer
-	timedOut := now.Sub(duel.TurnStarted) >= time.Duration(pokerDuelTurnSeconds)*time.Second
 	var err error
 	switch request.Action {
 	case "poker-duel-place":
@@ -616,11 +596,11 @@ func (s *webServer) applyPokerDuelTurn(request actionRequest, now time.Time) err
 	if err != nil {
 		return err
 	}
-	s.finishPokerDuelTurn(previousPlayer, now, request.Action, timedOut)
+	s.finishPokerDuelTurn(previousPlayer, now, request.Action)
 	return nil
 }
 
-func (s *webServer) finishPokerDuelTurn(previousPlayer int, now time.Time, action string, timedOut bool) {
+func (s *webServer) finishPokerDuelTurn(previousPlayer int, now time.Time, action string) {
 	session := s.session
 	duel := session.pokerDuel
 	session.actor = duel.ActivePlayer
@@ -651,7 +631,7 @@ func (s *webServer) finishPokerDuelTurn(previousPlayer int, now time.Time, actio
 	if session.mode != "hvh" && duel.ActivePlayer == 1 {
 		session.phase = "poker-duel-thinking"
 		session.message = s.playerName(1) + " is thinking."
-	} else if action == "poker-duel-timeout" || timedOut {
+	} else if action == "poker-duel-timeout" {
 		session.message = fmt.Sprintf("%s's turn timed out. They receive no time-bank bonus.", s.playerName(duel.ActivePlayer))
 	} else if session.mode != "hvh" {
 		session.message = "Your turn. Place or redraw a card before the 15-second clock expires."

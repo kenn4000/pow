@@ -63,6 +63,11 @@ func (s *webServer) getLocalPuzzleBattleCPU(w http.ResponseWriter) {
 }
 
 func (s *webServer) startLocalPuzzleBattleCPU(w http.ResponseWriter, request puzzleBattleRequest) {
+	matchMode, err := puzzleBattleCPUMatchMode(request.MatchMode)
+	if err != nil {
+		writeError(w, http.StatusBadRequest, err)
+		return
+	}
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	if s.playerProfile == nil {
@@ -99,7 +104,7 @@ func (s *webServer) startLocalPuzzleBattleCPU(w http.ResponseWriter, request puz
 		writeError(w, http.StatusInternalServerError, fmt.Errorf("create Easy CPU Puzzle Battle: %w", err))
 		return
 	}
-	match.MatchMode = "cpu_easy"
+	match.MatchMode = matchMode
 	if err := match.StartImmediately(now); err != nil {
 		writeError(w, http.StatusInternalServerError, err)
 		return
