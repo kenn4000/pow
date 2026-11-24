@@ -21,7 +21,10 @@ jobs:
         with:
           distribution: temurin
           java-version: '21'
-      - uses: android-actions/setup-android@v3
+      - name: Check preinstalled Android SDK
+        run: |
+          echo "ANDROID_HOME=$ANDROID_HOME"
+          sdkmanager --version
       - run: sdkmanager "platforms;android-35" "build-tools;35.0.0"
       - run: npm install --no-audit --no-fund
       - run: npm run android:init
