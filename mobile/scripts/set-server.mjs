@@ -1,0 +1,14 @@
+import { readFileSync, writeFileSync } from 'node:fs';
+const raw = process.env.PLAYTEST_URL;
+if (!raw) throw new Error('PLAYTEST_URL required');
+const url = new URL(raw);
+if (!['https:', 'http:'].includes(url.protocol)) throw new Error('Only HTTP(S) servers are supported');
+if (url.username || url.password || url.search || url.hash) throw new Error('Use a plain server URL without credentials, query, or fragment');
+if (!url.pathname.endsWith('/prisoner-of-war/')) throw new Error('URL must end in /prisoner-of-war/');
+if (url.protocol === 'http:' && !(/^(?:10\\.|192\\.168\\.|172\\.(?:1[6-9]|2\\d|3[01])\\.)\\d+\\.\\d+\\.\\d+$/.test(url.hostname) || url.hostname === 'localhost')) throw new Error('HTTP permitted only for local/private network addresses');
+const path = 'capacitor.config.json';
+const config = JSON.parse(readFileSync(path, 'utf8'));
+config.server = { url: url.toString(), cleartext: url.protocol === 'http:' };
+config.android = { ...(config.android || {}), allowMixedContent: false };
+writeFileSync(path, JSON.stringify(config, null, 2) + '\\n');
+console.log('Android playtest target:', config.server.url);
