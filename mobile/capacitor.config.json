@@ -1,0 +1,12 @@
+{
+  "appId": "com.markdownthing.prisonersofwar",
+  "appName": "Prisoners of War",
+  "webDir": "www",
+  "server": {
+    "url": "https://games.markdownthing.com/prisoner-of-war/",
+    "cleartext": false
+  },
+  "android": {
+    "allowMixedContent": false
+  }
+}
