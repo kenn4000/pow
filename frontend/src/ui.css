@@ -579,3 +579,20 @@ details.mission > summary .mission-title { flex: 1; }
 /* Iteration 25 · Password: visibility control reads as a toggle, not a second submit */
 .account-page .visibility-toggle { justify-self: start; min-height: 32px; padding: .3rem .8rem; border-color: #344159; background: transparent; color: #f4d46f; font-size: .85rem; }
 .account-page .visibility-toggle[aria-pressed="true"] { border-color: #7f6233; background: #1f1a0e; }
+
+/* Mobile device viewport and touch ergonomics. Keep desktop layout intact. */
+@media (max-width: 520px) {
+  body { min-width: 0; }
+  #root { min-width: 0; padding: env(safe-area-inset-top, 0px) env(safe-area-inset-right, 0px) env(safe-area-inset-bottom, 0px) env(safe-area-inset-left, 0px); }
+  .shell, .dashboard-shell { width: 100%; max-width: none; border-radius: 0; height: calc(100dvh - var(--account-height) - env(safe-area-inset-top, 0px) - env(safe-area-inset-bottom, 0px)); }
+  .dashboard-footer { width: 100%; max-width: 430px; bottom: env(safe-area-inset-bottom, 0px); }
+  .board, .feature-content { overscroll-behavior-y: contain; min-width: 0; }
+  .modal { max-width: 100%; max-height: calc(100dvh - 36px - env(safe-area-inset-top, 0px) - env(safe-area-inset-bottom, 0px)); }
+  input:not([type=checkbox]):not([type=radio]), select, textarea { font-size: 16px; }
+}
+@media (pointer: coarse) {
+  button.card:hover { transform: none; }
+  button.card:active { outline: 2px solid var(--gold); outline-offset: -2px; }
+  .action, .account-toggle, .password-toggle { min-height: 44px; }
+  button, a, summary { -webkit-tap-highlight-color: #f0c75e33; }
+}
