@@ -8,7 +8,7 @@ permissions:
   contents: read
 jobs:
   build:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     defaults:
       run:
         working-directory: mobile
@@ -21,11 +21,12 @@ jobs:
         with:
           distribution: temurin
           java-version: '21'
-      - name: Check preinstalled Android SDK
+      - name: Locate Android SDK and install required packages
         run: |
-          echo "ANDROID_HOME=$ANDROID_HOME"
-          sdkmanager --version
-      - run: sdkmanager "platforms;android-35" "build-tools;35.0.0"
+          SDKMANAGER="$(find "$ANDROID_HOME/cmdline-tools" -type f -name sdkmanager | sort -V | tail -n 1)"
+          test -x "$SDKMANAGER"
+          "$SDKMANAGER" --version
+          "$SDKMANAGER" --sdk_root="$ANDROID_HOME" "platforms;android-35" "build-tools;35.0.0"
       - run: npm install --no-audit --no-fund
       - run: npm run android:init
       - run: npm run android:sync
