@@ -105,6 +105,7 @@ type webSession struct {
 	tugWarSeries        *tugWarSeriesProgress
 	pokerDuelCPUReadyAt time.Time
 	ladderReadyAt       time.Time
+	cpuStepReadyAt      time.Time
 	whitePlayer         int
 	phase               string
 	actor               int
@@ -755,8 +756,8 @@ func (s *webServer) handleState(w http.ResponseWriter, r *http.Request) {
 	}
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	if s.session != nil && s.session.variant == "ladder" {
-		if err := s.advanceLadderAI(); err != nil {
+	if s.session != nil && (s.session.variant == "ladder" || s.session.variant == "rummy" || s.session.variant == "tug-war" || s.session.variant == "abandon-duel") {
+		if err := s.advanceAI(); err != nil {
 			writeError(w, http.StatusInternalServerError, err)
 			return
 		}
@@ -2121,22 +2122,19 @@ func (s *webServer) readyAction() error {
 func (s *webServer) advanceAI() error {
 	session := s.session
 	if session != nil && session.variant == "tug-war" {
-		return s.advanceTugWarAI()
+		return s.advanceTimedCPU(800*time.Millisecond, s.advanceTugWarAI)
 	}
 	if session != nil && session.variant == "ladder" {
 		return s.advanceLadderAI()
 	}
 	if session != nil && session.variant == "rummy" {
-		if isAI(session.mode, session.actor) {
-			time.Sleep(500 * time.Millisecond)
-		}
-		return s.advanceRummyAI()
+		return s.advanceTimedCPU(time.Second, s.advanceRummyAI)
 	}
 	if session != nil && session.variant == "poker-duel" {
 		return s.schedulePokerDuelCPU()
 	}
-	if session.variant == "abandon-duel" {
-		return s.advanceAbandonDuelAI()
+	if session != nil && session.variant == "abandon-duel" {
+		return s.advanceTimedCPU(400*time.Millisecond, func() error { return s.advanceAbandonDuelAIStage(true) })
 	}
 	if session != nil && (session.variant == "puzzler" || session.variant == "abandon" || session.variant == "poker") {
 		return nil
@@ -3267,4 +3265,26 @@ func webFaceCards(cards []game.Card) []webFaceCard {
 		result[index] = webFaceCard{Card: card}
 	}
 	return result
+}
+
+// advanceTimedCPU schedules a visible, persisted CPU step without sleeping in a database transaction.
+func (s *webServer) advanceTimedCPU(delay time.Duration, step func() error) error {
+	session := s.session
+	if session == nil || s.onlineViewer || session.phase == "gameover" || !isAI(session.mode, session.actor) {
+		if session != nil { session.cpuStepReadyAt = time.Time{} }
+		return nil
+	}
+	now := time.Now()
+	if session.cpuStepReadyAt.IsZero() {
+		session.cpuStepReadyAt = now.Add(delay)
+		session.message = "The CPU is thinking."
+		return nil
+	}
+	if now.Before(session.cpuStepReadyAt) { return nil }
+	session.cpuStepReadyAt = time.Time{}
+	if err := step(); err != nil { return err }
+	if session.phase != "gameover" && isAI(session.mode, session.actor) {
+		session.cpuStepReadyAt = time.Now().Add(delay)
+	}
+	return nil
 }

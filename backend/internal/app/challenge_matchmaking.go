@@ -3,6 +3,7 @@ package app
 import (
 	"context"
 	"database/sql"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"net/http"
@@ -55,10 +56,14 @@ func refreshChallengeAvailabilityTx(ctx context.Context, tx *sql.Tx, userID stri
 		return nil, 0, fmt.Errorf("refresh online challenge availability: %w", err)
 	}
 	accepted := []string{}
+	var acceptedJSON []byte
 	if err := tx.QueryRowContext(ctx,
-		"SELECT accepted_challenges FROM online_challenge_preferences WHERE user_id=$1", userID).
-		Scan(&accepted); err != nil {
+		"SELECT COALESCE(to_json(accepted_challenges), \'[]\'::json) FROM online_challenge_preferences WHERE user_id=$1", userID).
+		Scan(&acceptedJSON); err != nil {
 		return nil, 0, fmt.Errorf("load online challenge preferences: %w", err)
+	}
+	if err := json.Unmarshal(acceptedJSON, &accepted); err != nil {
+		return nil, 0, fmt.Errorf("decode online challenge preferences: %w", err)
 	}
 	cooldownSeconds, err := challengeCooldownSecondsTx(ctx, tx, userID, now)
 	if err != nil {

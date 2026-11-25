@@ -317,6 +317,10 @@ func removeAbandonDuelCards(cards []game.Card, firstIndex, secondIndex int) []ga
 }
 
 func (s *webServer) advanceAbandonDuelAI() error {
+	return s.advanceAbandonDuelAIStage(false)
+}
+
+func (s *webServer) advanceAbandonDuelAIStage(singleStep bool) error {
 	session := s.session
 	if session == nil || session.abandonDuel == nil {
 		return errors.New("Abandon Duel state is unavailable")
@@ -335,6 +339,11 @@ func (s *webServer) advanceAbandonDuelAI() error {
 			if len(hiddenBoard) > 0 {
 				if err := duel.flipBoardCard(hiddenBoard[s.rng.Intn(len(hiddenBoard))]); err != nil {
 					return err
+				}
+				if singleStep {
+					session.actor, session.phase = duel.ActivePlayer, duel.phase()
+					session.message = fmt.Sprintf("%s revealed a card.", s.playerName(player))
+					return nil
 				}
 			}
 		}
@@ -397,6 +406,7 @@ func (s *webServer) advanceAbandonDuelAI() error {
 		} else {
 			session.message = fmt.Sprintf("%s completed a pair.", s.playerName(player))
 		}
+		if singleStep { return nil }
 	}
 	return nil
 }

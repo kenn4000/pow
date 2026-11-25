@@ -5623,8 +5623,9 @@
     }
 
     function syncLadderPolling() {
-      const active = state?.variant === "ladder" &&
-        ["ladder-opening-reveal", "ladder-thinking"].includes(state.phase);
+      const active = !showDashboard && !showFeature && state?.mode !== "online" && state?.mode !== "hvh" && state?.phase !== "gameover" && (
+        (state?.variant === "ladder" && ["ladder-opening-reveal", "ladder-thinking"].includes(state.phase)) ||
+        (["rummy", "tug-war", "abandon-duel"].includes(state?.variant) && Number(state.actor) === 1));
       if (!active) {
         if (ladderPollTimer !== null) window.clearInterval(ladderPollTimer);
         ladderPollTimer = null;
@@ -5635,15 +5636,16 @@
         if (ladderPollInProgress || actionInProgress) return;
         ladderPollInProgress = true;
         const gameId = state?.gameId;
+        const variant = state?.variant;
         try {
           const next = await api("/api/state");
-          if (!actionInProgress && state?.gameId === gameId && state?.variant === "ladder" && next.gameId === gameId && next.variant === "ladder") {
+          if (!actionInProgress && state?.gameId === gameId && state?.variant === variant && next.gameId === gameId && next.variant === variant) {
             state = next;
             activeMode = next.mode;
             render();
           }
         } catch (error) {
-          setStatus(`Waiting for Ladder turn update: ${connectionError(error)}`, true);
+          setStatus(`Waiting for CPU turn update: ${connectionError(error)}`, true);
         } finally {
           ladderPollInProgress = false;
         }

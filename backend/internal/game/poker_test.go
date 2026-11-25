@@ -122,3 +122,14 @@ func TestPokerConstraintFailureDoesNotReturnScores(t *testing.T) {
 		t.Fatalf("constraint failure exposed score data: %+v", score)
 	}
 }
+
+func TestPokerFirstCardMustGoInHandA(t *testing.T) {
+	var hands [3][]Card
+	if !CanPlacePokerCard(hands, 0) || CanPlacePokerCard(hands, 1) || CanPlacePokerCard(hands, 2) {
+		t.Fatal("only Hand A should accept the first card")
+	}
+	hands[0] = []Card{{Suit: Shield, Face: 1}}
+	if CanPlacePokerCard(hands, 0) || !CanPlacePokerCard(hands, 1) || !CanPlacePokerCard(hands, 2) {
+		t.Fatal("the next card should be legal in either empty hand")
+	}
+}

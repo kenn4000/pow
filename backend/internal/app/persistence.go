@@ -40,6 +40,7 @@ type sessionSnapshot struct {
 	TugWarSeries        *tugWarSeriesProgress
 	PokerDuelCPUReadyAt time.Time
 	LadderReadyAt       time.Time
+	CPUStepReadyAt      time.Time
 	WhitePlayer         int
 	Phase               string
 	Actor               int
@@ -89,6 +90,7 @@ func snapshotSession(s *webSession) *sessionSnapshot {
 		Poker: s.poker, PokerDuel: s.pokerDuel, TugWar: s.tugWar, TugWarSeries: tugWarSeries,
 		PokerDuelCPUReadyAt: s.pokerDuelCPUReadyAt,
 		LadderReadyAt:       s.ladderReadyAt,
+		CPUStepReadyAt:      s.cpuStepReadyAt,
 		WhitePlayer:         s.whitePlayer, Phase: s.phase, Actor: s.actor, HandoffTarget: s.handoffTarget,
 		HandoffPhase: s.handoffPhase, Exchange: s.exchange, Attacker: s.attacker,
 		AttackIndex: s.attackIndex, AttackCard: s.attackCard, LastAttack: s.lastAttack,
@@ -196,6 +198,7 @@ func (s *sessionSnapshot) restore() *webSession {
 		state: s.State, mode: s.Mode, variant: variant, puzzle: s.Puzzle, abandon: abandon, abandonDuel: abandonDuel, rummy: rummy, ladder: ladderGame, poker: s.Poker, pokerDuel: s.PokerDuel, tugWar: s.TugWar, tugWarSeries: tugWarSeries,
 		pokerDuelCPUReadyAt: s.PokerDuelCPUReadyAt,
 		ladderReadyAt:       s.LadderReadyAt,
+		cpuStepReadyAt:      s.CPUStepReadyAt,
 		whitePlayer:         s.WhitePlayer, phase: phase, actor: s.Actor, handoffTarget: s.HandoffTarget,
 		handoffPhase: s.HandoffPhase, exchange: s.Exchange, attacker: s.Attacker,
 		attackIndex: s.AttackIndex, attackCard: s.AttackCard, lastAttack: s.LastAttack,
@@ -303,7 +306,9 @@ func (s *webServer) withPlayer(next http.Handler) http.Handler {
 			}
 		}
 		snapshot.Schema = 1
+		previousSessionJSON, _ := json.Marshal(snapshot.Session)
 		snapshot.Session = snapshotSession(current.session)
+		nextSessionJSON, _ := json.Marshal(snapshot.Session)
 		snapshot.PreviewProfile = current.previewProfile
 		snapshot.CampDraw = current.campDrawSession.Snapshot()
 		snapshot.CampDrawPreview = current.campDrawPreview
@@ -315,7 +320,8 @@ func (s *webServer) withPlayer(next http.Handler) http.Handler {
 			databaseError(w, err)
 			return
 		}
-		if r.Method == http.MethodPost && snapshot.GameID != "" && (strings.HasSuffix(r.URL.Path, "/new") || strings.HasSuffix(r.URL.Path, "/action")) {
+		if snapshot.GameID != "" && current.session != nil && ((r.Method == http.MethodPost && (strings.HasSuffix(r.URL.Path, "/new") || strings.HasSuffix(r.URL.Path, "/action"))) || (r.Method == http.MethodGet && strings.HasSuffix(r.URL.Path, "/state") && !bytes.Equal(previousSessionJSON, nextSessionJSON))) {
+			if r.Method == http.MethodGet { body = []byte(`{"action":"cpu-step"}`) }
 			if err := saveGame(ctx, tx, u.ID, snapshot, current, stateJSON, body); err != nil {
 				databaseError(w, err)
 				return

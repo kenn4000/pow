@@ -715,7 +715,7 @@ func (m *Match) scorePairs(round *Round, player int, pairs []Pair) (int, []game.
 	var jail []game.Card
 	var captured [3][3]int
 	for _, result := range m.resolvePairs(round, player, pairs) {
-		if result.CapturedCard == nil || result.WinnerPlayer != player {
+		if result.CapturedCard == nil {
 			continue
 		}
 		card := *result.CapturedCard

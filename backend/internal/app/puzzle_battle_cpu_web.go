@@ -474,11 +474,11 @@ func choosePuzzleBattleCPUPairs(match *puzzlebattle.Match, round *puzzlebattle.R
 				winner = 1 - round.Controller
 			}
 			pairs = append(pairs, puzzlebattle.Pair{FirstIndex: firstIndex, SecondIndex: secondIndex})
-			if winner == 1 {
+			if winner != -1 {
 				captured = append(captured, outcome.Captured)
 			}
 			search(withoutFirst&^(uint64(1)<<secondIndex), remaining-1)
-			if winner == 1 {
+			if winner != -1 {
 				captured = captured[:len(captured)-1]
 			}
 			pairs = pairs[:len(pairs)-1]
