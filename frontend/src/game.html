@@ -2464,7 +2464,7 @@
           : (heroIconNames[heroID] || heroID || "recruit");
       const priorScore = player.score !== undefined && battleAnimation && battleAnimation.key === battleAnimationKey() &&
         battleAnimation.stage !== "settled" && battleAnimation.previousScores[player.color];
-      const scoreText = priorScore ?? `${playerLabel(player)} = ${player.score}`;
+      const scoreText = (priorScore === false ? null : priorScore) ?? `${playerLabel(player)} = ${player.score}`;
       const scoreMarkup = state.variant === "abandon-duel"
         ? `<p class="hero-score abandon-round-scores ${color}">
             <span>Round 1: ${esc(formatModifier(Number(state.abandonDuel?.roundScores?.[0]?.[playerIndex] ?? 0)))}</span>
@@ -2523,8 +2523,8 @@
       let rules = "";
       if (state.variant === "rummy") {
         const params = state.rummy?.parameters || {};
-        rules = `<p><strong>set bonus:</strong> ${Number(params.j ?? 0)}</p>
-          <p><strong>run bonus:</strong> ${Number(params.b ?? 0)}</p>`;
+        rules = `<p><strong>Set:</strong> Face ${formatModifier(Number(params.j ?? 0))}</p>
+          <p><strong>Run:</strong> Top Face + Length ${formatModifier(Number(params.b ?? 0))}</p>`;
       } else if (state.variant === "puzzler") {
         const puzzle = state.puzzle || {};
         rules = `<p><strong>Target:</strong> ${esc(puzzle.target ?? "—")}</p>
@@ -2570,7 +2570,7 @@
         const favoredValue = Number(mods.favored || 0);
         const favored = `x2${favoredValue > 0 ? `+${favoredValue}` : favoredValue < 0 ? favoredValue : ""}`;
         rules = `<p><strong>Favored Rule:</strong> ${favored}</p>
-          <p><strong>Face Values:</strong> ${1 + Number(mods.shift || 0)}–${9 + Number(mods.shift || 0)}</p>`;
+          <p><strong>Face Values:</strong> ${1 + Number(mods.shift || 0)}–${9 + Number(mods.shift || 0)}</p>${state.bounty ? `<p style="color:${suitColorValue(Number(state.bounty.suit))}"><strong style="color:inherit">Bounty:</strong> ${formatModifier(Number(mods.bounty ?? 0))}</p>` : ""}`;
       }
       document.getElementById("matchRules").innerHTML = rules;
     }
@@ -2900,7 +2900,7 @@
           state.variant === "fog" ? { ...item, faceHidden: false, faceRange: "" } : item
         )).join("");
         document.getElementById("battleLeft").innerHTML = `<div class="draft-battlefield">
-          <span class="battle-player-name">Public draft · ${state.draftPool.length} cards remain</span>
+          <span class="battle-player-name">Draft Cards · ${state.draftPool.length} cards remain</span>
           <div class="draft-card-pool">${cards}</div>
         </div>`;
         document.getElementById("battleRight").innerHTML = "";
@@ -3030,8 +3030,8 @@
           appendNavigationAction("Find another opponent", chooseMatchMode, "secondary manage");
           return;
         }
-        appendNavigationAction("Choose match mode", chooseMatchMode, "secondary manage");
         appendNavigationAction("Restart this mode", requestNewGameConfirmation, "secondary manage");
+        appendNavigationAction("Choose match mode", chooseMatchMode, "secondary manage");
       };
       if (!state || !state.started) return;
       if (state.variant === "puzzler") {
@@ -6456,7 +6456,7 @@
     async function saveSuitAppearance(body) {
       try {
         const data = await api('/api/shop',body);
-        state.dashboard = data.dashboard;
+        state.dashboard = { ...state.dashboard, ...data.dashboard, matchTokensAllowed: state.dashboard?.matchTokensAllowed, canUndo: state.dashboard?.canUndo, canRestart: state.dashboard?.canRestart, canSkipMission: state.dashboard?.canSkipMission, replaceOptions: state.dashboard?.replaceOptions };
         openSuitMenu = null;
         openPuzzleSuitMenu = -1;
         render();
@@ -6809,7 +6809,11 @@
 
     document.getElementById("dashboardCampDraw").addEventListener("click", () => navigateGame("camp-draw"));
     document.getElementById("dashboardAchievements").addEventListener("click", () => navigateGame("achievements"));
-    document.getElementById("dashboardShop").addEventListener("click", () => navigateGame("shop"));
+    document.getElementById("dashboardShop").addEventListener("click", async () => {
+      const id = state?.dashboard?.dailyFeaturedItem?.id;
+      await openFeature("shop");
+      if (id && showFeature && currentFeature === "shop") openShopPreview(id);
+    });
     document.getElementById("dashboardCampaigns").addEventListener("click", () => navigateGame("campaigns"));
     document.getElementById("dashboardHistory").addEventListener("click", () => navigateGame("history"));
     document.getElementById("dashboardSkills").addEventListener("click", () => navigateGame("skills"));
