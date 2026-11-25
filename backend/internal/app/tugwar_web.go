@@ -47,6 +47,7 @@ type webTugWarState struct {
 	ValuesRevealed bool                         `json:"valuesRevealed"`
 	CanAct         bool                         `json:"canAct"`
 	CanPlay        bool                         `json:"canPlay"`
+	LegalPlays     [][tugwar.NumPiles]bool      `json:"legalPlays"`
 	CanFlip        bool                         `json:"canFlip"`
 	CanPush        [tugwar.NumPiles]bool        `json:"canPush"`
 	CanPass        bool                         `json:"canPass"`
@@ -292,6 +293,12 @@ func (s *webServer) advanceTugWarAI() error {
 			action = session.tugWar.ChooseCPUAction()
 		}
 	}
+	if action.Kind == tugwar.ActionPlayCard && !session.tugWar.CanPlayCard(session.actor, action.CardIndex, action.PileIndex) ||
+		action.Kind == tugwar.ActionSpendPush && !session.tugWar.CanSpendPush(session.actor, action.PileIndex) ||
+		action.Kind == tugwar.ActionPass && !session.tugWar.CanPass() ||
+		action.Kind == tugwar.ActionFlipDeck && len(session.tugWar.State.Deck) == 0 {
+		action = session.tugWar.ChooseCPUAction()
+	}
 	if err := session.tugWar.Apply(action); err != nil {
 		return fmt.Errorf("Tug War CPU action: %w", err)
 	}
@@ -381,7 +388,8 @@ func tugWarWebView(server *webServer, session *webSession) *webTugWarState {
 		S: state.S, F: state.F, B: state.B, BountyRevealed: bountyRevealed,
 		Round: state.Round, Current: state.Current, Viewer: viewer,
 		DeckCount: len(state.Deck), Hand: append([]game.Card(nil), state.Hands[viewer]...),
-		CanAct: canAct, CanPlay: canAct && len(state.Hands[viewer]) > 0 && session.tugWar.HasLegalAction(viewer),
+		CanAct: canAct, CanPlay: canAct && session.tugWar.HasWinningPlay(viewer),
+		LegalPlays: make([][tugwar.NumPiles]bool, len(state.Hands[viewer])),
 		CanFlip: canAct && len(state.Deck) > 0, CanPass: canAct && session.tugWar.CanPass(),
 		Log:            append([]tugwar.ActionLogEntry(nil), session.tugWar.Log...),
 		ValuesRevealed: bountyRevealed,
@@ -429,6 +437,11 @@ func tugWarWebView(server *webServer, session *webSession) *webTugWarState {
 		}
 		if player == viewer || state.Over {
 			view.Players[player].Hand = append([]game.Card(nil), state.Hands[player]...)
+		}
+	}
+	for cardIndex := range view.LegalPlays {
+		for pileIndex := range view.LegalPlays[cardIndex] {
+			view.LegalPlays[cardIndex][pileIndex] = canAct && session.tugWar.CanPlayCard(viewer, cardIndex, pileIndex)
 		}
 	}
 	for pileIndex := range view.CanPush {

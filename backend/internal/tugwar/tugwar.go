@@ -344,6 +344,16 @@ func PileValue(pile Pile, bountySuit game.Suit, bounty int) int {
 	return total
 }
 
+// CanPlayCard reports whether this exact hand card can beat this pile.
+func (g *Game) CanPlayCard(player, cardIndex, pileIndex int) bool {
+	if g == nil || g.State.Over || player < 0 || player > 1 || player != g.State.Current ||
+		cardIndex < 0 || cardIndex >= len(g.State.Hands[player]) || pileIndex < 0 || pileIndex >= len(g.State.Piles) {
+		return false
+	}
+	top, ok := g.State.Piles[pileIndex].Top()
+	return ok && CardBeatsTop(g.State.Hands[player][cardIndex], top, g.State.S, g.State.F)
+}
+
 func (g *Game) HasWinningPlay(player int) bool {
 	if g == nil || player < 0 || player > 1 || g.State.Over {
 		return false
@@ -415,8 +425,8 @@ func (g *Game) Apply(action Action) error {
 			action.PileIndex < 0 || action.PileIndex >= len(g.State.Piles) {
 			return errors.New("card or pile selection is out of range")
 		}
-		if !g.HasLegalAction(player) {
-			return errors.New("no legal play is available; pass instead")
+		if !g.CanPlayCard(player, action.CardIndex, action.PileIndex) {
+			return errors.New("that card cannot beat the selected pile")
 		}
 		pile := &g.State.Piles[action.PileIndex]
 		top, ok := pile.Top()
@@ -429,13 +439,9 @@ func (g *Game) Apply(action Action) error {
 		log.TopValue = CardValue(top, card, g.State.S, g.State.F)
 		log.ZoneBefore = pile.Zone
 		g.State.Hands[player] = removeCard(g.State.Hands[player], action.CardIndex)
-		if log.CardValue > log.TopValue {
-			log.Succeeded = true
-			pile.Cards = append(pile.Cards, card)
-			pile.Zone = moveZone(pile.Zone, player)
-		} else {
-			g.State.Discard = append(g.State.Discard, card)
-		}
+		log.Succeeded = true
+		pile.Cards = append(pile.Cards, card)
+		pile.Zone = moveZone(pile.Zone, player)
 		pile.Hidden = false
 		log.ZoneAfter = pile.Zone
 	case ActionFlipDeck:
@@ -1059,7 +1065,7 @@ func (g *Game) chooseSuboptimalBait(rng *rand.Rand) Action {
 	candidates := make([]Action, 0)
 	for cardIndex := range g.State.Hands[1] {
 		for pileIndex := range g.State.Piles {
-			if pileIndex == 1 || pileIndex == 2 {
+			if (pileIndex == 1 || pileIndex == 2) && g.CanPlayCard(1, cardIndex, pileIndex) {
 				candidates = append(candidates, Action{Kind: ActionPlayCard, CardIndex: cardIndex, PileIndex: pileIndex})
 			}
 		}

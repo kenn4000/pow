@@ -2134,7 +2134,7 @@ func (s *webServer) advanceAI() error {
 		return s.schedulePokerDuelCPU()
 	}
 	if session != nil && session.variant == "abandon-duel" {
-		return s.advanceTimedCPU(400*time.Millisecond, func() error { return s.advanceAbandonDuelAIStage(true) })
+		return s.advanceTimedCPU(800*time.Millisecond, func() error { return s.advanceAbandonDuelAIStage(true) })
 	}
 	if session != nil && (session.variant == "puzzler" || session.variant == "abandon" || session.variant == "poker") {
 		return nil

@@ -157,6 +157,8 @@ type View struct {
 	Board             []game.Card        `json:"board,omitempty"`
 	RequiredPairs     int                `json:"requiredPairs"`
 	OwnPairs          []Pair             `json:"ownPairs,omitempty"`
+	OwnJail           []game.Card        `json:"ownJail"`
+	OwnScore          int                `json:"ownScore"`
 	PendingIndex      int                `json:"pendingIndex"`
 	OwnSubmitted      bool               `json:"ownSubmitted"`
 	OpponentSubmitted bool               `json:"opponentSubmitted"`
@@ -522,6 +524,7 @@ func (m *Match) ViewFor(player int, now time.Time) (View, error) {
 		view.Board = append([]game.Card(nil), round.Board...)
 		view.RequiredPairs = requiredPairs(round.Number)
 		view.OwnPairs = append([]Pair(nil), own.Pairs...)
+		view.OwnScore, view.OwnJail, _ = m.scorePairs(&round, player, own.Pairs)
 		view.PendingIndex = own.PendingIndex
 		view.OwnSubmitted = own.Submitted
 		view.OpponentSubmitted = round.Players[1-player].Submitted

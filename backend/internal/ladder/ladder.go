@@ -507,9 +507,6 @@ func (g *LadderGame) PassTurn(player PlayerID) error {
 	if player != g.current {
 		return ErrWrongTurn
 	}
-	if len(g.LegalPlays(player)) > 0 {
-		return ErrPassNotAllowed
-	}
 	opponent := otherPlayer(player)
 	opponentHand := g.handFor(opponent)
 	if len(opponentHand) == 0 {

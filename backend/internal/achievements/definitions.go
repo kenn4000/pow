@@ -120,7 +120,7 @@ func buildAchievements() []Achievement {
 	}
 
 	meta := []Achievement{
-		{ID: "chroma_collector", Name: "Chroma Collector", Description: "Own 5, 20, and 50 chromas.", CounterType: CounterBestRecord, CounterID: "chroma_count", ProgressUnit: "chromas owned", Tiers: standardTiers("gold", "swap", []int{5, 20, 50})},
+		{ID: "chroma_collector", Name: "Chroma Collector", Description: "Own 5, 20, and 50 chromas beyond the three starter chromas.", CounterType: CounterBestRecord, CounterID: "chroma_count", ProgressUnit: "chromas owned", Tiers: standardTiers("gold", "swap", []int{5, 20, 50})},
 		{ID: "lucky_draw", Name: "Lucky Draw", Description: "Open 5, 20, and 50 boxes.", CounterType: CounterCumulative, CounterID: "boxes_opened", ProgressUnit: "boxes opened", Tiers: standardTiers("gold", "skip", []int{5, 20, 50})},
 		{ID: "win_streak_humans", Name: "Win Streak (Humans)", Description: "Win 3, 6, and 12 consecutive matches against human opponents.", CounterType: CounterBestRecord, CounterID: "human_win_streak_best", ProgressUnit: "consecutive human wins", Tiers: standardTiers("gold", "undo", []int{3, 6, 12})},
 		{ID: "login_streak", Name: "Login Streak", Description: "Log in on 1, 10, and 30 consecutive days.", CounterType: CounterBestRecord, CounterID: "login_streak_best", ProgressUnit: "consecutive days", Tiers: standardTiers("gold", "restart", []int{1, 10, 30})},

@@ -420,8 +420,11 @@ func TestPassingIsForcedOnlyWhenNoLegalCardAndOpponentLeadsFresh(t *testing.T) {
 	}
 
 	g.chainValue = intPointer(1)
-	if err := g.PassTurn(PlayerA); !errors.Is(err, ErrPassNotAllowed) {
-		t.Fatalf("voluntary pass error = %v, want ErrPassNotAllowed", err)
+	if err := g.PassTurn(PlayerA); err != nil {
+		t.Fatalf("voluntary pass should open a new chain for the opponent: %v", err)
+	}
+	if state := g.State(); !state.OpeningPending || state.Current != PlayerB {
+		t.Fatalf("voluntary pass did not give the opponent the opening: %+v", state)
 	}
 }
 

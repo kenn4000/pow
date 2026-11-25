@@ -455,7 +455,7 @@ func (g *pokerDuelGame) webView(phase string, now time.Time, cpuPlayer int) *web
 		}
 		for slotIndex, cards := range player.Table {
 			hidden := slotIndex > 0 && !g.GameOver &&
-				(phase == "handoff" || index != g.ActivePlayer || index == cpuPlayer)
+				(phase == "handoff" || index == cpuPlayer || cpuPlayer < 0 && index != g.ActivePlayer)
 			slot := pokerDuelSlotView{
 				Count: len(cards), Hidden: hidden,
 				CanPlace: phase == "poker-duel-play" && index == g.ActivePlayer && index != cpuPlayer &&

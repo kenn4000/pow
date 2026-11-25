@@ -309,8 +309,8 @@ func evalChromaCollector(ctx Context) (int, bool, int) {
 		return 0, false, 0
 	}
 	count := 0
-	for _, owned := range ctx.Profile.OwnedChromas {
-		if owned {
+	for id, owned := range ctx.Profile.OwnedChromas {
+		if owned && id != "tribal-red" && id != "tribal-blue" && id != "tribal-yellow" {
 			count++
 		}
 	}
@@ -618,8 +618,9 @@ func evalHeroVariety(ctx Context) (int, bool, int) {
 		}
 	}
 	for counterID, wins := range ctx.Profile.AchievementCounters {
-		if wins > 0 && strings.HasPrefix(counterID, "hero_match_wins_") {
-			unique[strings.TrimPrefix(counterID, "hero_match_wins_")] = struct{}{}
+		if wins > 0 && strings.HasPrefix(counterID, "hero_match_wins_") && counterID != "hero_match_wins_total" {
+			id := strings.TrimPrefix(counterID, "hero_match_wins_")
+			if id != "" { unique[id] = struct{}{} }
 		}
 	}
 	count := len(unique)

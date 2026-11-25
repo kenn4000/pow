@@ -615,3 +615,10 @@ details.mission > summary .mission-title { flex: 1; }
 
 #gameShell[data-variant="puzzle-battle"] .actions:not(:empty) { display:flex !important; }
 #gameShell[data-variant="puzzle-battle"] .puzzle-actions:has([data-pb-home]) { display:none; }
+
+.cpu-energy-status { color:#f0d484; display:flex; flex-wrap:wrap; align-items:center; gap:6px; }
+.cpu-energy-status .currency-icon { width:22px; height:22px; }
+.tug-pulls-remaining { text-align:center; margin:0; }
+#gameShell[data-variant="puzzle-battle"][data-phase="complete"] .suit-cycle { display:none !important; }
+#gameShell[data-variant="puzzle-battle"][data-phase="complete"] #matchInfo { display:none !important; }
+.puzzle-battle-live-jail-cells { display:flex; justify-content:center; flex-wrap:wrap; gap:8px; }

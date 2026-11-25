@@ -164,24 +164,19 @@ func TestCardComparisonIsStrictAndUsesHeroStats(t *testing.T) {
 	}
 }
 
-func TestFailedHandPlayDiscardsCardWithoutChangingPile(t *testing.T) {
+func TestIllegalHandPlayDoesNotConsumeCardOrTurn(t *testing.T) {
 	g := testGame()
 	g.State.Piles[0].Zone = -1
 	card := game.Card{Suit: game.Blade, Face: 1}
 	g.State.Hands[0] = []game.Card{card}
 	g.State.Deck = []game.Card{{Suit: game.Fang, Face: 9}}
-	before := append([]game.Card(nil), g.State.Piles[0].Cards...)
-	if err := g.Apply(Action{Kind: ActionPlayCard, CardIndex: 0, PileIndex: 0}); err != nil {
-		t.Fatal(err)
+	before := len(g.State.Piles[0].Cards)
+	if g.CanPlayCard(0, 0, 0) || g.Apply(Action{Kind: ActionPlayCard, CardIndex: 0, PileIndex: 0}) == nil {
+		t.Fatal("illegal hand play was accepted")
 	}
-	if len(g.State.Discard) != 1 || g.State.Discard[0] != card {
-		t.Fatalf("failed card was not discarded: %v", g.State.Discard)
-	}
-	if len(g.State.Piles[0].Cards) != len(before) || g.State.Piles[0].Zone != -1 {
-		t.Fatal("failed hand play changed the pile")
-	}
-	if len(g.Log) != 1 || g.Log[0].Succeeded || g.Log[0].CardValue >= g.Log[0].TopValue {
-		t.Fatalf("failed play was not fully logged: %+v", g.Log)
+	if len(g.State.Hands[0]) != 1 || g.State.Hands[0][0] != card || len(g.State.Discard) != 0 ||
+		len(g.State.Piles[0].Cards) != before || g.State.Piles[0].Zone != -1 || g.State.Current != 0 || len(g.Log) != 0 {
+		t.Fatal("illegal hand play mutated the game")
 	}
 }
 

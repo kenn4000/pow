@@ -1506,22 +1506,13 @@
         ? `<p class="variant-score">${esc(rankedSeriesDescription(rankedSeries))}</p>`
         : "";
       const resultRounds = result?.rounds || [];
-      const liveJailsMarkup = view.status === "round2" && Array.isArray(view.roundOneJails)
-        ? `<section class="puzzle-battle-live-jails"><h3>Round 1 prisoners</h3>
-          ${[view.player, 1 - view.player].map(player => {
-            const jailedCards = view.roundOneJails[player] || [];
-            const cells = Array.from({ length: 3 }, (_, index) => {
-              const card = jailedCards[index];
-              return `<span class="puzzle-battle-live-jail-cell">${card
-                ? cardMarkup(card)
-                : `<span class="puzzle-battle-empty-jail-cell">${index + 1}</span>`}</span>`;
-            }).join("");
-            return `<div class="puzzle-battle-live-jail-row">
-              <strong>${player === view.player ? "My prisoners" : "Opponent"}</strong>
-              <div class="puzzle-battle-live-jail-cells">${cells}</div>
-              <span class="puzzle-battle-live-jail-score">${view.roundOneScores?.[player] ?? 0}</span>
-            </div>`;
-          }).join("")}</section>`
+      const liveJailsMarkup = roundActive
+        ? `<section class="puzzle-battle-live-jails"><h3>Round ${view.roundNumber} · Your prisoners</h3>
+          <div class="puzzle-battle-live-jail-cells">${Array.from({ length: view.requiredPairs }, (_, index) => {
+            const card = view.ownJail?.[index];
+            return `<span class="puzzle-battle-live-jail-cell">${card ? cardMarkup(card) : `<span class="puzzle-battle-empty-jail-cell">${index + 1}</span>`}</span>`;
+          }).join("")}</div>
+          <p>Current round score: ${view.ownScore ?? 0}</p></section>`
         : "";
       const scoreBoxMarkup = (player, title) => {
         const rows = [1, 2].map(roundNumber => {
@@ -1891,9 +1882,7 @@
           <section class="poker-slot${opponentTurnActive ? " opponent-turn-active" : ""}">
             <h4>${opponent ? "Opponent's Visible Hand" : `Hand ${String.fromCharCode(65 + slotIndex)}`}
               ${opponent ? "" : `<span>${slot.count} / 5</span>`}</h4>
-            <div class="poker-duel-cards">${opponentTurnActive
-              ? '<span class="empty-row">Opponent is playing</span>'
-              : slot.hidden
+            <div class="poker-duel-cards">${slot.hidden
               ? `${backs(slot.count)}<span>${slot.count ? `${slot.count} hidden cards` : "Empty"}</span>`
               : (slot.cards || []).map(card => cardMarkup(card)).join("") || '<span class="empty-row">Empty</span>'}</div>
           </section>`).join("");
@@ -1923,7 +1912,7 @@
           : `Score unavailable: ${esc(score.constraintFailReason || "scoring failed")}`}</p>`).join("")}
       </section>` : "";
       document.getElementById("variantContent").innerHTML = `<div class="poker-duel-overview">
-        <p class="poker-duel-clock">Turn clock <strong id="pokerDuelTimer">${["poker-duel-play", "poker-duel-thinking"].includes(state.phase) ? "15.0s" : "Paused"}</strong></p>
+        <p class="poker-duel-clock">${Number(duel.activePlayer) === 0 ? "Your turn" : "Opponent’s turn"} · <strong id="pokerDuelTimer">${["poker-duel-play", "poker-duel-thinking"].includes(state.phase) ? `${Math.max(0, Number(duel.turnRemainingMs || 0) / 1000).toFixed(1)}s` : "Paused"}</strong></p>
         <div class="poker-duel-summary">
           <p>Keep all three hand sizes within one card of each other.</p>
           <p>Scoring config · 9 base ${formatModifier(duel.rules?.nineBase)}</p>
@@ -2095,7 +2084,7 @@
           : pile.cards?.length
           ? cardMarkup(pile.cards[pile.cards.length - 1])
           : "";
-        const play = tug.canPlay && selectedIndex !== undefined
+        const play = tug.canAct && selectedIndex !== undefined && tug.legalPlays?.[selectedIndex]?.[index]
           ? `<button class="action primary" data-tug-action="tug-war-play" data-pile="${index}" data-index="${selectedIndex}">Play here</button>` : "";
         const pull = `<button class="action secondary" data-tug-action="tug-war-push" data-pile="${index}"${tug.canPush?.[index] && pullsRemaining > 0 ? "" : " disabled"}>Pull (${pullsRemaining})</button>`;
         const draw = `<button class="action secondary" data-tug-action="tug-war-flip" data-pile="${index}"${tug.canFlip ? "" : " disabled"}>Draw</button>`;
@@ -2125,11 +2114,12 @@
         : "";
       document.getElementById("variantContent").innerHTML = `<div class="tug-war-overview">
         ${campaignStatus}
+        <p class="variant-score tug-pulls-remaining">Your pulls remaining: <strong>${pullsRemaining}</strong></p>
         <div class="tug-war-board">${piles}</div>
         <section class="player-panel">
           <div class="player-heading"><h2>${esc(playerName(Number(tug.viewer || 0)))}’s hand</h2><span>${hand.length} cards${tug.canAct ? " · select a card" : ""}</span></div>
           <div class="tug-war-hand" style="--hand-columns:${handColumns}">${hand.map((card, index) => cardMarkup({
-            card, index, selectable: Boolean(tug.canPlay && tug.canAct)
+            card, index, selectable: Boolean(tug.canAct && tug.legalPlays?.[index]?.some(Boolean))
           }, { commit: true })).join("") || '<span class="empty-row">No cards in hand</span>'}</div>
         </section>
       </div>`;
@@ -2482,7 +2472,7 @@
 
     function renderMatchInfo() {
       const info = document.getElementById("matchInfo");
-      if (!state || !state.started || ["poker", "online-battle-lobby"].includes(state.variant) || (state.variant === "puzzle-battle" && !state.puzzleBattle?.match)) {
+      if (!state || !state.started || ["poker", "online-battle-lobby"].includes(state.variant) || (state.variant === "puzzle-battle" && (!state.puzzleBattle?.match || state.puzzleBattle?.match?.view?.result))) {
         info.hidden = true;
         return;
       }
@@ -2563,7 +2553,8 @@
         ].join("");
       } else if (state.variant === "puzzle-battle") {
         const mods = state.puzzleBattle?.match?.view?.modifiers || {};
-        rules = ["bounty", "shift", "favored", "draft"].map(key =>
+        const bountySuit = Number(state.puzzleBattle?.match?.view?.bountySuit);
+        rules = `<p style="color:${suitColorValue(bountySuit)}"><strong style="color:inherit">Bounty:</strong> ${esc(suits[bountySuit] || "—")} ${formatModifier(Number(mods.bounty ?? 0))}</p>` + ["shift", "favored", "draft"].map(key =>
           modifierLine(key === "favored" ? "Favor" : key[0].toUpperCase() + key.slice(1), mods[key])).join("");
       } else {
         const mods = state.modifiers || {};
@@ -3253,7 +3244,7 @@
       const start = modal.querySelector("#startMatchButton");
       start.dataset.mode = setupMode;
       start.dataset.variant = setupVariant;
-      start.textContent = `Play ${cpuDifficultyName(setupMode)} CPU · -1 Energy`;
+      start.textContent = Number(state?.dashboard?.energy || 0) < 1 ? "Not enough Energy" : `Play ${cpuDifficultyName(setupMode)} CPU · -1 Energy`;
       start.disabled = actionInProgress || Number(state?.dashboard?.energy || 0) < 1;
     }
 
@@ -3323,6 +3314,7 @@
         modal.classList.remove("hidden");
         modal.innerHTML = `<section class="modal">
           <h2>Choose your CPU battle</h2>
+          <p class="cpu-energy-status">${currencyIconMarkup("energy")} <strong>Energy: ${Number(state?.dashboard?.energy ?? 0)} / ${Number(state?.dashboard?.maxEnergy ?? 0)}</strong>${Number(state?.dashboard?.energy ?? 0) < 1 ? " · Not enough energy to start a match." : " · 1 per match"}</p>
           ${state?.started && state.phase !== 'gameover' ? '<p>Your current match stays saved until you start a replacement. Starting a mode archives the unfinished match.</p>' : ''}
           ${state?.opponentHint ? `<p>Your opponent last played: ${esc(state.opponentHint)}</p>` : ""}
           <label class="hero-select">Game mode<select id="matchVariant">${[
@@ -4986,7 +4978,6 @@
           <p class="match-mode">${campaign ? `Campaign · ${esc(campaign)}` : esc(item.modeName)}</p>
           <p class="match-date">${esc(date)}</p>
           <p>${plural(record.player_prisoners, "prisoner", "prisoners")} · ${plural(record.clashes, "clash", "clashes")} · ${currencyAmountMarkup(record.marks_earned, "Marks")} earned</p>
-           <p>Bounty suit: ${esc({B:'Scissors',F:'Paper',S:'Rock'}[record.bounty_suit] || record.bounty_suit || "Unknown")}</p>
            <details><summary>Match details</summary><p>Your seat: ${esc(record.player_seat || 'Unknown')} · Opponent prisoners: ${record.opp_prisoners || 0}</p><a href="#/saved-games${record.game_id ? `/${esc(record.game_id)}` : ''}">Review saved match timeline</a>${!record.game_id ? '<p>This older record has no saved-match link. Choose its date from Saved games.</p>' : ''}</details>
         </article>`;
       }).join("");
@@ -5560,7 +5551,7 @@
     }
 
     function syncPokerDuelTimer() {
-      const active = state?.variant === "poker-duel" &&
+      const active = !showDashboard && !showFeature && state?.variant === "poker-duel" &&
         ["poker-duel-play", "poker-duel-thinking"].includes(state.phase);
       if (!active) {
         if (pokerDuelTimer !== null) window.clearInterval(pokerDuelTimer);
@@ -5578,14 +5569,13 @@
         const remaining = Math.max(0, pokerDuelDeadline - Date.now());
         const clock = document.getElementById("pokerDuelTimer");
         if (clock) clock.textContent = `${(remaining / 1000).toFixed(1)}s`;
-        if (remaining === 0 && state.phase !== "poker-duel-thinking" && !actionInProgress &&
+        if (remaining === 0 && state.phase === "poker-duel-play" && state.pokerDuel?.activePlayer === 0 && !actionInProgress &&
             (state.mode !== "online" || state.canAct)) {
           if (pokerDuelTimer !== null) window.clearInterval(pokerDuelTimer);
           pokerDuelTimer = null;
           act("poker-duel-timeout");
         }
       };
-      if (pokerDuelTimer !== null) window.clearInterval(pokerDuelTimer);
       update();
       if (pokerDuelTimer === null) pokerDuelTimer = window.setInterval(update, 100);
     }
