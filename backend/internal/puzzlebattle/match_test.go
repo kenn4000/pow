@@ -534,3 +534,21 @@ func TestTimelyHeartbeatAndTieBreakBoundaries(t *testing.T) {
 		t.Fatalf("submission more than 100ms earlier should win the score tie: winner=%d draw=%v", winner, draw)
 	}
 }
+
+func TestEveryNonClashPairAddsOnePrisoner(t *testing.T) {
+	match := testMatch(t, 29, time.Now())
+	match.Modifiers = game.GameModifiers{Reckoning: [3]int{1, 1, 1}}
+	board := []game.Card{{Suit: game.Shield, Face: 9}, {Suit: game.Shield, Face: 1}, {Suit: game.Blade, Face: 1}, {Suit: game.Blade, Face: 9}}
+	for _, roundNumber := range []int{1, 2} {
+		for _, controller := range []int{0, 1} {
+			round := &Round{Number: roundNumber, Controller: controller, Board: board}
+			for _, player := range []int{0, 1} {
+				score, jail, captures := match.scorePairs(round, player, []Pair{{FirstIndex: 0, SecondIndex: 1}, {FirstIndex: 2, SecondIndex: 3}})
+				if len(jail) != 2 || captures[roundNumber-1][int(game.Shield)] != 1 || captures[roundNumber-1][int(game.Blade)] != 1 {
+					t.Fatalf("round %d controller %d player %d: score %d, jail %v, captures %v", roundNumber, controller, player, score, jail, captures)
+				}
+				if want := game.ScoreWithModifiers(jail, captures, match.BountySuit, match.Modifiers).Total; score != want { t.Fatalf("score %d, want %d", score, want) }
+			}
+		}
+	}
+}

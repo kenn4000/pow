@@ -293,6 +293,7 @@ func (s *webServer) withPlayer(next http.Handler) http.Handler {
 			snapshot.GameID, snapshot.StartedAt = randomID(), time.Now().UTC()
 			current.gameID = snapshot.GameID
 		}
+		previousSessionJSON, _ := json.Marshal(snapshot.Session)
 		response := &bufferedResponse{header: make(http.Header)}
 		next.ServeHTTP(response, r.WithContext(context.WithValue(r.Context(), gameServerKey, current)))
 		if response.status >= 400 {
@@ -306,7 +307,6 @@ func (s *webServer) withPlayer(next http.Handler) http.Handler {
 			}
 		}
 		snapshot.Schema = 1
-		previousSessionJSON, _ := json.Marshal(snapshot.Session)
 		snapshot.Session = snapshotSession(current.session)
 		nextSessionJSON, _ := json.Marshal(snapshot.Session)
 		snapshot.PreviewProfile = current.previewProfile

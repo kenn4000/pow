@@ -1,6 +1,7 @@
 package app
 
 import (
+	"encoding/json"
 	"math/rand"
 	"net/http"
 	"net/http/httptest"
@@ -318,6 +319,7 @@ func TestRummyAIOpponentCompletesItsTurnAutomatically(t *testing.T) {
 	web := &webServer{rng: rand.New(rand.NewSource(620)), playerProfile: playerProfile}
 	mux := http.NewServeMux()
 	mux.HandleFunc("/api/new", web.handleNewGame)
+	mux.HandleFunc("/api/state", web.handleState)
 	mux.HandleFunc("/api/action", web.handleAction)
 	server := httptest.NewServer(mux)
 	defer server.Close()
@@ -334,6 +336,15 @@ func TestRummyAIOpponentCompletesItsTurnAutomatically(t *testing.T) {
 	view = sendWebRequest(t, server.Client(), server.URL+"/api/action", map[string]any{
 		"action": "rummy-discard", "faceUpIndex": 0, "buriedIndex": 1,
 	})
+	if view.Actor != 1 || view.Rummy.TurnsCompleted != 1 || view.Rummy.CanDrawTwo || view.Rummy.CanDrawFaceUp || web.session.cpuStepReadyAt.IsZero() {
+		t.Fatalf("CPU turn should be scheduled and human actions disabled: %+v", view)
+	}
+	web.session.cpuStepReadyAt = time.Now().Add(-time.Second)
+	response, err := server.Client().Get(server.URL + "/api/state")
+	if err != nil { t.Fatal(err) }
+	defer response.Body.Close()
+	if err := json.NewDecoder(response.Body).Decode(&view); err != nil { t.Fatal(err) }
+	if response.StatusCode != http.StatusOK { t.Fatalf("CPU poll returned %d", response.StatusCode) }
 	if view.Phase != "rummy-turn" || view.Actor != 0 || view.Rummy.TurnsCompleted != 2 {
 		t.Fatalf("CPU did not finish its turn: phase:%q actor:%d turns:%d",
 			view.Phase, view.Actor, view.Rummy.TurnsCompleted)

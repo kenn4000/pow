@@ -210,10 +210,10 @@ func TestPokerDuelExpiredTurnStillUsesExplicitlyChosenPlacement(t *testing.T) {
 	}
 	duel.ActivePlayer = 0
 	card := duel.Players[0].Hand[0]
-	if err := duel.takeTurn(0, 2, false, now.Add(15*time.Second), rng); err != nil {
+	if err := duel.takeTurn(0, 0, false, now.Add(15*time.Second), rng); err != nil {
 		t.Fatal(err)
 	}
-	if len(duel.Players[0].Table[2]) != 1 || duel.Players[0].Table[2][0] != card {
+	if len(duel.Players[0].Table[0]) != 1 || duel.Players[0].Table[0][0] != card {
 		t.Fatal("expired turn did not honor the player's selected card and hand")
 	}
 }

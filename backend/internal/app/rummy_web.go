@@ -188,8 +188,10 @@ func (r *rummySession) webView(session *webSession, viewer int, online bool) *we
 	viewerPlayer := session.actor
 	if online {
 		viewerPlayer = viewer
+	} else if session.mode != "hvh" {
+		viewerPlayer = 0
 	}
-	canAct := !online || viewer == session.actor
+	canAct := (!online && session.mode == "hvh") || viewerPlayer == session.actor
 	result := &webRummyState{
 		Parameters:     r.Parameters,
 		OpponentHand:   len(r.Hands[1-viewerPlayer]),

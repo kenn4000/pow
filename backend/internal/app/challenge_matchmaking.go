@@ -58,7 +58,7 @@ func refreshChallengeAvailabilityTx(ctx context.Context, tx *sql.Tx, userID stri
 	accepted := []string{}
 	var acceptedJSON []byte
 	if err := tx.QueryRowContext(ctx,
-		"SELECT COALESCE(to_json(accepted_challenges), \'[]\'::json) FROM online_challenge_preferences WHERE user_id=$1", userID).
+		"SELECT COALESCE(to_json(accepted_challenges), '[]'::json) FROM online_challenge_preferences WHERE user_id=$1", userID).
 		Scan(&acceptedJSON); err != nil {
 		return nil, 0, fmt.Errorf("load online challenge preferences: %w", err)
 	}
@@ -80,7 +80,7 @@ func refreshChallengeAvailabilityTx(ctx context.Context, tx *sql.Tx, userID stri
 func challengeCooldownSecondsTx(ctx context.Context, tx *sql.Tx, userID string, now time.Time) (int, error) {
 	var seconds int
 	err := tx.QueryRowContext(ctx, `
-		SELECT GREATEST(0,CEIL(EXTRACT(EPOCH FROM (blocked_until-$2))))::integer
+		SELECT GREATEST(0,CEIL(EXTRACT(EPOCH FROM (blocked_until-$2::timestamptz))))::integer
 		FROM online_challenge_cooldowns WHERE user_id=$1`, userID, now).Scan(&seconds)
 	if errors.Is(err, sql.ErrNoRows) {
 		return 0, nil

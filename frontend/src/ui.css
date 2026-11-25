@@ -612,3 +612,6 @@ details.mission > summary .mission-title { flex: 1; }
 .gameplay-dock-actions .action { flex:1 1 0; min-width:0; }
 #gameplayDock:has(> .gameplay-dock-toggle:only-child) { display:flex; justify-content:center; }
 #gameplayDock > .gameplay-dock-toggle:only-child { width:52px; }
+
+#gameShell[data-variant="puzzle-battle"] .actions:not(:empty) { display:flex !important; }
+#gameShell[data-variant="puzzle-battle"] .puzzle-actions:has([data-pb-home]) { display:none; }

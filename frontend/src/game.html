@@ -1728,7 +1728,7 @@
         </div>
         <div id="rummyTurnActions" class="rummy-turn-actions" role="group" aria-label="Rummy turn actions"></div>
         <section class="rummy-hand">
-          <h3>${esc(currentPlayer)}’s hand <span>${hand.length} cards</span></h3>
+          <h3>${state.mode === "hvh" ? `${esc(currentPlayer)}’s` : "Your"} hand <span>${hand.length} cards</span></h3>
           <div class="rummy-card-row" data-hand-size="${hand.length}">${handCards || '<span class="empty-row">Hand hidden until the player is ready.</span>'}</div>
           ${state.phase === "rummy-discard" && rummyDiscardFirstIndex !== null
             ? rummyDiscardFirstRole === null
@@ -2498,8 +2498,8 @@
         const ownPlayer = match?.players?.[view?.player];
         const otherPlayer = match?.players?.[1 - Number(view?.player)];
         players = [
-          { color: "White", handle: ownPlayer?.handle },
-          { color: "Black", handle: otherPlayer?.handle }
+          { color: "White", handle: ownPlayer?.handle, score: view?.result?.scores?.[view.player] ?? view?.roundOneScores?.[view.player] ?? 0 },
+          { color: "Black", handle: otherPlayer?.handle, score: view?.result?.scores?.[1 - view.player] ?? view?.roundOneScores?.[1 - view.player] ?? 0 }
         ];
         playerHero = ownPlayer?.hero || playerHero;
         playerHeroID = ownPlayer?.heroId || playerHeroID;
@@ -3048,6 +3048,7 @@
       }
       if (state.variant === "puzzle-battle") {
         appendNavigationAction("Home", openDashboard);
+        appendNavigationAction("Choose match mode", chooseMatchMode, "secondary manage");
         return;
       }
       if (state.variant === "poker-duel") {
@@ -5590,7 +5591,7 @@
     }
 
     function syncPokerDuelPolling() {
-      const active = state?.variant === "poker-duel" && state.mode !== "online" &&
+      const active = !showDashboard && !showFeature && state?.variant === "poker-duel" && state.mode !== "online" &&
         state.pokerDuel?.activePlayer === 1 && state.phase !== "gameover";
       if (!active) {
         if (pokerDuelPollTimer !== null) window.clearInterval(pokerDuelPollTimer);
@@ -5604,7 +5605,7 @@
         const gameId = state?.gameId;
         try {
           const next = await api("/api/state");
-          if (!actionInProgress && state?.gameId === gameId && state?.variant === "poker-duel" && next.gameId === gameId && next.variant === "poker-duel") {
+          if (!showDashboard && !showFeature && !actionInProgress && state?.gameId === gameId && state?.variant === "poker-duel" && next.gameId === gameId && next.variant === "poker-duel") {
             state = next;
             activeMode = next.mode;
             if (next.phase === "poker-duel-thinking" &&
@@ -5639,10 +5640,11 @@
         const variant = state?.variant;
         try {
           const next = await api("/api/state");
-          if (!actionInProgress && state?.gameId === gameId && state?.variant === variant && next.gameId === gameId && next.variant === variant) {
+          if (!showDashboard && !showFeature && !actionInProgress && state?.gameId === gameId && state?.variant === variant && next.gameId === gameId && next.variant === variant) {
+            const changed = JSON.stringify([state.phase, state.actor, state.message, state.rummy, state.tugWar, state.abandonDuel, state.ladder]) !== JSON.stringify([next.phase, next.actor, next.message, next.rummy, next.tugWar, next.abandonDuel, next.ladder]);
             state = next;
             activeMode = next.mode;
-            render();
+            if (changed) render();
           }
         } catch (error) {
           setStatus(`Waiting for CPU turn update: ${connectionError(error)}`, true);
@@ -6360,6 +6362,18 @@
       if (notice && route !== 'home') notice.hidden = true;
       if (['saved-games', 'password', 'admin', 'cards'].includes(route)) return;
       if (route === 'home') { openDashboard(); return; }
+      if (route.startsWith("shop/featured/")) {
+        const id = decodeURIComponent(route.slice("shop/featured/".length));
+        openFeature("shop").then(() => {
+          if (!showFeature || currentFeature !== "shop" || window.location.hash !== `#/${route}`) return;
+          const item = featureData?.chromas?.find(entry => entry.chroma.id === id);
+          if (!item) return;
+          currentShopSubTab = ["common","uncommon","rare","epic","premium"][Number(item.chroma.rarityRank)] || "common";
+          render();
+          openShopPreview(id);
+        });
+        return;
+      }
       if (route === 'battle' || route === 'match/new') {
         navigationVersion++;
         showDashboard = false;
@@ -6815,8 +6829,8 @@
     document.getElementById("dashboardAchievements").addEventListener("click", () => navigateGame("achievements"));
     document.getElementById("dashboardShop").addEventListener("click", async () => {
       const id = state?.dashboard?.dailyFeaturedItem?.id;
-      await openFeature("shop");
-      if (id && showFeature && currentFeature === "shop") openShopPreview(id);
+      if (!id) { navigateGame("shop"); return; }
+      navigateGame(`shop/featured/${encodeURIComponent(id)}`);
     });
     document.getElementById("dashboardCampaigns").addEventListener("click", () => navigateGame("campaigns"));
     document.getElementById("dashboardHistory").addEventListener("click", () => navigateGame("history"));
