@@ -2116,6 +2116,7 @@
       document.getElementById("variantContent").innerHTML = `<div class="tug-war-overview">
         ${campaignStatus}
         <p class="variant-score tug-pulls-remaining">Your pulls: <strong>${pullsRemaining}</strong> · Opponent pulls: <strong>${opponentPulls}</strong></p>
+        ${tug.canAct && pullsRemaining > 0 && !tug.canPush?.some(Boolean) ? `<p class="tug-last-move">${!tug.deckCount && !state.campaign ? "Pulls are unavailable once the draw deck is empty." : "No eligible pile to pull this turn."}</p>` : ""}
         <div class="tug-war-board">${piles}</div>
         ${(tug.log || []).slice(-2).map(move => `<p class="tug-last-move">${esc(playerName(Number(move.player)))} · ${move.kind === "spend-push" ? "Pull" : move.kind === "play-card" ? "Played card" : move.kind === "flip-deck" ? "Drew card" : "Pass"}${move.kind === "pass" ? "" : ` · Pile ${Number(move.pileIndex ?? 0) + 1}`}</p>`).join("")}
         <section class="player-panel">

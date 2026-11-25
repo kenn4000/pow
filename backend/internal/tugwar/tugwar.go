@@ -477,6 +477,7 @@ func (g *Game) Apply(action Action) error {
 		pile := &g.State.Piles[action.PileIndex]
 		log.PileIndex, log.ZoneBefore = action.PileIndex, pile.Zone
 		g.State.Pushes[player]--
+		log.Succeeded = true
 		pile.Zone = moveZone(pile.Zone, player)
 		log.ZoneAfter = pile.Zone
 	case ActionPass:

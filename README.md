@@ -55,7 +55,7 @@ use the existing DOM renderer.
   rounds, with a shared board, private piles, and reversed starting player in
   Round 2.
 - **Ladder:** Play legal cards that meet or exceed the current chain value.
-  Wild cards change the chain suit. Pass when no card is playable; the opponent
+  Wild cards change the chain suit. Pass voluntarily, even with a legal card; the opponent
   can open a fresh chain. Empty your hand to win. Play solo against a CPU or
   online against another player.
 - **Rummy:** Build sets of three equal-face cards in different suits and

@@ -663,15 +663,30 @@ func TestTugWarCampaignHidesMissionSixInformation(t *testing.T) {
 	}
 	match := web.session.tugWar
 	match.State.Current = 0
-	if err := match.Apply(tugwar.Action{Kind: tugwar.ActionPlayCard, CardIndex: 0, PileIndex: 0}); err != nil {
-		t.Fatal(err)
+	// A blind losing hand play is no longer permitted; it must not consume
+	// the card or reveal the pile. Find a legal hand play if one exists.
+	if !match.CanPlayCard(0, 0, 0) {
+		before := len(match.State.Hands[0])
+		if err := match.Apply(tugwar.Action{Kind: tugwar.ActionPlayCard, CardIndex: 0, PileIndex: 0}); err == nil {
+			t.Fatal("illegal blind play was accepted")
+		}
+		if len(match.State.Hands[0]) != before || !match.State.Piles[0].Hidden {
+			t.Fatal("illegal blind play consumed a card or revealed a pile")
+		}
 	}
-	view = tugWarWebView(web, web.session)
-	if view.Piles[0].Hidden {
-		t.Fatal("playing on a hidden pile did not reveal its top")
-	}
-	if view.BountyRevealed || view.BountySuit != nil {
-		t.Fatal("playing on a hidden pile revealed the bounty suit before a flip")
+	played := false
+	for cardIndex := range match.State.Hands[0] {
+		for pileIndex := range match.State.Piles {
+			if !match.CanPlayCard(0, cardIndex, pileIndex) { continue }
+			if err := match.Apply(tugwar.Action{Kind: tugwar.ActionPlayCard, CardIndex: cardIndex, PileIndex: pileIndex}); err != nil { t.Fatal(err) }
+			view = tugWarWebView(web, web.session)
+			if view.Piles[pileIndex].Hidden || view.BountyRevealed || view.BountySuit != nil {
+				t.Fatal("legal hand play should reveal its pile, not the bounty")
+			}
+			played = true
+			break
+		}
+		if played { break }
 	}
 	match.State.Current = 0
 	if err := match.Apply(tugwar.Action{Kind: tugwar.ActionFlipDeck, PileIndex: 1}); err != nil {
