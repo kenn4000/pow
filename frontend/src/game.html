@@ -775,6 +775,7 @@
   <main id="gameShell" class="shell hidden">
     <header class="topline">
       <h1 id="gameBrand" class="brand">Prisoners <span>of War</span></h1>
+      <span id="pokerHeaderClock" class="poker-header-clock" hidden><span id="pokerHeaderTurn"></span> <strong id="pokerDuelTimer"></strong></span>
     </header>
       <section class="board" aria-label="Game board">
       <div id="track" class="track" aria-label="Bounty and captured prisoners"></div>
@@ -1912,7 +1913,6 @@
           : `Score unavailable: ${esc(score.constraintFailReason || "scoring failed")}`}</p>`).join("")}
       </section>` : "";
       document.getElementById("variantContent").innerHTML = `<div class="poker-duel-overview">
-        <p class="poker-duel-clock">${Number(duel.activePlayer) === 0 ? "Your turn" : "Opponent’s turn"} · <strong id="pokerDuelTimer">${["poker-duel-play", "poker-duel-thinking"].includes(state.phase) ? `${Math.max(0, Number(duel.turnRemainingMs || 0) / 1000).toFixed(1)}s` : "Paused"}</strong></p>
         <div class="poker-duel-summary">
           <p>Keep all three hand sizes within one card of each other.</p>
           <p>Scoring config · 9 base ${formatModifier(duel.rules?.nineBase)}</p>
@@ -2068,7 +2068,8 @@
             : `Player ${index + 1}`;
       const hand = tug.hand || [];
       const handColumns = Math.max(1, hand.length <= 4 ? hand.length : Math.ceil(hand.length / 2));
-      const pullsRemaining = Number(players[Number(tug.viewer || 0)]?.pushes ?? 0);
+      const pullsRemaining = Number(players.find(player => player.you)?.pushes ?? players[Number(tug.viewer || 0)]?.pushes ?? 0);
+      const opponentPulls = Number(players.find(player => !player.you)?.pushes ?? 0);
       const selectedIndex = selected.size ? [...selected][0] : undefined;
       const pileValue = (pile, index) => {
         if (!tug.valuesRevealed) return "?";
@@ -2114,8 +2115,9 @@
         : "";
       document.getElementById("variantContent").innerHTML = `<div class="tug-war-overview">
         ${campaignStatus}
-        <p class="variant-score tug-pulls-remaining">Your pulls remaining: <strong>${pullsRemaining}</strong></p>
+        <p class="variant-score tug-pulls-remaining">Your pulls: <strong>${pullsRemaining}</strong> · Opponent pulls: <strong>${opponentPulls}</strong></p>
         <div class="tug-war-board">${piles}</div>
+        ${(tug.log || []).slice(-2).map(move => `<p class="tug-last-move">${esc(playerName(Number(move.player)))} · ${move.kind === "spend-push" ? "Pull" : move.kind === "play-card" ? "Played card" : move.kind === "flip-deck" ? "Drew card" : "Pass"}${move.kind === "pass" ? "" : ` · Pile ${Number(move.pileIndex ?? 0) + 1}`}</p>`).join("")}
         <section class="player-panel">
           <div class="player-heading"><h2>${esc(playerName(Number(tug.viewer || 0)))}’s hand</h2><span>${hand.length} cards${tug.canAct ? " · select a card" : ""}</span></div>
           <div class="tug-war-hand" style="--hand-columns:${handColumns}">${hand.map((card, index) => cardMarkup({
@@ -5553,6 +5555,8 @@
     function syncPokerDuelTimer() {
       const active = !showDashboard && !showFeature && state?.variant === "poker-duel" &&
         ["poker-duel-play", "poker-duel-thinking"].includes(state.phase);
+      const headerClock = document.getElementById("pokerHeaderClock");
+      if (headerClock) headerClock.hidden = !active;
       if (!active) {
         if (pokerDuelTimer !== null) window.clearInterval(pokerDuelTimer);
         pokerDuelTimer = null;
@@ -5568,7 +5572,9 @@
       const update = () => {
         const remaining = Math.max(0, pokerDuelDeadline - Date.now());
         const clock = document.getElementById("pokerDuelTimer");
-        if (clock) clock.textContent = `${(remaining / 1000).toFixed(1)}s`;
+        if (clock) { clock.textContent = `${(remaining / 1000).toFixed(1)}s`; clock.classList.toggle("clock-low", remaining < 3000); }
+        const label = document.getElementById("pokerHeaderTurn");
+        if (label) label.textContent = state.pokerDuel?.activePlayer === 0 ? "Your turn" : "Opponent";
         if (remaining === 0 && state.phase === "poker-duel-play" && state.pokerDuel?.activePlayer === 0 && !actionInProgress &&
             (state.mode !== "online" || state.canAct)) {
           if (pokerDuelTimer !== null) window.clearInterval(pokerDuelTimer);
@@ -5615,7 +5621,7 @@
 
     function syncLadderPolling() {
       const active = !showDashboard && !showFeature && state?.mode !== "online" && state?.mode !== "hvh" && state?.phase !== "gameover" && (
-        (state?.variant === "ladder" && ["ladder-opening-reveal", "ladder-thinking"].includes(state.phase)) ||
+        (state?.variant === "ladder" && (["ladder-opening-reveal", "ladder-thinking"].includes(state.phase) || state.phase === "ladder-play" && Number(state.actor) === 1)) ||
         (["rummy", "tug-war", "abandon-duel"].includes(state?.variant) && Number(state.actor) === 1));
       if (!active) {
         if (ladderPollTimer !== null) window.clearInterval(ladderPollTimer);

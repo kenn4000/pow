@@ -30,6 +30,7 @@ func (s *webServer) webMatchResult(playerScore, opponentScore int, won, tied boo
 			PlayerJail: state.P1.Jail, OpponentJail: state.P2.Jail,
 			PlayerCapturedByRound: state.P1.CapturedByRound, OpponentCapturedByRound: state.P2.CapturedByRound,
 			Modifiers: state.Modifiers, BountySuit: state.Bounty.Suit, Clashes: state.Clashes,
+			PlayerHeroID: s.session.playerHeroID, OpponentHeroID: s.session.opponentHeroID,
 			ScoreAfterR2: afterR2[0], OpponentAfterR2: afterR2[1],
 		}},
 	}

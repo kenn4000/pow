@@ -94,7 +94,8 @@ func TestPokerDuelTurnBanksRemainingTimeAndHidesPrivateCards(t *testing.T) {
 	duel.TurnStarted = now
 	cpuTurnView := duel.webView("poker-duel-thinking", now.Add(5*time.Second), 1)
 	if len(cpuTurnView.Players[0].Hand) != len(duel.Players[0].Hand) ||
-		!cpuTurnView.Players[1].HandHidden || cpuTurnView.TurnRemainingMS != 10_000 {
+		!cpuTurnView.Players[1].HandHidden || cpuTurnView.TurnRemainingMS != 10_000 ||
+		cpuTurnView.Players[0].Table[1].Hidden || !cpuTurnView.Players[1].Table[1].Hidden || cpuTurnView.Players[1].Table[0].Hidden {
 		t.Fatal("CPU turn hid the player's hand or failed to advance the turn clock")
 	}
 	opponentView := duel.webView("poker-duel-play", now, 0)

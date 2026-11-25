@@ -155,7 +155,7 @@ func TestMetaProgressUsesOwnedItemsAndTrackedActions(t *testing.T) {
 	for id := range p.OwnedChromas {
 		p.OwnedChromas[id] = true
 	}
-	for i := 0; i < 47; i++ {
+	for i := 0; i < 50; i++ {
 		p.OwnedChromas[string(rune('a'+i))] = true
 	}
 	p.AchievementCounters["boxes_opened"] = 50
@@ -241,4 +241,15 @@ func unlockFor(events []UnlockEvent, id string) (UnlockEvent, bool) {
 		}
 	}
 	return UnlockEvent{}, false
+}
+
+func TestStarterChromasAndAggregateHeroCounterExcluded(t *testing.T) {
+	p := newAchievementProfile(t)
+	p.OwnedChromas = map[string]bool{"tribal-red":true,"tribal-blue":true,"tribal-yellow":true,"bonus":true}
+	p.HeroWinCounts = map[string]int{"recruit":1}
+	p.AchievementCounters["hero_match_wins_recruit"] = 1
+	p.AchievementCounters["hero_match_wins_total"] = 1
+	ctx := Context{Profile:p, Event:EventProfileLoad}
+	if progress, _, _, _ := ProgressFor(ctx, "chroma_collector"); progress != 1 { t.Fatalf("chroma count = %d, want 1", progress) }
+	if progress, _, _, _ := ProgressFor(ctx, "hero_variety"); progress != 1 { t.Fatalf("hero count = %d, want 1", progress) }
 }
