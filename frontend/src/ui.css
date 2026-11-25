@@ -596,3 +596,19 @@ details.mission > summary .mission-title { flex: 1; }
   .action, .account-toggle, .password-toggle { min-height: 44px; }
   button, a, summary { -webkit-tap-highlight-color: #f0c75e33; }
 }
+
+/* Mobile battle QA: keep cards and controls in distinct layout rows. */
+#gameShell[data-variant="main"] .board, #gameShell[data-variant="fog"] .board { display:grid; grid-template-columns:minmax(0,1fr); grid-template-rows:none; grid-auto-rows:max-content; grid-template-areas:'track' 'info' 'battle' 'players' 'actions'; align-content:start; }
+#gameShell[data-variant="main"] .board.drafting, #gameShell[data-variant="fog"] .board.drafting { display:grid; }
+#gameShell .battle.drafting { min-height:max-content; overflow:visible; }
+.draft-card-pool { padding-block:8px; row-gap:18px; }
+#gameShell[data-variant="puzzle-battle"] .board { grid-template-areas:'info' 'battle' 'actions'; }
+#gameShell[data-variant="puzzle-battle"] #matchInfo:not([hidden]) { display:grid !important; grid-template-columns:minmax(0,1fr) minmax(90px,1.2fr) minmax(0,1fr); }
+#gameShell .actions { position:static; background:transparent; z-index:auto; }
+#gameShell .actions:empty, #gameShell .actions:has(> .action-divider:only-child) { display:none; }
+.rummy-card-row { padding-block:18px 10px; row-gap:26px; }
+.tug-war-hand { padding-top:32px; row-gap:34px; }
+.poker-duel-table { row-gap:14px; }
+.gameplay-dock-actions .action { flex:1 1 0; min-width:0; }
+#gameplayDock:has(> .gameplay-dock-toggle:only-child) { display:flex; justify-content:center; }
+#gameplayDock > .gameplay-dock-toggle:only-child { width:52px; }

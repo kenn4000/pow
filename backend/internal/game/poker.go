@@ -105,6 +105,9 @@ func CanPlacePokerCard(hands [3][]Card, slot int) bool {
 		!PokerHandsBalanced(hands) {
 		return false
 	}
+	if len(hands[0])+len(hands[1])+len(hands[2]) == 0 && slot != 0 {
+		return false
+	}
 	next := [3]int{len(hands[0]), len(hands[1]), len(hands[2])}
 	next[slot]++
 	minCount, maxCount := next[0], next[0]

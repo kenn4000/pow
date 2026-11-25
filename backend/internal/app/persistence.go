@@ -286,6 +286,10 @@ func (s *webServer) withPlayer(next http.Handler) http.Handler {
 			databaseError(w, err)
 			return
 		}
+		if r.Method == http.MethodPost && strings.HasSuffix(r.URL.Path, "/new") {
+			snapshot.GameID, snapshot.StartedAt = randomID(), time.Now().UTC()
+			current.gameID = snapshot.GameID
+		}
 		response := &bufferedResponse{header: make(http.Header)}
 		next.ServeHTTP(response, r.WithContext(context.WithValue(r.Context(), gameServerKey, current)))
 		if response.status >= 400 {
@@ -297,7 +301,6 @@ func (s *webServer) withPlayer(next http.Handler) http.Handler {
 				databaseError(w, err)
 				return
 			}
-			snapshot.GameID, snapshot.StartedAt = randomID(), time.Now().UTC()
 		}
 		snapshot.Schema = 1
 		snapshot.Session = snapshotSession(current.session)

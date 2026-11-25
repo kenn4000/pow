@@ -75,6 +75,8 @@ func ladderWebView(session *webSession, viewer int, online bool) *webLadderState
 	currentPlayer := session.actor
 	if online {
 		currentPlayer = viewer
+	} else if session.mode != "hvh" {
+		currentPlayer = 0
 	}
 	current := ladder.PlayerID(currentPlayer)
 	hand := state.HandA
@@ -116,7 +118,7 @@ func ladderWebView(session *webSession, viewer int, online bool) *webLadderState
 		legalCards[card] = struct{}{}
 	}
 	view.CanPass = humanTurn && len(legal) == 0
-	if session.phase != "handoff" && (humanTurn || openingReveal || openingChoice || online && session.phase == "ladder-play") {
+	if session.phase != "handoff" && (humanTurn || openingReveal || openingChoice || online && session.phase == "ladder-play" || !online && session.mode != "hvh") {
 		view.Hand = make([]webCard, len(hand))
 		for index, card := range hand {
 			_, selectable := legalCards[card]

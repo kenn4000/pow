@@ -2039,7 +2039,7 @@
         ${state.phase === "gameover" && finalHands ? `<section class="variant-panel"><h2>Remaining cards</h2><div class="ladder-final-hands">${finalHands}</div></section>` : ""}
         ${state.phase !== "gameover" ? `<section class="player-panel ladder-hand-panel">
           <div class="player-heading">
-            <h2>${state.phase === "handoff" ? "Private hand hidden" : `${esc(activeName)}’s hand`}</h2>
+            <h2>${state.phase === "handoff" ? "Private hand hidden" : `${state.mode === "hvh" ? esc(activeName) : "Your"} hand`}</h2>
             <span>Opponent’s hand size: ${opponentHandCount}</span>
           </div>
           ${revealedOpponentHand ? `<section class="ladder-open-hand"><h3>Opponent’s open hand</h3>${revealedOpponentHand}</section>` : ""}
@@ -2467,8 +2467,8 @@
       const scoreText = (priorScore === false ? null : priorScore) ?? `${playerLabel(player)} = ${player.score}`;
       const scoreMarkup = state.variant === "abandon-duel"
         ? `<p class="hero-score abandon-round-scores ${color}">
-            <span>Round 1: ${esc(formatModifier(Number(state.abandonDuel?.roundScores?.[0]?.[playerIndex] ?? 0)))}</span>
-            <span>Round 2: ${esc(formatModifier(Number(state.abandonDuel?.roundScores?.[1]?.[playerIndex] ?? 0)))}</span>
+            <span>Round 1: ${esc(formatModifier(Number((!state.abandonDuel?.gameOver && state.abandonDuel?.round === 1 ? state.abandonDuel?.players?.[playerIndex]?.previewScore : state.abandonDuel?.roundScores?.[0]?.[playerIndex]) ?? 0)))}</span>
+            <span>Round 2: ${esc(formatModifier(Number((!state.abandonDuel?.gameOver && state.abandonDuel?.round === 2 ? state.abandonDuel?.players?.[playerIndex]?.previewScore : state.abandonDuel?.roundScores?.[1]?.[playerIndex]) ?? 0)))}</span>
           </p>`
         : player.score === undefined ? "" : `<p class="hero-score ${color}">${esc(scoreText)}</p>`;
       return `<article class="match-hero ${color}">
@@ -2482,7 +2482,7 @@
 
     function renderMatchInfo() {
       const info = document.getElementById("matchInfo");
-      if (!state || !state.started || ["poker", "online-battle-lobby"].includes(state.variant)) {
+      if (!state || !state.started || ["poker", "online-battle-lobby"].includes(state.variant) || (state.variant === "puzzle-battle" && !state.puzzleBattle?.match)) {
         info.hidden = true;
         return;
       }
@@ -3047,6 +3047,7 @@
         return;
       }
       if (state.variant === "puzzle-battle") {
+        appendNavigationAction("Home", openDashboard);
         return;
       }
       if (state.variant === "poker-duel") {
@@ -3098,6 +3099,7 @@
       if (state.variant === "ladder") {
         if (state.phase === "gameover") return;
         appendNavigationAction("Home", openDashboard);
+        appendModeManagementActions();
         if (state.phase === "ladder-play" && state.ladder?.canPass) {
           const pass = makeButton("Pass · opponent opens a new chain", () => act("ladder-pass"), "primary");
           pass.disabled = actionInProgress;
@@ -3162,7 +3164,7 @@
       const chooser = document.getElementById("gameplaySuitChooser");
       const shell = document.getElementById("gameShell");
       const active = !showDashboard && !showFeature && state?.started &&
-        state.phase !== "gameover" && state.dashboard?.matchTokensAllowed;
+        !["gameover", "complete", "completed"].includes(state.phase) && state.variant !== "online-battle-lobby" && (state.variant !== "puzzle-battle" || state.puzzleBattle?.match);
       dock.hidden = !active;
       shell.classList.toggle("has-gameplay-dock", Boolean(active));
       if (!active) {
@@ -3171,7 +3173,7 @@
         return;
       }
 
-      const dashboard = state.dashboard;
+      const dashboard = state.dashboard || {};
       const addToken = (label, action, kind, count, canUse, canBuyWhenUnavailable = true) => {
         const quantity = Number(count || 0);
         const button = makeButton("", async () => {
@@ -3224,7 +3226,7 @@
       toggle.innerHTML = `<img src="${import.meta.env.BASE_URL}skins/icons/trichooser.png" alt="" aria-hidden="true">`;
       toggle.setAttribute("aria-label", chooser.hidden ? "Show suit chooser" : "Hide suit chooser");
       toggle.setAttribute("aria-expanded", String(!chooser.hidden));
-      dock.replaceChildren(undo(), restart(), toggle, replace(), skip());
+      dock.replaceChildren(...(dashboard.matchTokensAllowed ? [undo(), restart(), toggle, replace(), skip()] : [toggle]));
       if (!chooser.hidden) renderDockSuitCycle();
     }
 
@@ -5602,7 +5604,7 @@
         const gameId = state?.gameId;
         try {
           const next = await api("/api/state");
-          if (next.gameId === gameId && next.variant === "poker-duel") {
+          if (!actionInProgress && state?.gameId === gameId && state?.variant === "poker-duel" && next.gameId === gameId && next.variant === "poker-duel") {
             state = next;
             activeMode = next.mode;
             if (next.phase === "poker-duel-thinking" &&
@@ -5635,7 +5637,7 @@
         const gameId = state?.gameId;
         try {
           const next = await api("/api/state");
-          if (next.gameId === gameId && next.variant === "ladder") {
+          if (!actionInProgress && state?.gameId === gameId && state?.variant === "ladder" && next.gameId === gameId && next.variant === "ladder") {
             state = next;
             activeMode = next.mode;
             render();
