@@ -1,0 +1,45 @@
+name: Mobile gameplay checks
+on:
+  push:
+    branches: [android-playtest]
+    paths: ['frontend/**', 'backend/**', '.github/workflows/mobile-gameplay-checks.yml']
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  frontend:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - run: npm --prefix frontend ci
+      - run: npm --prefix frontend run build
+  backend:
+    runs-on: ubuntu-24.04
+    services:
+      postgres:
+        image: postgres:17-alpine
+        env:
+          POSTGRES_DB: pow_test
+          POSTGRES_USER: pow_test
+          POSTGRES_PASSWORD: test-only-password
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U pow_test -d pow_test"
+          --health-interval 5s
+          --health-timeout 3s
+          --health-retries 10
+    env:
+      GOWORK: 'off'
+      TEST_DATABASE_URL: postgres://pow_test:test-only-password@127.0.0.1:5432/pow_test?sslmode=disable
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: backend/go.mod
+          cache-dependency-path: backend/go.sum
+      - run: go -C backend test ./...
+      - run: go -C backend build ./cmd/prisoners-of-war
